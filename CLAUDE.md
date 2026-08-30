@@ -6,7 +6,7 @@ Guidance for AI agents (Claude Code, Hermes, or others) working in this reposito
 
 `mcpforge` generates [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec, with observability plugins (starting with OpenTelemetry) wired in automatically. Read [PLAN.md](PLAN.md) for the business/strategy context and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design before making non-trivial changes — both are kept up to date as living documents, not one-off planning artifacts.
 
-**This is Ricardo's personal project** (github.com/ricardocvasconcelos/mcpforge), unrelated to his employer (Wavix). Do not confuse it with, or leak details from, Wavix repositories/work.
+**This is Ricardo's personal project** (github.com/ricardocvasconcelos/mcpforge).
 
 **Architecture pivot (Aug 30, 2026, ARCHITECTURE.md section 16):** mcpforge no longer parses OpenAPI or generates server code itself. That's delegated to [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator), a mature MIT-licensed library that does it better than the earlier hand-rolled implementation (sections 9-15, kept as historical reference — don't resurrect it). mcpforge's own code is now entirely the *instrumentation* layer: a small textual patch (`render/instrument.ts`) that rewrites the one call site `openapi-mcp-generator` always generates (`executeApiTool`) to route through an `ObservabilityPlugin`.
 

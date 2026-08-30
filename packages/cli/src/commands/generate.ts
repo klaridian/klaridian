@@ -3,8 +3,8 @@
 // Implements `mcpforge generate` — ARCHITECTURE.md section 16/18 pivot:
 // delegates the actual OpenAPI -> MCP server generation to
 // openapi-mcp-generator (a mature, MIT-licensed library, validated against
-// the real Wavix spec in section 16), then post-processes the generated
-// server with mcpforge's own observability instrumentation layer
+// a large real-world production API spec in section 16), then post-processes
+// the generated server with mcpforge's own observability instrumentation layer
 // (instrument.ts). mcpforge's own code no longer parses OpenAPI or renders
 // server source from scratch — that's the whole point of the pivot.
 //

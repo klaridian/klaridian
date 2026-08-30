@@ -98,9 +98,9 @@ Not "yet another observability dashboard." It's the **control and correlation pl
 ## 5. Open questions / to validate
 
 - [x] Generator tech stack: **TypeScript/Node** (decided Aug 30, 2026 — stronger OpenAPI-generator ecosystem, most published MCP servers are Node-based)
-- [ ] First plugin to build: Datadog or PostHog? (decide by API ease + perceived demand)
-- [ ] Input format: OpenAPI spec only, or also manual tool definitions (YAML/JSON schema)?
-- [ ] Where to launch for initial validation: Hacker News, r/mcp (if it exists), Anthropic Discord/community, X?
+- [x] First plugin to build: **generic OpenTelemetry** (decided Aug 30, 2026). Rationale: OTel is the underlying standard (aligns with MCP's own SEP-414), and every major backend (Datadog, Grafana, Honeycomb, New Relic) consumes OTLP — building on OTel first means one plugin works with all of them via exporter config, avoiding vendor lock-in for users and duplicate work per backend. A Datadog-specific plugin can follow later as a thin, pre-configured wrapper over the OTel exporter (API key + auto-tagging convenience), not a separate instrumentation path.
+- [x] Input format: **OpenAPI spec only** for v0 (decided Aug 30, 2026). Manual tool definitions (YAML/JSON schema) deferred until there's signal it's needed — keeps v0 scope tight.
+- [ ] Where to launch for initial validation: Hacker News, r/mcp (if it exists), Anthropic Discord/community, X? — **still undecided, revisit closer to a working v0.**
 - [x] Project name: **mcpforge** (decided Aug 30, 2026)
 - [ ] Concrete metrics for "enough signal" to move to Phase 1 (define the number upfront, not mid-hype)
 

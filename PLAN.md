@@ -97,11 +97,11 @@ Not "yet another observability dashboard." It's the **control and correlation pl
 
 ## 5. Open questions / to validate
 
-- [ ] Generator tech stack: Node/TypeScript vs Python — which community does the MCP ecosystem lean toward? (check official SDK adoption)
+- [x] Generator tech stack: **TypeScript/Node** (decided Aug 30, 2026 — stronger OpenAPI-generator ecosystem, most published MCP servers are Node-based)
 - [ ] First plugin to build: Datadog or PostHog? (decide by API ease + perceived demand)
 - [ ] Input format: OpenAPI spec only, or also manual tool definitions (YAML/JSON schema)?
 - [ ] Where to launch for initial validation: Hacker News, r/mcp (if it exists), Anthropic Discord/community, X?
-- [ ] Project name (currently placeholder `mcp-obs-gen`)
+- [x] Project name: **mcpforge** (decided Aug 30, 2026)
 - [ ] Concrete metrics for "enough signal" to move to Phase 1 (define the number upfront, not mid-hype)
 
 ---

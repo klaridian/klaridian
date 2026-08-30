@@ -182,6 +182,32 @@ function detectUnsupportedSchemaFeatures(schema: OpenAPIV3.SchemaObject | undefi
   return null;
 }
 
+/**
+ * True when every 2xx response for this operation has ONLY non-JSON
+ * content types (or no content at all is fine — that's not "binary", just
+ * empty). Mixed responses (e.g. both application/json and application/pdf
+ * on the same 200) are treated as JSON-capable, not binary — the JSON path
+ * stays usable. Only genuinely JSON-less 2xx responses trigger the
+ * binary-response code path (ARCHITECTURE.md section 17).
+ */
+function isBinaryOnlyResponse(operation: OpenAPIV3.OperationObject): boolean {
+  const responses = operation.responses ?? {};
+  const twoXxEntries = Object.entries(responses).filter(([code]) => code.startsWith("2"));
+  if (twoXxEntries.length === 0) return false;
+
+  let sawAnyContent = false;
+  for (const [, response] of twoXxEntries) {
+    const content = (response as OpenAPIV3.ResponseObject).content;
+    if (!content) continue;
+    const contentTypes = Object.keys(content);
+    if (contentTypes.length === 0) continue;
+    sawAnyContent = true;
+    const hasJson = contentTypes.some((ct) => ct === "application/json" || ct.endsWith("+json"));
+    if (hasJson) return false;
+  }
+  return sawAnyContent;
+}
+
 function mapOperation(
   path: string,
   method: HttpMethod,
@@ -269,6 +295,8 @@ function mapOperation(
     required: parameters.filter((p) => p.required).map((p) => p.name),
   };
 
+  const isBinaryResponse = isBinaryOnlyResponse(operation);
+
   return {
     name,
     description: operation.summary ?? operation.description ?? `${method.toUpperCase()} ${path}`,
@@ -276,6 +304,7 @@ function mapOperation(
     method,
     parameters,
     inputSchema,
+    isBinaryResponse,
   };
 }
 

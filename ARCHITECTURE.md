@@ -235,10 +235,12 @@ This is where real design judgment is needed, not just plumbing:
 **Post-v0 roadmap (added Aug 30, 2026 — see section 14 for the full case study):** validating against the real Wavix production API/MCP server surfaced concrete, prioritized next steps beyond the original 6-step list above:
 
 7. ~~`allOf` schema merging in `map-tools.ts` (highest priority — see section 14).~~ **Done (Aug 30, 2026) — see section 15.** Result against the real Wavix spec: 120/122 operations (98.4%) now map successfully.
-8. ~~Authentication support (Bearer token at minimum) — currently zero auth story.~~ **Done (Aug 30, 2026) — see section 16.** Also fixed a real blocker found along the way: `generate` used to refuse to produce anything if any operation had a mapping error; now defaults to skip-and-warn (`--strict` restores the old behavior). mcpforge can now generate and compile a real, working Wavix MCP server (120 tools, auth wired) from the unmodified real spec.
+8. ~~Authentication support (Bearer token at minimum) — currently zero auth story.~~ **Done (Aug 30, 2026) — see section 17.** Also fixed a real blocker found along the way: `generate` used to refuse to produce anything if any operation had a mapping error; now defaults to skip-and-warn (`--strict` restores the old behavior). mcpforge could generate and compile a real, working Wavix MCP server (120 tools, auth wired) from the unmodified real spec.
 9. OpenAPI 3.1 support — turns out this already works (the real Wavix spec is 3.1 and parses/maps correctly); still worth adding an explicit 3.1 test fixture so this isn't just incidentally true.
-10. Binary/streaming response handling (generate a `{ downloadUrl, contentType, status }`-shaped tool instead of inlining binary data) — same pattern Wavix's own server uses by hand.
+10. Binary/streaming response handling (generate a `{ downloadUrl, contentType, status }`-shaped tool instead of inlining binary data) — same idea frameworks like FastAPI apply with a dedicated response type instead of forcing binary bytes through a JSON body.
 11. `multipart/form-data` request body support, or an explicit documented limitation.
+
+**Superseded (Aug 30, 2026) — see section 16.** Items 7-11 above (and their underlying `packages/cli` `openapi/`/`render/` implementation) are superseded by the decision to adopt `openapi-mcp-generator` as mcpforge's generation engine rather than continuing to build and maintain a competing implementation. The *findings* from this work remain valid and directly informed that decision; the code itself is not the path forward. See section 16 for the comparison and rationale, and section 18 for the new build order.
 
 ---
 
@@ -348,7 +350,49 @@ Implemented in `packages/cli/src/openapi/map-tools.ts`: a new `mergeAllOf()` fun
 
 **Not yet re-validated end-to-end:** this fix was validated at the mapping layer (does `mapOpenApiToTools` produce a correct `ToolDefinition`?) against both synthetic fixtures and the real Wavix spec's *mapping* output, but **not** by actually rendering and running a generated server against the live Wavix API (unlike the Petstore validations in sections 12-13) — that would require a real Wavix API key, which we don't have. The rendering/running mechanic itself was already proven generic in sections 12-13, so the residual risk here is specifically "does the merged schema's shape make sense to an MCP client," not "does the generator pipeline work," but this is worth flagging explicitly rather than assuming section 12/13's validation automatically covers this new code path too.
 
-## 16. Authentication support — implemented and validated end to end against the real Wavix spec (Aug 30, 2026)
+## 16. Strategic pivot: adopt `openapi-mcp-generator` as the generation engine instead of maintaining our own (Aug 30, 2026)
+
+While implementing roadmap item #4 (binary/streaming responses), we stopped to check whether mcpforge's hand-rolled OpenAPI→MCP generation was reinventing something that already exists well. It was.
+
+### What we found
+
+[`harsha-iiiv/openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator) — MIT-licensed, published on npm, 631 GitHub stars, actively maintained (commits within the last 2 months as of this writing). A TypeScript CLI **and** library (exports a clean programmatic API, `getToolsFromOpenApi()`) that converts an OpenAPI spec into a buildable MCP server project. Directly comparable to mcpforge's own generator, and — after hands-on testing against the real Wavix spec — measurably ahead of it on multiple axes we hadn't even covered:
+
+| Capability | `openapi-mcp-generator` | mcpforge (pre-pivot) |
+|---|---|---|
+| Auth | API key, Bearer, Basic, **OAuth2**, custom | Bearer, API key only |
+| Transports | stdio, SSE web server, **StreamableHTTP** | stdio only |
+| Schema validation | Zod, auto-generated via `json-schema-to-zod` | hand-written type checks |
+| **64-character tool name limit** (a real MCP client constraint, e.g. Claude Desktop) | handled — word-level abbreviation + deterministic hash fallback | **not handled at all** — a latent bug in mcpforge against any spec with long names |
+| `allOf`/`oneOf`/`anyOf` | delegated to Zod via `json-schema-to-zod`, handles all three (Zod natively supports unions) | `allOf` hand-merged (section 15); `oneOf`/`anyOf` still hard-rejected |
+| Multi-file `$ref` | supported | untested |
+| Selective tool inclusion | `x-mcp` OpenAPI extension (per-operation/path/root) | none |
+| SSRF protection on spec parsing | explicit (`assertNoExternalRefs`, opt-in `allowExternalRefs`) | none |
+| Validated against | Stripe (452 tools, per their own commit history) | Wavix (120/122 tools, section 15/16) |
+
+**Direct validation against the real Wavix spec (same fixture used throughout sections 14-16):** ran `openapi-mcp-generator` against the unmodified `wavix-api.json`. Result: **all 122 operations generated successfully** (vs. mcpforge's 120/122 — the 2 `oneOf` operations that mcpforge still hard-rejects were handled fine here because Zod natively expresses unions), zero warnings printed, and `npm run build` (`tsc`) compiled with zero errors on the first try.
+
+### The other half of the finding: a real critique of OpenAPI→MCP auto-conversion itself
+
+While researching this, we also found [a post by the FastMCP author](https://www.jlowin.dev/blog/stop-converting-rest-apis-to-mcp) (FastMCP's `from_openapi()` is the tool the actual Wavix MCP server uses, per section 14) arguing that auto-converting a REST API to MCP tools 1:1 is actively bad for agents in production: APIs designed for humans are "generous" (hundreds of atomic, composable endpoints), but agents pay a real cost per tool in context/tokens and reasoning overhead — auto-conversion produces "chatty," bloated tool catalogs that make agents slower and more error-prone, not more capable. His recommendation: use auto-conversion for bootstrapping/prototyping only, then curate aggressively (rename, hide, merge, prune) before shipping to production.
+
+This is a genuine, separate insight from "which generator library is best," and it points at a real opportunity: **nobody in this space (Speakeasy, Gram, FastMCP, openapi-mcp-generator) combines auto-generation with automated curation/pruning.** That gap is worth keeping in mind as a possible differentiator distinct from the observability angle — not something to build now, but a validated direction, not a guess.
+
+### Decision
+
+Adopt `openapi-mcp-generator` as mcpforge's generation engine rather than continuing to maintain a parallel, less-capable implementation. Concretely:
+
+- `packages/cli`'s hand-rolled `openapi/` and `render/` modules (sections 12, 15, 16, and the in-progress section on binary responses) are superseded — not because the work was wasted (it directly validated the mechanic, per the spike in sections 9-13, and surfaced real integration risks like the stdout/OTel finding that remain valid regardless of generator choice), but because a better-tested, more complete implementation of the same generation step already exists and is MIT-licensed.
+- mcpforge's own value proposition (PLAN.md: generator + observability plugins nobody else combines) is unaffected — if anything, it's cleaner: mcpforge becomes explicitly "`openapi-mcp-generator` (or equivalent) plus an instrumentation layer," not "yet another OpenAPI-to-MCP generator that also happens to have plugins."
+- Next concrete step: replace `packages/cli`'s internal OpenAPI parsing/mapping/rendering with a dependency on (or vendored/forked copy of) `openapi-mcp-generator`, then re-attach the `runtime-otel`/plugin instrumentation layer (sections 4-5, 13) on top of *its* generated output instead of our own. The plugin interface design (section 4) doesn't need to change — it was already decoupled from the specific code-generation mechanics.
+- Needs follow-up before depending on it in production: `npm install` reported 19 vulnerabilities (6 moderate, 12 high, 1 critical) in `openapi-mcp-generator`'s own dependency tree — audit before adopting, and decide fork-with-patches vs. upstream-dependency based on how maintainable those turn out to be.
+
+---
+
+## 17. Authentication support — implemented and validated end to end against the real Wavix spec (Aug 30, 2026)
+
+> **Note:** this work (and section 15's `allOf` merging) predates the section 16 pivot to `openapi-mcp-generator`. Kept here as an accurate record of what was built and validated, and because the *findings* (real Wavix spec needs auth; skip-and-warn generation is essential for real-world specs) remain true and informed the pivot decision — but the actual code described below (in mcpforge's own `openapi/`/`render/` modules) is superseded per section 16, not the current implementation path going forward.
+
 
 Implemented (roadmap item #2 from section 14): the second-highest-priority post-v0 fix, chosen because — as section 15's real Wavix validation confirmed — `allOf` merging alone gets 120/122 operations *mapped*, but every one of them still needs a working Bearer token to actually be *callable*, since Wavix requires auth on every request.
 
@@ -365,4 +409,14 @@ Implemented (roadmap item #2 from section 14): the second-highest-priority post-
 **Full real-world proof:** ran the actual CLI binary against the real Wavix spec end to end — `mcpforge generate --spec wavix-api.json --out ...` now succeeds (previously refused outright), producing **120 tools**, correctly detecting `{ type: "http-bearer" }` auth, and the generated project's `npm run build` (`tsc`) compiles cleanly with zero errors. This is the first time mcpforge has produced a real, compilable, non-Petstore server from an unmodified real-world spec. All 16 automated tests pass (`npm test`).
 
 **Not yet covered:** `api-key` (as opposed to `http-bearer`) auth has unit-level type support and is used identically in the generated fetch wiring, but hasn't been exercised by its own end-to-end test the way `http-bearer` has — worth adding if/when a real API using `apiKey` auth comes up as a validation case. OAuth2/openIdConnect remain explicitly unsupported (warning, not automated) — no changes planned there without a concrete use case, since a generated stdio server can't run an interactive OAuth flow.
+
+## 18. New build order after the section 16 pivot
+
+Replaces the section 9 build order's remaining post-v0 items. Concrete next steps:
+
+1. Audit `openapi-mcp-generator`'s 19 reported dependency vulnerabilities (6 moderate, 12 high, 1 critical per `npm install` output) and decide: depend on it directly (`npm install openapi-mcp-generator`), or fork with patches if the vulnerabilities turn out to be in code paths mcpforge doesn't use, or upstream fixes if they're real and fixable.
+2. Replace `packages/cli`'s internal `openapi/` (parse.ts, map-tools.ts, types.ts) and `render/` (generate-server-code.ts, render-project.ts) modules with a thin wrapper around `openapi-mcp-generator`'s programmatic API (`getToolsFromOpenApi()`) and/or its CLI, generating the base (uninstrumented) server the same way `openapi-mcp-generator` already does on its own.
+3. Re-attach the plugin/instrumentation layer (section 4's `ObservabilityPlugin` interface, section 13's OTel plugin) on top of `openapi-mcp-generator`'s generated output. This requires understanding its generated code's structure well enough to inject `wrapTool()`-equivalent wiring around each tool call — likely a small codemod/AST pass over its output rather than string-templating from scratch, since we no longer control the base template.
+4. Re-run the full validation suite (Petstore end-to-end per sections 12-13, Wavix real-spec generation per section 14-17) against the new pipeline to confirm the instrumentation layer still holds under the same conditions previously validated — specifically re-confirm the stdout/OTel finding from `spike/FINDINGS.md` still applies once `openapi-mcp-generator`'s own server template is what's being instrumented, since it wasn't designed with this constraint in mind.
+5. Decide whether to keep mcpforge's own tests (auth.test.ts, binary-response.test.ts, openapi-3.1.test.ts, map-tools.test.ts) as-is against the new pipeline, retire them in favor of `openapi-mcp-generator`'s own (already more thorough) test suite plus new instrumentation-specific tests, or some mix.
 

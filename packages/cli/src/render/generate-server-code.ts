@@ -64,6 +64,49 @@ function generateHandlerBody(tool: ToolDefinition, auth: AuthScheme | undefined)
   }
   const headersExpr = headersLines.length > 0 ? `{ ${headersLines.join(", ")} }` : "undefined";
 
+  if (tool.isBinaryResponse) {
+    // Binary/streaming responses (audio, PDF, ndjson, octet-stream, ...)
+    // can't be inlined into an MCP tool-call content block the way JSON
+    // can — this is the same category of problem frameworks like FastAPI
+    // solve with a dedicated StreamingResponse/FileResponse type instead
+    // of trying to serialize bytes into a JSON body. We apply the same
+    // idea here: treat binary endpoints as a distinct response shape and
+    // return a structured pointer (download URL + content type) the
+    // caller can fetch separately, rather than streaming binary data
+    // through the tool-call protocol. Redirects are followed manually so
+    // a pre-signed 3xx Location can be returned auth-free, falling back to
+    // an authenticated re-fetchable URL on a direct 2xx.
+    lines.push(`  const response = await fetch(url, {`);
+    lines.push(`    method: ${JSON.stringify(tool.method.toUpperCase())},`);
+    lines.push(`    headers: ${headersExpr},`);
+    if (bodyParam) {
+      lines.push(`    body: JSON.stringify(args.body),`);
+    }
+    lines.push(`    redirect: "manual",`);
+    lines.push(`  });`);
+    lines.push(`  if (response.status >= 300 && response.status < 400) {`);
+    lines.push(`    const location = response.headers.get("location");`);
+    lines.push(`    return {`);
+    lines.push(`      downloadUrl: location,`);
+    lines.push(`      contentType: response.headers.get("content-type"),`);
+    lines.push(`      status: response.status,`);
+    lines.push(`      note: "Pre-signed URL — fetch directly, no auth needed.",`);
+    lines.push(`    };`);
+    lines.push(`  }`);
+    lines.push(`  if (response.ok) {`);
+    lines.push(`    return {`);
+    lines.push(`      downloadUrl: url.toString(),`);
+    lines.push(`      contentType: response.headers.get("content-type"),`);
+    lines.push(`      status: response.status,`);
+    lines.push(`      note: "Authenticated URL — re-fetch with the same credentials to download.",`);
+    lines.push(`    };`);
+    lines.push(`  }`);
+    lines.push(
+      `  throw new Error(\`${tool.name} failed: \${response.status} \${response.statusText}\`);`
+    );
+    return lines.join("\n");
+  }
+
   lines.push(`  const response = await fetch(url, {`);
   lines.push(`    method: ${JSON.stringify(tool.method.toUpperCase())},`);
   lines.push(`    headers: ${headersExpr},`);

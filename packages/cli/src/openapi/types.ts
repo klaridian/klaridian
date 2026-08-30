@@ -39,6 +39,17 @@ export interface ToolDefinition {
   parameters: ToolParameter[];
   /** Full JSON Schema for the MCP tool's inputSchema (object of all parameters). */
   inputSchema: JsonSchemaObject;
+  /**
+   * True when every 2xx response for this operation is non-JSON (binary,
+   * audio, PDF, ndjson streaming, etc.) — i.e. there's no JSON content type
+   * to parse and return. Such tools are generated with a different handler
+   * body that returns `{ downloadUrl, contentType, status }` instead of
+   * trying to inline binary data into an MCP tool-call result — the same
+   * "binary endpoints are a distinct response type" idea frameworks like
+   * FastAPI apply with StreamingResponse/FileResponse (see ARCHITECTURE.md
+   * section 17).
+   */
+  isBinaryResponse: boolean;
 }
 
 /** Non-fatal issue found while mapping — surfaced to the user, doesn't stop generation. */

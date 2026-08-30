@@ -36,6 +36,16 @@ pytest tests/
 3. Add tests. If you're fixing a bug, add a test that would have caught it.
 4. Update ARCHITECTURE.md if you're making a design decision, not just a code change.
 
+## Releases
+
+Versioning is manual for now (no automated changelog tooling yet — revisit if release frequency picks up):
+
+1. Bump the relevant `package.json`/`pyproject.toml` version(s).
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Create a GitHub Release from the tag (Releases → Draft a new release → pick the tag), with notes describing what changed. GitHub can auto-generate a first draft from merged PRs/commits since the last tag — edit for clarity before publishing.
+
+Packages (`@mcpforge/cli` on npm, `mcpforge-posthog-middleware` on PyPI) are not published yet — both are marked private/pre-release until that's decided.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).

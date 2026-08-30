@@ -261,3 +261,18 @@ Implemented (`packages/cli/src/render/{generate-server-code,render-project}.ts`)
 
 **Not yet covered:** no plugins/instrumentation in the generated server yet (that's the next build-order step). No handling yet for OpenAPI response-body schemas beyond "return JSON or text as-is" — response *shape* isn't currently surfaced to the MCP tool definition, only the request-side `inputSchema`. Worth a note for later: MCP tool definitions don't have a standard "output schema" slot the way inputs do, so this may simply not matter much in practice — revisit if real usage says otherwise.
 
+## 13. Plugin interface + OTel plugin — implemented and validated end to end (Aug 30, 2026)
+
+Implemented and tested:
+
+- **`src/plugins/plugin.interface.ts`** — the `ObservabilityPlugin` interface exactly as designed in section 4, plus `resolvePluginConfig()` to validate/apply-defaults for a plugin's config schema against CLI-provided values.
+- **`src/plugins/otel/otel.plugin.ts`** — the generic OTel plugin. Its vendored `instrumentation.ts` contribution directly encodes both spike findings: `OTLPTraceExporter` only (never `ConsoleSpanExporter`), OTel diagnostics routed to stderr, and explicit `SIGINT`/`SIGTERM` → `sdk.shutdown()` handlers.
+- **`generate-server-code.ts`** now accepts an optional plugin and wraps every generated tool handler in the plugin's `wrapFunctionName` — e.g. `wrapTool("getPetById", handle_getPetById)` — without any per-tool special-casing.
+- **`src/commands/generate.ts` + `src/index.ts`** — the real `mcpforge generate` CLI command (via `commander`), supporting `--spec`, `--out`, `--name`, `--plugin`, and repeatable `--plugin-config <pluginId>.<key>=<value>` flags. Surfaces mapping warnings/errors to the user and refuses to generate on hard errors.
+
+**v0 scope decision made here:** exactly 0 or 1 plugins per generated server for now — `generateServerSource` throws if given more than one. Composing multiple plugins around the same tool call site (e.g. OTel + PostHog both wrapping the same handler) needs a real composition strategy that isn't worth building until a second plugin actually exists. Documented directly in code, not just here.
+
+**Validation (`packages/cli/test/otel-plugin.test.ts`):** generates a server with the OTel plugin enabled, runs a real `npm install` (pulling real `@opentelemetry/*` packages), builds, runs it, and — critically — sends it a real `SIGTERM` mid-run to exercise the plugin's shutdown handler. Confirms the invariant from `spike/FINDINGS.md` holds through the full generator, not just the hand-written spike: **stdout stays exactly 2 valid JSON-RPC lines**, even with OTel active and no collector available to receive the exported spans.
+
+Also manually smoke-tested the actual CLI binary (`node dist/src/index.js generate --spec ... --plugin otel --plugin-config otel.serviceName=...`) end to end outside the test suite — correctly surfaced the pre-existing `uploadImage` non-JSON-body warning and generated all 19 tools with OTel wiring. All 11 automated tests pass (`npm test` in `packages/cli`).
+

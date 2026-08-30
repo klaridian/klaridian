@@ -5,7 +5,7 @@
   "description": "Generate MCP servers with built-in observability from an OpenAPI spec.",
   "type": "module",
   "bin": {
-    "mcpforge": "./dist/index.js"
+    "mcpforge": "./dist/src/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^10.1.1",
+    "commander": "^15.0.0",
     "openapi-types": "^12.1.3"
   },
   "devDependencies": {

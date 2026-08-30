@@ -9,11 +9,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { MappingResult } from "../openapi/types.js";
 import { generateServerSource } from "./generate-server-code.js";
+import type { ObservabilityPlugin, ResolvedPluginConfig } from "../plugins/plugin.interface.js";
 
 export interface RenderOptions {
   outputDir: string;
   serverName: string;
   version?: string;
+  /** At most one plugin is supported in v0 (see generate-server-code.ts). */
+  plugin?: ObservabilityPlugin;
+  pluginConfig?: ResolvedPluginConfig;
 }
 
 function generatePackageJson(options: RenderOptions): string {
@@ -30,6 +34,7 @@ function generatePackageJson(options: RenderOptions): string {
       },
       dependencies: {
         "@modelcontextprotocol/sdk": "^1.0.0",
+        ...(options.plugin ? options.plugin.getDependencies() : {}),
       },
       devDependencies: {
         typescript: "^5.7.3",
@@ -141,7 +146,19 @@ export async function renderProject(mapping: MappingResult, options: RenderOptio
     generateServerSource(mapping.tools, {
       serverName: options.serverName,
       version: options.version ?? "0.0.1",
+      plugins: options.plugin ? [options.plugin] : [],
     }),
     "utf-8"
   );
+
+  if (options.plugin) {
+    const config = options.pluginConfig ?? {};
+    const contributions = options.plugin.getTemplateContributions(config);
+    for (const contribution of contributions) {
+      const filePath = path.join(options.outputDir, contribution.path);
+      await mkdir(path.dirname(filePath), { recursive: true });
+      const content = typeof contribution.content === "function" ? contribution.content(config) : contribution.content;
+      await writeFile(filePath, content, "utf-8");
+    }
+  }
 }

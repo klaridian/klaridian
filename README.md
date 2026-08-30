@@ -2,14 +2,14 @@
 
 > Generate MCP servers with engineering + product observability built in — no manual instrumentation.
 
-**Status:** Pre-alpha / planning stage. Not yet functional. See [PLAN.md](PLAN.md) for the full strategic plan.
+**Status:** Working v0. Generates real, runnable MCP servers from an OpenAPI spec, optionally instrumented with OpenTelemetry. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
 ## What is this?
 
-`mcpforge` is a CLI that generates [Model Context Protocol](https://modelcontextprotocol.io) servers — from an OpenAPI spec or a manual tool definition — with observability wired in from the start:
+`mcpforge` is a CLI that generates [Model Context Protocol](https://modelcontextprotocol.io) servers — from an OpenAPI spec — with observability wired in from the start:
 
-- **Engineering observability** — OpenTelemetry spans for every tool call, exportable to Datadog, Grafana, or any OTel-compatible backend. Latency, errors, and cost per call, with zero manual instrumentation.
-- **Product observability** — tool usage events sent to PostHog (or similar), so you can see adoption, usage funnels, and success rates for how agents actually use your server.
+- **Engineering observability** (available now) — OpenTelemetry spans for every tool call, exportable to Datadog, Grafana, or any OTel-compatible backend via OTLP. Latency, errors, and status per call, with zero manual instrumentation.
+- **Product observability** (planned) — tool usage events sent to PostHog (or similar), so you can see adoption, usage funnels, and success rates for how agents actually use your server.
 
 You pick the plugins you want at generation time. The server that comes out the other end is already instrumented.
 
@@ -17,14 +17,70 @@ You pick the plugins you want at generation time. The server that comes out the 
 
 Building an MCP server today means writing the server, then manually wiring up tracing and analytics — repetitive work every MCP server author does from scratch. Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own, but those let an agent *query* those platforms — they don't instrument a *new* server you're building. `mcpforge` closes that gap.
 
+## Quickstart
+
+```bash
+cd packages/cli
+npm install
+npm run build
+
+# Generate an MCP server from an OpenAPI spec, with OTel instrumentation:
+node dist/src/index.js generate \
+  --spec ../../examples/petstore/openapi.json \
+  --out /tmp/my-generated-server \
+  --name my-petstore-server \
+  --plugin otel \
+  --plugin-config otel.serviceName=my-petstore-server
+
+# Then run the generated server:
+cd /tmp/my-generated-server
+npm install && npm run build
+export MCPFORGE_BASE_URL=https://petstore3.swagger.io/api/v3   # only needed if the spec's server URL is relative
+npm start
+```
+
+Omit `--plugin otel` to generate a plain, un-instrumented server.
+
+## Repository layout
+
+```
+mcpforge/
+├── packages/
+│   └── cli/                # the mcpforge CLI — parser, mapper, templating, plugins
+│       ├── src/
+│       │   ├── openapi/    # OpenAPI parsing + OpenAPI-operation -> MCP-tool mapping
+│       │   ├── render/     # generates the actual server source + project files
+│       │   ├── plugins/    # ObservabilityPlugin interface + the otel plugin
+│       │   └── commands/   # the `generate` CLI command
+│       └── test/           # end-to-end tests (real npm install + build + run)
+├── examples/
+│   └── petstore/           # real OpenAPI spec used as the test fixture throughout
+├── spike/                  # throwaway hand-written spike that validated the core mechanic first
+├── PLAN.md                 # business/strategy plan
+├── ARCHITECTURE.md         # technical design, decisions, and validation history
+└── CLAUDE.md               # working agreements for AI agents contributing to this repo
+```
+
 ## Status & roadmap
 
-This project is in the planning phase. See [PLAN.md](PLAN.md) for:
+This project has a working v0: OpenAPI → MCP server generation, plus a real, tested OpenTelemetry plugin. See [ARCHITECTURE.md](ARCHITECTURE.md) sections 9–13 for exactly what's built, what's tested, and what real findings changed the design along the way.
 
+Next up (see ARCHITECTURE.md section 9 build order): CLI polish, then a documented Petstore walkthrough, then a second plugin (PostHog) once the plugin composition question needs answering for real.
+
+See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap
 - Business model (open-core, phased — see plan for why we're not committing to a paid tier on day one)
 - What a future hosted layer could offer *without* duplicating Datadog/PostHog data
 - Open questions and concrete next steps
+
+## Running the tests
+
+```bash
+cd packages/cli
+npm test
+```
+
+This runs real end-to-end tests: generating a project, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
 
 ## License
 

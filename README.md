@@ -2,7 +2,7 @@
 
 > Generate MCP servers with engineering + product observability built in — no manual instrumentation.
 
-**Status:** Working v0. Generates real, runnable MCP servers from an OpenAPI spec, optionally instrumented with OpenTelemetry. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
+**Status:** Working v0, now built on [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator) as the generation engine. Generates real, runnable MCP servers from an OpenAPI spec, optionally instrumented with OpenTelemetry. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
 ## What is this?
 
@@ -12,6 +12,8 @@
 - **Product observability** (planned) — tool usage events sent to PostHog (or similar), so you can see adoption, usage funnels, and success rates for how agents actually use your server.
 
 You pick the plugins you want at generation time. The server that comes out the other end is already instrumented.
+
+mcpforge doesn't parse OpenAPI or generate server code itself — that's delegated to [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator), a mature, MIT-licensed library that handles the OpenAPI→MCP mapping (including `allOf`/`oneOf`/`anyOf`, OAuth2, the MCP 64-char tool-name limit, and multiple transports) better than we could by hand-rolling it. mcpforge's own code is entirely the instrumentation layer on top: a small, targeted patch to the one call site `openapi-mcp-generator` always generates (`executeApiTool`), wiring it through an `ObservabilityPlugin`.
 
 ## Why
 
@@ -29,29 +31,28 @@ node dist/src/index.js generate \
   --spec ../../examples/petstore/openapi.json \
   --out /tmp/my-generated-server \
   --name my-petstore-server \
+  --base-url https://petstore3.swagger.io/api/v3 \
   --plugin otel \
   --plugin-config otel.serviceName=my-petstore-server
 
 # Then run the generated server:
 cd /tmp/my-generated-server
 npm install && npm run build
-export MCPFORGE_BASE_URL=https://petstore3.swagger.io/api/v3   # only needed if the spec's server URL is relative
 npm start
 ```
 
-Omit `--plugin otel` to generate a plain, un-instrumented server.
+Omit `--plugin otel` to generate a plain, un-instrumented server (still via `openapi-mcp-generator`).
 
 ## Repository layout
 
 ```
 mcpforge/
 ├── packages/
-│   └── cli/                # the mcpforge CLI — parser, mapper, templating, plugins
+│   └── cli/                # the mcpforge CLI
 │       ├── src/
-│       │   ├── openapi/    # OpenAPI parsing + OpenAPI-operation -> MCP-tool mapping
-│       │   ├── render/     # generates the actual server source + project files
+│       │   ├── render/instrument.ts  # patches openapi-mcp-generator's output to wire in a plugin
 │       │   ├── plugins/    # ObservabilityPlugin interface + the otel plugin
-│       │   └── commands/   # the `generate` CLI command
+│       │   └── commands/   # the `generate` CLI command (delegates generation to openapi-mcp-generator)
 │       └── test/           # end-to-end tests (real npm install + build + run)
 ├── examples/
 │   └── petstore/           # real OpenAPI spec used as the test fixture throughout
@@ -63,13 +64,11 @@ mcpforge/
 
 ## Status & roadmap
 
-This project has a working v0: OpenAPI → MCP server generation, plus a real, tested OpenTelemetry plugin. See [ARCHITECTURE.md](ARCHITECTURE.md) sections 9–13 for exactly what's built, what's tested, and what real findings changed the design along the way.
+This project has a working v0 built on `openapi-mcp-generator`: OpenAPI → MCP server generation (delegated), plus a real, tested OpenTelemetry instrumentation layer patched on top. See [ARCHITECTURE.md](ARCHITECTURE.md) sections 16–18 for the pivot rationale, and sections 9–15 for the original hand-rolled implementation's history (superseded, kept for context).
 
-**Real-world validation:** we checked whether mcpforge could generate a server comparable to the production [`Wavix/wavix-mcp-server`](https://github.com/Wavix/wavix-mcp-server) from its real OpenAPI spec (122 operations, heavy `allOf` usage, auth, binary responses). Verdict and prioritized gap list in [ARCHITECTURE.md section 14](ARCHITECTURE.md#14-real-world-validation-case-could-mcpforge-replacegenerate-a-wavix-compatible-mcp-server-aug-30-2026).
+**Real-world validation:** checked against the production [`Wavix/wavix-mcp-server`](https://github.com/Wavix/wavix-mcp-server)'s real OpenAPI spec (122 operations, heavy `allOf` usage, auth, binary responses). Via `openapi-mcp-generator`, mcpforge now generates **all 122 operations** (vs. 120/122 with the earlier hand-rolled mapper) as a working, compilable, OTel-instrumented server, from the unmodified real-world spec. See [ARCHITECTURE.md section 16](ARCHITECTURE.md#16-strategic-pivot-adopt-openapi-mcp-generator-as-the-generation-engine-instead-of-maintaining-our-own-aug-30-2026) for the pivot decision and [section 18](ARCHITECTURE.md#18-new-build-order-after-the-section-16-pivot) for validation details.
 
-**Strategic pivot (Aug 30, 2026):** while closing those gaps, we found [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator) — a mature, MIT-licensed, actively-maintained TypeScript library that already does the OpenAPI→MCP generation step better than mcpforge's own hand-rolled implementation (handles `allOf`/`oneOf`/`anyOf`, OAuth2, the 64-char MCP tool-name limit, multiple transports — validated end to end against the same real Wavix spec, 122/122 operations generated cleanly). Rather than keep building a competing generator, mcpforge is pivoting to use it as the generation engine and focus entirely on the actual differentiator: the observability instrumentation layer. See [ARCHITECTURE.md section 16](ARCHITECTURE.md#16-strategic-pivot-adopt-openapi-mcp-generator-as-the-generation-engine-instead-of-maintaining-our-own-aug-30-2026) for the full comparison and rationale, and [section 18](ARCHITECTURE.md#18-new-build-order-after-the-section-16-pivot) for the new build order.
-
-Next up: integrate `openapi-mcp-generator` as mcpforge's generation engine, then re-attach the OTel plugin layer on top of its generated output.
+Next up: PostHog (product observability) plugin; pin/track the `openapi-mcp-generator` version the instrumentation patch depends on and add a canary test for its generated-code shape.
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap
@@ -84,7 +83,7 @@ cd packages/cli
 npm test
 ```
 
-This runs real end-to-end tests: generating a project, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
+This runs real end-to-end tests: generating a project via `openapi-mcp-generator`, patching in the OTel plugin, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
 
 ## License
 

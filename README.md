@@ -77,7 +77,9 @@ This project has a working v0 built on `openapi-mcp-generator`: OpenAPI → MCP 
 
 **Python/FastMCP support (Aug 30, 2026):** first step on the multi-language path — [`packages/python-posthog-middleware/`](packages/python-posthog-middleware/) ships `PostHogMiddleware`, a native FastMCP middleware (not a generator, not a patch) that attaches product-observability event capture to ANY FastMCP server via `mcp.add_middleware(PostHogMiddleware(...))`. Deliberately doesn't ship an `otel`-equivalent for Python — FastMCP already has that natively. See [ARCHITECTURE.md section 23](ARCHITECTURE.md#23-multi-language-expansion-pythonfastmcp-via-a-native-middleware-aug-30-2026) for the full validation.
 
-Next up: decide whether to publish the Python package to PyPI, and continue evaluating the other differentiation paths in section 22.
+**Tool curation — decided, not yet built (Aug 30, 2026):** deep market research confirmed "tool bloat / context overload" as the strongest, most validated pain point in the MCP ecosystem — stronger than product-analytics demand — specifically for OpenAPI→MCP generators like mcpforge. Decision: **user-chosen filtering at generation time** (tag/operation checkboxes + `--include-tags`/`--exclude-tags` flags), not LLM-suggested and not usage-data-gated (avoids the chicken-and-egg problem of needing users before being able to help them). MCP-client-side tool toggles and OAuth consent screens were investigated and ruled out as outside a stdio-only generator's control. See [ARCHITECTURE.md section 24](ARCHITECTURE.md#24-tool-curation-direction-user-chosen-filtering-at-generation-time-not-llm--or-usage-data-driven-aug-30-2026) for the full reasoning and the (already-validated) `x-mcp` mechanism this will build on.
+
+Next up: implement the tool curation feature (section 24); decide whether to publish the Python package to PyPI.
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap

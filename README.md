@@ -50,6 +50,8 @@ npm start
 
 Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--include-tags`, `--exclude-tags`, `--exclude-operation-ids`, or `--interactive` to curate which operations become tools — see [ARCHITECTURE.md section 25](ARCHITECTURE.md#25-tool-curation-implemented-and-validated-end-to-end-aug-30-2026) for details.
 
+Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning) — MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-mcpforge-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
+
 ## Repository layout
 
 ```
@@ -78,6 +80,10 @@ Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry + PostHog 
 **Validated against real-world specs:** including a large, complex production API (100+ operations, heavy `allOf` usage, Bearer auth, binary responses) — see [ARCHITECTURE.md section 16](ARCHITECTURE.md#16-strategic-pivot-adopt-openapi-mcp-generator-as-the-generation-engine-instead-of-maintaining-our-own-aug-30-2026).
 
 **Plugins available:** `otel` (engineering observability, any OTLP backend) and three product-analytics plugins — `posthog`, `amplitude`, `mixpanel` — composable together on the same server in any combination. See [ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026) for how composition works, and [section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why product analytics needed three plugins where engineering observability only needed one.
+
+**MCP spec conformance:** every generated server is patched to fix two real MCP spec (2025-06-18) conformance bugs found in `openapi-mcp-generator`'s own output — unknown-tool calls now return a genuine JSON-RPC protocol error instead of a "successful" result, and tool execution failures now set `isError: true`. Applied always, not opt-in. See [ARCHITECTURE.md section 28](ARCHITECTURE.md#28-mcp-spec-conformance-audit--fixes-aug-30-2026) for the audit methodology and what's still an open gap (rate limiting, output sanitization, tool annotations).
+
+**Transports:** `--transport stdio` (default), `--transport streamable-http`, or `--transport web` (with `--port`, default 3000). Non-stdio transports come straight from `openapi-mcp-generator`; conformance fixes and plugin instrumentation apply identically across all three. **Known limitation:** `streamable-http` crashes on the second HTTP request to a session due to an upstream `fetch-to-node` bug in `openapi-mcp-generator`'s own generated code (reproduced against a vanilla, unpatched project — not caused by mcpforge). See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026).
 
 **Competitive positioning:** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so the OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin and tool curation are the clearer differentiators today. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-mcpforge-vs-fastmcp-aug-30-2026) for the full matrix.
 

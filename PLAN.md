@@ -57,6 +57,8 @@ Building that too early is the most common and most expensive open-core mistake.
 - Built-in waitlist in the CLI: "want a hosted dashboard to see all this aggregated? [yes/no]"
 - Don't build the dashboard until we have ~20-50 real users explicitly asking for it
 
+**Decision (Aug 30, 2026): NOT building CLI telemetry, even opt-in.** Reversing the original plan above. Rationale: mcpforge targets developers who may generate servers for sensitive/regulated APIs (healthcare, finance, EU data) where auditability and trust matter — the same principle already stated below ("infrastructure touching production data... needs to be auditable"). A CLI that phones home at all, even anonymously and opt-in, is exactly the kind of thing a security/compliance-conscious team flags when evaluating whether to use a tool, undermining that positioning before it's even established. The signal we'd get from it (usage counts, popular plugins) is also cheaply approximated without it — GitHub stars, npm/PyPI download counts, issues, direct community feedback — so the trust cost isn't justified by the data value. If real demand for aggregate usage insight emerges later, the correct mechanism is a clearly-documented, default-off, no-PII opt-in with the exact payload published in the README — not something to build speculatively now. Validation for Phase 1 (whether to build a paid layer) should rely on the waitlist prompt and direct community engagement instead, not CLI-collected telemetry.
+
 ### Phase 1 — Paid layer (only after validation, not before)
 See section 4 for what the paid layer should actually be.
 

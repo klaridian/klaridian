@@ -219,6 +219,13 @@ This is where real design judgment is needed, not just plumbing:
 ## 9. Suggested build order (once implementation starts)
 
 1. **Spike (throwaway):** manually generate one MCP server from the Petstore OpenAPI spec, wire OTel by hand, confirm the mechanics actually work end to end (spec → tool → span → OTLP collector) before building any generator abstraction. This validates the riskiest assumption first.
+
+   > **✅ Done (Aug 30, 2026).** See `spike/FINDINGS.md` for full results. Two findings changed downstream design:
+   > - `ConsoleSpanExporter` writes to **stdout**, which corrupts stdio-transport MCP servers (stdout must carry JSON-RPC only). The real OTel plugin must default to `OTLPTraceExporter`; any debug console output must go to stderr, hard-wired, never left to the implementer to get right.
+   > - Span flushing needs explicit `SIGINT`/`SIGTERM` handling (`sdk.shutdown()`) — the default batch processor can lose spans on process exit otherwise. `runtime-otel` must wire this by default, not leave it as an exercise for generated-server users.
+   >
+   > Both findings are now incorporated into section 5 above (the `wrapTool()` design) and should carry into `runtime-otel`'s real implementation and its tests.
+
 2. OpenAPI parsing + tool mapping (no plugins yet, no templating yet — just prove spec → internal tool model works, with tests against the Petstore spec).
 3. Basic project templating (no plugins) — generate a working, unInstrumented MCP server.
 4. Plugin interface + OTel plugin — wire instrumentation into the templated output.

@@ -1,0 +1,191 @@
+// packages/cli/test/curation.test.ts
+//
+// Tests for tool curation (ARCHITECTURE.md section 24): user-chosen
+// filtering of which OpenAPI operations become MCP tools, applied at
+// generation time via the `x-mcp` extension openapi-mcp-generator already
+// respects (confirmed with real generated output — see section 24 and
+// generate.test.ts's E2E coverage of the actual CLI flags).
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import type { OpenAPIV3 } from "openapi-types";
+import {
+  summarizeTags,
+  validateCurationChoice,
+  applyCurationToSpec,
+  CurationValidationError,
+  type OperationSummary,
+} from "../src/curation/curation.js";
+
+const execFileAsync = promisify(execFile);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
+const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
+
+const SAMPLE_OPERATIONS: OperationSummary[] = [
+  { operationId: "listPets", tags: ["pets"], method: "get", path: "/pets" },
+  { operationId: "createPet", tags: ["pets", "write"], method: "post", path: "/pets" },
+  { operationId: "listUsers", tags: ["admin"], method: "get", path: "/users" },
+  { operationId: "healthCheck", tags: [], method: "get", path: "/health" },
+];
+
+test("summarizeTags counts operations per tag, including untagged", () => {
+  const summary = summarizeTags(SAMPLE_OPERATIONS);
+  const asMap = Object.fromEntries(summary.map((s) => [s.tag, s.count]));
+  assert.deepEqual(asMap, { pets: 2, write: 1, admin: 1, "(untagged)": 1 });
+});
+
+test("validateCurationChoice throws CurationValidationError on an unknown tag", () => {
+  assert.throws(
+    () => validateCurationChoice({ excludeTags: ["nonexistent"] }, SAMPLE_OPERATIONS),
+    CurationValidationError
+  );
+});
+
+test("validateCurationChoice throws CurationValidationError on an unknown operationId", () => {
+  assert.throws(
+    () => validateCurationChoice({ excludeOperationIds: ["doesNotExist"] }, SAMPLE_OPERATIONS),
+    CurationValidationError
+  );
+});
+
+test("validateCurationChoice passes silently for real tags/operationIds", () => {
+  assert.doesNotThrow(() =>
+    validateCurationChoice({ includeTags: ["pets"], excludeOperationIds: ["createPet"] }, SAMPLE_OPERATIONS)
+  );
+});
+
+function buildTestDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Test", version: "1.0.0" },
+    paths: {
+      "/pets": {
+        get: { operationId: "listPets", tags: ["pets"], responses: { "200": { description: "OK" } } },
+      },
+      "/admin/users": {
+        get: { operationId: "listUsers", tags: ["admin"], responses: { "200": { description: "OK" } } },
+      },
+      "/health": {
+        get: { operationId: "healthCheck", responses: { "200": { description: "OK" } } },
+      },
+    },
+  };
+}
+
+test("applyCurationToSpec sets x-mcp: false only on excluded operations, and doesn't mutate the input", () => {
+  const original = buildTestDoc();
+  const originalJson = JSON.stringify(original);
+
+  const curated = applyCurationToSpec(original, { excludeTags: ["admin"] });
+
+  // Input untouched.
+  assert.equal(JSON.stringify(original), originalJson);
+
+  const petsOp = (curated.paths!["/pets"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+  const usersOp = (curated.paths!["/admin/users"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+  const healthOp = (curated.paths!["/health"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+
+  assert.equal(petsOp["x-mcp"], undefined, "non-excluded operation should be untouched");
+  assert.equal(usersOp["x-mcp"], false, "admin-tagged operation should be excluded");
+  assert.equal(healthOp["x-mcp"], undefined, "untagged operation not matching excludeTags should be untouched");
+});
+
+test("applyCurationToSpec with includeTags excludes everything NOT matching", () => {
+  const curated = applyCurationToSpec(buildTestDoc(), { includeTags: ["admin"] });
+
+  const petsOp = (curated.paths!["/pets"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+  const usersOp = (curated.paths!["/admin/users"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+
+  assert.equal(petsOp["x-mcp"], false, "non-admin-tagged operation should be excluded when includeTags=admin");
+  assert.equal(usersOp["x-mcp"], undefined, "admin-tagged operation should survive includeTags=admin");
+});
+
+test("applyCurationToSpec excludeOperationIds overrides regardless of tags", () => {
+  const curated = applyCurationToSpec(buildTestDoc(), { excludeOperationIds: ["listPets"] });
+  const petsOp = (curated.paths!["/pets"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+  assert.equal(petsOp["x-mcp"], false);
+});
+
+// --- End-to-end: the actual CLI flags against the real Petstore fixture ---
+
+test(
+  "generate --exclude-tags: produces a working server with only the non-excluded operations",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-curated",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--exclude-tags",
+        "store,user",
+      ]);
+      assert.match(result.stderr, /Generated 8 tool\(s\) \(curated from 19 total\)/);
+
+      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      // Petstore's "store" tag includes getInventory/placeOrder/etc, "user"
+      // includes createUser/loginUser/etc — none of those operationIds
+      // should be present in the curated output.
+      assert.doesNotMatch(serverSource, /"getInventory"/);
+      assert.doesNotMatch(serverSource, /"createUser"/);
+      assert.match(serverSource, /"getPetById"/, "pet-tagged operations should survive");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test("generate --exclude-tags with an unknown tag fails loudly with a clear message", { timeout: 60_000 }, async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-bad-"));
+  try {
+    await assert.rejects(
+      execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-bad-tag",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--exclude-tags",
+        "nonexistent",
+      ]),
+      (err: unknown) => {
+        const e = err as { stderr: string };
+        return /Unknown tag "nonexistent"/.test(e.stderr);
+      }
+    );
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});

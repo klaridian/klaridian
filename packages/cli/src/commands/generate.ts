@@ -21,6 +21,8 @@ import { instrumentGeneratedServer, getPluginProjectAdditions, InstrumentationPa
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
+import { amplitudePlugin } from "../plugins/amplitude/amplitude.plugin.js";
+import { mixpanelPlugin } from "../plugins/mixpanel/mixpanel.plugin.js";
 import type { ObservabilityPlugin } from "../plugins/plugin.interface.js";
 import { listOperations, validateCurationChoice, applyCurationToSpec, CurationValidationError } from "../curation/curation.js";
 import { promptForCurationChoice } from "../curation/interactive.js";
@@ -30,6 +32,8 @@ import type { OpenAPIV3 } from "openapi-types";
 const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
   [otelPlugin.id]: otelPlugin,
   [posthogPlugin.id]: posthogPlugin,
+  [amplitudePlugin.id]: amplitudePlugin,
+  [mixpanelPlugin.id]: mixpanelPlugin,
 };
 
 /** Parses `--plugin-config otel.serviceName=foo` style flags into a nested map. */

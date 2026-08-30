@@ -13,10 +13,12 @@
     "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js"
   },
   "dependencies": {
+    "@amplitude/analytics-node": "^1.5.71",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@inquirer/prompts": "^8.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",
+    "mixpanel": "^0.23.0",
     "openapi-mcp-generator": "4.0.1",
     "openapi-types": "^12.1.3",
     "posthog-node": "^5.21.2"

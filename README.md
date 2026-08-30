@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml)
 
+![mcpforge: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
+
 > Generate MCP servers with engineering + product observability built in — no manual instrumentation.
 
 **Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec, optionally instrumented with OpenTelemetry and/or PostHog, with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
@@ -10,11 +12,11 @@
 
 `mcpforge` is a CLI that generates MCP servers — from an OpenAPI spec — with observability and tool curation wired in from the start:
 
-- **Engineering observability** (`otel` plugin) — OpenTelemetry spans for every tool call, exportable to Datadog, Grafana, or any OTel-compatible backend via OTLP. Latency, errors, and status per call, with zero manual instrumentation.
-- **Product observability** (`posthog` plugin) — a PostHog event per tool call (`tool_name`, `duration_ms`, `success`), so you can see adoption and usage patterns for how agents actually use your server.
+- **Engineering observability** (`otel` plugin) — OpenTelemetry spans for every tool call, exportable via OTLP to Datadog, Grafana, Honeycomb, New Relic, or any other OTLP-compatible backend. Latency, errors, and status per call, with zero manual instrumentation. One plugin reaches every backend here because OTel/OTLP is a genuine open wire protocol.
+- **Product observability** — an event per tool call (`tool_name`, `duration_ms`, `success`) captured by whichever provider you pick: `posthog`, `amplitude`, or `mixpanel` plugins. Unlike OTel, there's no shared standard for product analytics ingestion, so this is three separate plugins rather than one — see [ARCHITECTURE.md section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why that's a structural difference, not an oversight.
 - **Tool curation** — choose which OpenAPI operations become tools at generation time (`--include-tags`, `--exclude-tags`, `--exclude-operation-ids`, or an interactive prompt), so you don't ship every operation in a large spec as a tool by default.
 
-You pick the plugins you want at generation time — `--plugin otel`, `--plugin posthog`, or both together (`--plugin otel --plugin posthog`, composed automatically). The server that comes out the other end is already instrumented.
+You pick the plugins you want at generation time — e.g. `--plugin otel --plugin posthog`, or `--plugin otel --plugin amplitude --plugin mixpanel` (any combination composes automatically). The server that comes out the other end is already instrumented.
 
 OpenAPI parsing and MCP server code generation are handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator); mcpforge's own code is the instrumentation and curation layer on top of that output.
 
@@ -75,7 +77,7 @@ Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry + PostHog 
 
 **Validated against real-world specs:** including a large, complex production API (100+ operations, heavy `allOf` usage, Bearer auth, binary responses) — see [ARCHITECTURE.md section 16](ARCHITECTURE.md#16-strategic-pivot-adopt-openapi-mcp-generator-as-the-generation-engine-instead-of-maintaining-our-own-aug-30-2026).
 
-**Plugins available:** `otel` (engineering observability) and `posthog` (product observability) — composable together on the same server. See [ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026).
+**Plugins available:** `otel` (engineering observability, any OTLP backend) and three product-analytics plugins — `posthog`, `amplitude`, `mixpanel` — composable together on the same server in any combination. See [ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026) for how composition works, and [section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why product analytics needed three plugins where engineering observability only needed one.
 
 **Competitive positioning:** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so the OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin and tool curation are the clearer differentiators today. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-mcpforge-vs-fastmcp-aug-30-2026) for the full matrix.
 

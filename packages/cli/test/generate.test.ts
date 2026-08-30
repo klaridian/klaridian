@@ -303,6 +303,133 @@ test(
   }
 );
 
+test(
+  "generate --plugin amplitude --plugin mixpanel: two product-analytics plugins compose, stdout stays clean JSON-RPC",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-analytics-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-petstore-analytics",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--plugin",
+        "amplitude",
+        "--plugin",
+        "mixpanel",
+      ]);
+      assert.match(result.stderr, /Generated 19 tool\(s\)/);
+      assert.match(result.stderr, /Instrumented with: amplitude, mixpanel/);
+
+      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      assert.match(serverSource, /import \{ wrapAmplitudeTool \} from ".\/instrumentation\/amplitude\.js";/);
+      assert.match(serverSource, /import \{ wrapMixpanelTool \} from ".\/instrumentation\/mixpanel\.js";/);
+      // amplitude is outermost (listed first), mixpanel innermost.
+      assert.match(
+        serverSource,
+        /return await wrapAmplitudeTool\(toolName, \(\) => wrapMixpanelTool\(toolName, \(\) => executeApiTool\(toolName, toolDefinition, toolArgs \?\? \{\}, securitySchemes\)\)\(\)\)\(\);/
+      );
+
+      const amplitudeFileContent = await readFile(path.join(outputDir, "src", "instrumentation", "amplitude.ts"), "utf-8");
+      assert.match(amplitudeFileContent, /AMPLITUDE_API_KEY/);
+      assert.match(amplitudeFileContent, /track\(/);
+
+      const mixpanelFileContent = await readFile(path.join(outputDir, "src", "instrumentation", "mixpanel.ts"), "utf-8");
+      assert.match(mixpanelFileContent, /MIXPANEL_TOKEN/);
+      assert.match(mixpanelFileContent, /mixpanel\.track/);
+
+      const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
+      assert.ok(packageJson.dependencies["@amplitude/analytics-node"]);
+      assert.ok(packageJson.dependencies["mixpanel"]);
+
+      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 90_000 });
+      const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
+      assert.doesNotMatch(buildResult.stderr, /error TS/);
+
+      // Drive the real compiled server over stdio JSON-RPC with BOTH
+      // plugins' env vars set (fake credentials — the SDKs will attempt a
+      // real network call in the background and fail silently/log to
+      // stderr, which is fine; the invariant under test is stdout purity).
+      const proc = spawn("node", ["build/index.js"], {
+        cwd: outputDir,
+        env: {
+          ...process.env,
+          API_BASE_URL: "https://petstore3.swagger.io/api/v3",
+          AMPLITUDE_API_KEY: "fake_test_key_for_e2e_test",
+          MIXPANEL_TOKEN: "fake_test_token_for_e2e_test",
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      let stdoutBuf = "";
+      let stderrBuf = "";
+      proc.stdout!.on("data", (d) => (stdoutBuf += d.toString()));
+      proc.stderr!.on("data", (d) => (stderrBuf += d.toString()));
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          proc.kill();
+          reject(new Error(`Timed out. stderr so far: ${stderrBuf}`));
+        }, 20_000);
+
+        setTimeout(
+          () =>
+            sendJsonRpc(proc, {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "initialize",
+              params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "analytics-test", version: "0.0.1" } },
+            }),
+          300
+        );
+        setTimeout(() => sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), 800);
+        setTimeout(
+          () =>
+            sendJsonRpc(proc, {
+              jsonrpc: "2.0",
+              id: 3,
+              method: "tools/call",
+              params: { name: "getPetById", arguments: { petId: 10 } },
+            }),
+          1300
+        );
+        setTimeout(() => {
+          clearTimeout(timeout);
+          proc.kill("SIGTERM"); // exercises amplitude's shutdown handler (mixpanel has none by design)
+          resolve();
+        }, 4000);
+      });
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const lines = stdoutBuf.trim().split("\n").filter(Boolean);
+      assert.equal(lines.length, 3, `Expected 3 JSON-RPC response lines, got ${lines.length}: ${stdoutBuf}`);
+      const parsed = lines.map((line, i) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          assert.fail(`stdout line ${i} is not valid JSON: ${line.slice(0, 200)}`);
+        }
+      });
+
+      const listResponse = parsed.find((r) => r.id === 2);
+      assert.equal(listResponse.result.tools.length, 19);
+
+      const callResponse = parsed.find((r) => r.id === 3);
+      assert.ok(callResponse.result, `getPetById call should succeed with both plugins active: ${JSON.stringify(callResponse)}`);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
 test("instrumentGeneratedServer throws InstrumentationPatchError if the call site isn't found", async () => {
   const { instrumentGeneratedServer, InstrumentationPatchError } = await import("../src/render/instrument.js");
   const { otelPlugin } = await import("../src/plugins/otel/otel.plugin.js");

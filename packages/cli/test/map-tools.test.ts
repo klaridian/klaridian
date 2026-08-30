@@ -185,3 +185,141 @@ test("non-JSON request body is skipped with a warning, not an error", () => {
   assert.equal(result.warnings.length, 1);
   assert.match(result.warnings[0].message, /application\/json/);
 });
+
+// --- allOf support (ARCHITECTURE.md section 14 — highest-priority post-v0 fix) ---
+
+test("allOf request body is merged into a flat object schema, not rejected", () => {
+  const spec = fixtureSpec({
+    "/campaigns": {
+      post: {
+        operationId: "createCampaign",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                allOf: [
+                  {
+                    type: "object",
+                    properties: { name: { type: "string" } },
+                    required: ["name"],
+                  },
+                  {
+                    type: "object",
+                    properties: { voice_campaign: { type: "boolean" } },
+                    required: ["voice_campaign"],
+                  },
+                ],
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "ok" } },
+      },
+    },
+  });
+
+  const result = mapOpenApiToTools(spec as any);
+  assert.equal(result.errors.length, 0, `Unexpected errors: ${JSON.stringify(result.errors)}`);
+  assert.equal(result.tools.length, 1);
+
+  const bodyParam = result.tools[0].parameters.find((p) => p.name === "body");
+  assert.ok(bodyParam, "body parameter should exist");
+  assert.equal(bodyParam!.schema.type, "object");
+  // Both allOf branches' properties should be merged into one flat schema.
+  assert.ok(bodyParam!.schema.properties?.name, "name from first branch should be present");
+  assert.ok(bodyParam!.schema.properties?.voice_campaign, "voice_campaign from second branch should be present");
+  // required from both branches should be unioned.
+  assert.deepEqual(new Set(bodyParam!.schema.required), new Set(["name", "voice_campaign"]));
+});
+
+test("allOf in a parameter schema is merged rather than rejected", () => {
+  const spec = fixtureSpec({
+    "/widgets/{id}": {
+      get: {
+        operationId: "getWidget",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: {
+              allOf: [{ type: "string" }, { description: "Widget identifier" }],
+            },
+          },
+        ],
+        responses: { "200": { description: "ok" } },
+      },
+    },
+  });
+
+  const result = mapOpenApiToTools(spec as any);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.tools.length, 1);
+  const idParam = result.tools[0].parameters.find((p) => p.name === "id");
+  assert.equal(idParam!.schema.type, "string");
+});
+
+test("nested allOf (allOf member that itself has allOf) is fully flattened", () => {
+  const spec = fixtureSpec({
+    "/things": {
+      post: {
+        operationId: "createThing",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                allOf: [
+                  {
+                    allOf: [
+                      { type: "object", properties: { a: { type: "string" } }, required: ["a"] },
+                      { type: "object", properties: { b: { type: "string" } }, required: ["b"] },
+                    ],
+                  },
+                  { type: "object", properties: { c: { type: "string" } }, required: ["c"] },
+                ],
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "ok" } },
+      },
+    },
+  });
+
+  const result = mapOpenApiToTools(spec as any);
+  assert.equal(result.errors.length, 0, `Unexpected errors: ${JSON.stringify(result.errors)}`);
+  const bodyParam = result.tools[0].parameters.find((p) => p.name === "body");
+  assert.ok(bodyParam!.schema.properties?.a);
+  assert.ok(bodyParam!.schema.properties?.b);
+  assert.ok(bodyParam!.schema.properties?.c);
+  assert.deepEqual(new Set(bodyParam!.schema.required), new Set(["a", "b", "c"]));
+});
+
+test("allOf containing a oneOf branch still produces a hard error (allOf merging doesn't hide genuine ambiguity)", () => {
+  const spec = fixtureSpec({
+    "/ambiguous": {
+      post: {
+        operationId: "createAmbiguous",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                allOf: [
+                  { type: "object", properties: { name: { type: "string" } } },
+                  { oneOf: [{ type: "string" }, { type: "number" }] },
+                ],
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "ok" } },
+      },
+    },
+  });
+
+  const result = mapOpenApiToTools(spec as any);
+  assert.equal(result.tools.length, 0, "operation with a oneOf nested inside allOf should still be rejected");
+  assert.equal(result.errors.length, 1);
+  assert.match(result.errors[0].message, /oneOf/);
+});

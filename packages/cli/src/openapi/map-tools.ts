@@ -49,7 +49,8 @@ function toToolName(
 function convertParamSchema(
   param: OpenAPIV3.ParameterObject
 ): JsonSchemaObject {
-  const schema = (param.schema ?? {}) as OpenAPIV3.SchemaObject;
+  const rawSchema = (param.schema ?? {}) as OpenAPIV3.SchemaObject;
+  const schema = "allOf" in rawSchema && rawSchema.allOf ? mergeAllOf(rawSchema) : rawSchema;
   const items = "items" in schema ? (schema as { items?: OpenAPIV3.SchemaObject }).items : undefined;
   return {
     type: schema.type ?? "string",
@@ -60,8 +61,82 @@ function convertParamSchema(
   };
 }
 
+/**
+ * Merges an `allOf` schema's sibling subschemas into a single flat schema.
+ *
+ * Unlike `oneOf`/`anyOf` (genuinely ambiguous — which branch does a single
+ * flat MCP `inputSchema` represent?), `allOf` is a deterministic
+ * intersection: every subschema must hold simultaneously, so merging
+ * `properties` (later subschemas win on key collision) and unioning
+ * `required` arrays is a faithful, general-purpose translation — not a
+ * spec-specific patch. This directly addresses the highest-impact real-world
+ * finding from ARCHITECTURE.md section 14 (Wavix's spec uses `allOf` 151
+ * times, `oneOf`/`anyOf` combined only 19 times).
+ *
+ * Recurses so nested `allOf` (an `allOf` member that itself has `allOf`) is
+ * also flattened. A subschema that uses `oneOf`/`anyOf` internally is left
+ * as-is here — detectUnsupportedSchemaFeatures still catches that case on
+ * the merged result, since merging doesn't make a nested oneOf/anyOf any
+ * less ambiguous.
+ */
+function mergeAllOf(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject {
+  if (!("allOf" in schema) || !schema.allOf) {
+    return schema;
+  }
+
+  const merged: Record<string, unknown> = { properties: {} };
+  const requiredSet = new Set<string>();
+
+  const subschemas = [...schema.allOf] as OpenAPIV3.SchemaObject[];
+  // Sibling keys alongside `allOf` (e.g. an explicit `required` at the same
+  // level) apply too, per the JSON Schema spec — include the outer schema's
+  // own properties/required as one more subschema to merge, after allOf's
+  // members so we don't discard them below.
+  const { allOf: _allOf, ...ownSchema } = schema;
+  subschemas.push(ownSchema as OpenAPIV3.SchemaObject);
+
+  for (let sub of subschemas) {
+    sub = "allOf" in sub && sub.allOf ? mergeAllOf(sub) : sub;
+
+    if (sub.type && sub.type !== "object" && !merged.type) {
+      merged.type = sub.type;
+    }
+    if (sub.description && !merged.description) {
+      merged.description = sub.description;
+    }
+    if ("properties" in sub && sub.properties) {
+      merged.properties = { ...(merged.properties as object), ...sub.properties };
+    }
+    if ("required" in sub && Array.isArray(sub.required)) {
+      for (const key of sub.required) requiredSet.add(key);
+    }
+    // Preserve oneOf/anyOf found in any branch rather than silently dropping
+    // them — merging must not hide genuine ambiguity from
+    // detectUnsupportedSchemaFeatures, which inspects the merged result.
+    if ("oneOf" in sub && sub.oneOf) {
+      merged.oneOf = sub.oneOf;
+    }
+    if ("anyOf" in sub && sub.anyOf) {
+      merged.anyOf = sub.anyOf;
+    }
+  }
+
+  merged.type = merged.type ?? "object";
+  if (requiredSet.size > 0) {
+    merged.required = [...requiredSet];
+  } else {
+    delete merged.required;
+  }
+  if (merged.properties && Object.keys(merged.properties as object).length === 0) {
+    delete merged.properties;
+  }
+
+  return merged as OpenAPIV3.SchemaObject;
+}
+
 /** Recursively converts an OpenAPI SchemaObject into our internal JsonSchemaObject shape. */
-function convertSchemaObject(schema: OpenAPIV3.SchemaObject): JsonSchemaObject {
+function convertSchemaObject(rawSchema: OpenAPIV3.SchemaObject): JsonSchemaObject {
+  const schema = "allOf" in rawSchema && rawSchema.allOf ? mergeAllOf(rawSchema) : rawSchema;
   const result: JsonSchemaObject = {
     type: schema.type,
     description: schema.description,
@@ -91,12 +166,18 @@ function convertSchemaObject(schema: OpenAPIV3.SchemaObject): JsonSchemaObject {
  * Known-unsupported-in-v0 schema shapes that would silently produce a wrong
  * or empty tool if we tried to map them naively. Detected so callers can
  * fail loudly instead (ARCHITECTURE.md section 7 & 8).
+ *
+ * `allOf` is deliberately NOT flagged here anymore (see mergeAllOf) — it's
+ * a deterministic merge, not an ambiguous union like oneOf/anyOf. Detection
+ * runs on schemas that may still contain allOf internally (e.g. a oneOf
+ * branch that itself uses allOf), so this still needs to look past a
+ * top-level allOf into what it resolves to.
  */
 function detectUnsupportedSchemaFeatures(schema: OpenAPIV3.SchemaObject | undefined): string | null {
   if (!schema) return null;
-  if ("oneOf" in schema && schema.oneOf) return "oneOf";
-  if ("allOf" in schema && schema.allOf) return "allOf";
-  if ("anyOf" in schema && schema.anyOf) return "anyOf";
+  const resolved = "allOf" in schema && schema.allOf ? mergeAllOf(schema) : schema;
+  if ("oneOf" in resolved && resolved.oneOf) return "oneOf";
+  if ("anyOf" in resolved && resolved.anyOf) return "anyOf";
   return null;
 }
 

@@ -234,9 +234,9 @@ This is where real design judgment is needed, not just plumbing:
 
 **Post-v0 roadmap (added Aug 30, 2026 — see section 14 for the full case study):** validating against the real Wavix production API/MCP server surfaced concrete, prioritized next steps beyond the original 6-step list above:
 
-7. `allOf` schema merging in `map-tools.ts` (highest priority — see section 14).
+7. ~~`allOf` schema merging in `map-tools.ts` (highest priority — see section 14).~~ **Done (Aug 30, 2026) — see section 15.** Result against the real Wavix spec: 120/122 operations (98.4%) now map successfully.
 8. Authentication support (Bearer token at minimum) — currently zero auth story.
-9. OpenAPI 3.1 support, validated with its own test fixture (currently only tested against 3.0.x).
+9. OpenAPI 3.1 support — turns out this already works (the real Wavix spec is 3.1 and parses/maps correctly); still worth adding an explicit 3.1 test fixture so this isn't just incidentally true.
 10. Binary/streaming response handling (generate a `{ downloadUrl, contentType, status }`-shaped tool instead of inlining binary data) — same pattern Wavix's own server uses by hand.
 11. `multipart/form-data` request body support, or an explicit documented limitation.
 
@@ -333,4 +333,18 @@ Our mapper (`map-tools.ts`) **rejects any operation using `allOf`/`oneOf`/`anyOf
 ### Bottom line
 
 With items 1-3 solved, a rough estimate is mcpforge could automatically cover something like 85-90 of Wavix's 122 real operations (excluding the ~19 oneOf/anyOf and ~8 binary/multipart ones, which would need the same kind of hand-written escape hatches Wavix itself uses). That's a meaningful chunk of real production-API work, not a rewrite of the generator — but it's also not a "small tweak"; `allOf` merging and an auth story are both non-trivial, multi-session features. This is now the top of the post-v0 roadmap (see section 9's build order, which this case study extends rather than replaces).
+
+> **Update (Aug 30, 2026, same day): item 1 (allOf merging) is now implemented — see section 15.** The actual result against the real Wavix spec beat the estimate above by a wide margin: **120 of 122 operations (98.4%) now map successfully**, not the ~85-90 originally estimated. The `anyOf` count (14 occurrences) turned out to mostly coexist with `allOf` in ways that resolve cleanly rather than blocking mapping — only 2 operations hit a genuine, irreducible `oneOf` ambiguity. Auth (item 2) and OpenAPI 3.1 validation (item 3, though the real Wavix spec — which *is* 3.1 — already parses and maps correctly, so this is now more "add an explicit test fixture" than "add support") remain open.
+
+## 15. `allOf` schema merging — implemented and validated against the real Wavix spec (Aug 30, 2026)
+
+Implemented in `packages/cli/src/openapi/map-tools.ts`: a new `mergeAllOf()` function that recursively flattens an `allOf` schema's sibling subschemas into one merged schema — deep-merging `properties`, unioning `required` arrays across all branches, and preserving any `oneOf`/`anyOf` found in a branch (rather than dropping it) so `detectUnsupportedSchemaFeatures` still catches genuine ambiguity in the *merged* result. `detectUnsupportedSchemaFeatures` no longer flags `allOf` itself as unsupported — only `oneOf`/`anyOf` remain hard errors, per the reasoning in section 14 (allOf is a deterministic intersection; oneOf/anyOf are genuinely ambiguous unions with no single flat `inputSchema` representation).
+
+**Real, load-bearing bug caught by testing, not just unit tests on synthetic fixtures:** the first implementation silently discarded a nested `oneOf`/`anyOf` when it appeared inside an `allOf` branch — merging only copied `properties`/`required`/`type`/`description` and dropped everything else. A dedicated test (`allOf containing a oneOf branch still produces a hard error`) caught this immediately: an operation that should have been rejected as ambiguous was instead silently mapped. Fixed by explicitly propagating `oneOf`/`anyOf` into the merged schema so downstream detection still sees them. This is exactly the kind of subtle-wrong-mapping bug the project's "fail loudly, don't guess" rule (section 7/8) exists to prevent — and it shipped with a passing test suite until the oneOf-inside-allOf case was specifically exercised. Lesson: allOf-merging tests need to include "and it still contains an unsupported feature" cases, not just the happy path.
+
+**Validation against real fixtures:**
+- 4 new unit tests added to `map-tools.test.ts` (`allOf` in a request body, `allOf` in a parameter schema, nested `allOf`-inside-`allOf`, and `oneOf`-inside-`allOf` still rejected) — all pass, plus the full existing suite (15/15 tests) still passes.
+- **Ran the mapper directly against the real Wavix OpenAPI spec** (not just Petstore) as a one-off validation script — this is the same spec analyzed in section 14. Result: **120 of 122 operations (98.4%) now map successfully**, up from an estimated small fraction before this change. Remaining gaps: 2 hard errors (genuine `oneOf` ambiguity) and 3 warnings (non-JSON request bodies — expected, unaddressed until item 4/5 of the roadmap). This substantially beats the original 85-90 estimate in section 14, suggesting `anyOf` usage in the real spec mostly coexists with mergeable `allOf` structure rather than blocking mapping on its own.
+
+**Not yet re-validated end-to-end:** this fix was validated at the mapping layer (does `mapOpenApiToTools` produce a correct `ToolDefinition`?) against both synthetic fixtures and the real Wavix spec's *mapping* output, but **not** by actually rendering and running a generated server against the live Wavix API (unlike the Petstore validations in sections 12-13) — that would require a real Wavix API key, which we don't have. The rendering/running mechanic itself was already proven generic in sections 12-13, so the residual risk here is specifically "does the merged schema's shape make sense to an MCP client," not "does the generator pipeline work," but this is worth flagging explicitly rather than assuming section 12/13's validation automatically covers this new code path too.
 

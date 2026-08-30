@@ -96,6 +96,24 @@ export MCPFORGE_BASE_URL=https://api.example.com
 By default this server calls \`${mapping.baseUrl}\`. Override with the \`MCPFORGE_BASE_URL\` environment variable if needed.
 `
 }
+${
+  mapping.auth
+    ? `## Authentication
+
+This API requires ${
+        mapping.auth.type === "http-bearer"
+          ? "an HTTP Bearer token"
+          : `an API key ("${mapping.auth.paramName}", sent via ${mapping.auth.in})`
+      }. Set it before running:
+
+\`\`\`bash
+export MCPFORGE_AUTH_TOKEN=your-credential-here
+\`\`\`
+
+The generated server will refuse to start without this variable set.
+`
+    : ""
+}
 
 ## Running
 
@@ -147,6 +165,7 @@ export async function renderProject(mapping: MappingResult, options: RenderOptio
       serverName: options.serverName,
       version: options.version ?? "0.0.1",
       plugins: options.plugin ? [options.plugin] : [],
+      auth: mapping.auth,
     }),
     "utf-8"
   );

@@ -62,4 +62,18 @@ export interface MappingResult {
   errors: MappingError[];
   /** Base server URL taken from the spec's `servers[0].url`, if present. */
   baseUrl: string | undefined;
+  /**
+   * Authentication scheme required by the spec, if any. v0 supports http
+   * bearer and apiKey (header or query) — the two schemes that cover the
+   * overwhelming majority of real-world APIs (e.g. Wavix uses bearerAuth,
+   * see ARCHITECTURE.md section 16). OAuth2/openIdConnect are detected but
+   * not automatable — surfaced as a warning instead, since a generated
+   * server can't run an interactive OAuth flow on its own.
+   */
+  auth: AuthScheme | undefined;
 }
+
+export type AuthScheme =
+  | { type: "http-bearer" }
+  | { type: "api-key"; in: "header" | "query"; paramName: string };
+

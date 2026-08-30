@@ -45,7 +45,12 @@ export function registerGenerateCommand(program: Command): void {
       "Plugin config in <pluginId>.<key>=<value> form, repeatable",
       []
     )
-    .action(async (opts: { spec: string; out: string; name: string; plugin?: string; pluginConfig: string[] }) => {
+    .option(
+      "--strict",
+      "Refuse to generate at all if any operation has a mapping error (default: skip failing operations, generate the rest)",
+      false
+    )
+    .action(async (opts: { spec: string; out: string; name: string; plugin?: string; pluginConfig: string[]; strict: boolean }) => {
       try {
         const spec = await parseOpenApiSpec(path.resolve(opts.spec));
         const mapping = mapOpenApiToTools(spec);
@@ -58,10 +63,24 @@ export function registerGenerateCommand(program: Command): void {
         }
 
         if (mapping.errors.length > 0) {
-          console.error(`\n❌ ${mapping.errors.length} error(s) — refusing to generate:`);
+          if (opts.strict) {
+            console.error(`\n❌ ${mapping.errors.length} error(s) — refusing to generate (--strict):`);
+            for (const e of mapping.errors) {
+              console.error(`   - ${e.method.toUpperCase()} ${e.path}: ${e.message}`);
+            }
+            process.exitCode = 1;
+            return;
+          }
+          console.error(
+            `\n⚠️  ${mapping.errors.length} operation(s) skipped due to mapping errors (pass --strict to refuse generation entirely instead):`
+          );
           for (const e of mapping.errors) {
             console.error(`   - ${e.method.toUpperCase()} ${e.path}: ${e.message}`);
           }
+        }
+
+        if (mapping.tools.length === 0) {
+          console.error(`\n❌ No tools could be mapped from this spec — nothing to generate.`);
           process.exitCode = 1;
           return;
         }
@@ -82,15 +101,18 @@ export function registerGenerateCommand(program: Command): void {
           pluginConfig = resolvePluginConfig(plugin, allConfig[plugin.id] ?? {});
         }
 
-        await renderProject(mapping, {
-          outputDir: path.resolve(opts.out),
-          serverName: opts.name,
-          plugin,
-          pluginConfig,
-        });
+        await renderProject(
+          { ...mapping, errors: [] }, // errors already excluded from mapping.tools; clear so renderProject's safety guard doesn't trip in non-strict (skip) mode
+          {
+            outputDir: path.resolve(opts.out),
+            serverName: opts.name,
+            plugin,
+            pluginConfig,
+          }
+        );
 
         console.error(
-          `\n✅ Generated ${mapping.tools.length} tool(s) in ${path.resolve(opts.out)}${plugin ? ` (instrumented with "${plugin.id}")` : ""}`
+          `\n✅ Generated ${mapping.tools.length} tool(s) in ${path.resolve(opts.out)}${plugin ? ` (instrumented with "${plugin.id}")` : ""}${mapping.auth ? ` [requires MCPFORGE_AUTH_TOKEN]` : ""}`
         );
         console.error(`   Next: cd ${opts.out} && npm install && npm run build && npm start`);
       } catch (err) {

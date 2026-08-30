@@ -11,6 +11,7 @@
 import type { OpenAPIV3 } from "openapi-types";
 import type { ParsedSpec } from "./parse.js";
 import type {
+  AuthScheme,
   HttpMethod,
   JsonSchemaObject,
   MappingError,
@@ -279,6 +280,77 @@ function mapOperation(
 }
 
 /**
+ * Detects the spec's required authentication scheme from its top-level
+ * `security` requirement plus `components.securitySchemes`. Only the first
+ * globally-required scheme is used — v0 doesn't support per-operation
+ * overrides or multiple simultaneous schemes (OAuth2 "and" bearer, etc.),
+ * which are rare in practice and out of scope for now (ARCHITECTURE.md
+ * section 8 guardrails).
+ *
+ * Supports http-bearer and apiKey (header/query) — the two schemes that
+ * cover real-world APIs mcpforge has actually been validated against (see
+ * ARCHITECTURE.md section 16; Wavix uses bearerAuth). OAuth2 and
+ * openIdConnect are detected but can't be automated (a generated server
+ * can't run an interactive OAuth flow), so they produce a warning instead
+ * of an AuthScheme.
+ */
+function detectAuthScheme(
+  doc: OpenAPIV3.Document,
+  warnings: MappingWarning[]
+): AuthScheme | undefined {
+  const security = doc.security;
+  if (!security || security.length === 0) {
+    return undefined;
+  }
+
+  const schemeNames = Object.keys(security[0] ?? {});
+  if (schemeNames.length === 0) {
+    return undefined;
+  }
+
+  const schemeName = schemeNames[0];
+  const schemes = doc.components?.securitySchemes as
+    | Record<string, OpenAPIV3.SecuritySchemeObject>
+    | undefined;
+  const scheme = schemes?.[schemeName];
+
+  if (!scheme) {
+    warnings.push({
+      operationId: undefined,
+      path: "",
+      method: "get",
+      message: `Spec requires security scheme "${schemeName}" but it's not defined in components.securitySchemes — generated server will have no auth wiring.`,
+    });
+    return undefined;
+  }
+
+  if (scheme.type === "http" && scheme.scheme === "bearer") {
+    return { type: "http-bearer" };
+  }
+
+  if (scheme.type === "apiKey") {
+    if (scheme.in === "header" || scheme.in === "query") {
+      return { type: "api-key", in: scheme.in, paramName: scheme.name };
+    }
+    warnings.push({
+      operationId: undefined,
+      path: "",
+      method: "get",
+      message: `Security scheme "${schemeName}" is an apiKey with unsupported location "${scheme.in}" (only header/query supported) — no auth wiring generated.`,
+    });
+    return undefined;
+  }
+
+  warnings.push({
+    operationId: undefined,
+    path: "",
+    method: "get",
+    message: `Security scheme "${schemeName}" has type "${scheme.type}" which mcpforge can't automate in v0 (only http-bearer and apiKey are supported) — generated server will have no auth wiring. Configure auth manually or see ARCHITECTURE.md section 9's post-v0 roadmap.`,
+  });
+  return undefined;
+}
+
+/**
  * Maps every supported operation in a parsed OpenAPI document into
  * ToolDefinitions. Never throws for per-operation issues — those are
  * collected as warnings/errors so the caller (CLI) can present a full
@@ -334,6 +406,7 @@ export function mapOpenApiToTools(spec: ParsedSpec): MappingResult {
   });
 
   const baseUrl = doc.servers?.[0]?.url;
+  const auth = detectAuthScheme(doc, warnings);
 
-  return { tools: dedupedTools, warnings, errors, baseUrl };
+  return { tools: dedupedTools, warnings, errors, baseUrl, auth };
 }

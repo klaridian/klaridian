@@ -249,3 +249,15 @@ Implemented and tested (`packages/cli/src/openapi/{parse,map-tools,types}.ts`, `
 
 Also validated: `@apidevtools/swagger-parser` fully dereferences `$ref`s before our code sees the document, so `map-tools.ts` never needs its own `$ref` resolution logic — confirms the parser choice in section 1/3 was right.
 
+## 12. Basic project templating — implemented and validated end to end (Aug 30, 2026)
+
+Implemented (`packages/cli/src/render/{generate-server-code,render-project}.ts`) and tested (`packages/cli/test/render-project.test.ts`):
+
+- **`generate-server-code.ts`** generates the actual TypeScript source of `src/index.ts` for a basic, un-instrumented MCP server — hand-rolled code generation (not a templating engine), because tool-handler wiring (path/query/header/body -> fetch call) has real per-parameter-location branching that's clearer as generated code than as template conditionals. This confirms the section 6 hybrid approach was right in spirit, though in practice v0 didn't even need `ts-morph` yet — plain string generation was sufficient because there's no cross-plugin injection point to manage until the OTel plugin lands (next build step).
+- **`render-project.ts`** writes the full project to disk: `package.json`, `tsconfig.json`, `README.md` (including a warnings section surfaced from the mapping step), and `src/index.ts`.
+- Confirmed the section-11 finding is now handled at generation time: when the spec's server URL isn't absolute, the generated server requires `MCPFORGE_BASE_URL` and fails with a clear message instead of guessing a host, and the generated README documents this explicitly.
+
+**The strongest validation so far:** `render-project.test.ts` doesn't just check generated file contents — it renders a real project to a temp directory, runs a real `npm install`, runs a real `tsc` build, spawns the compiled server, and drives it over stdio JSON-RPC exactly as the spike did by hand. Result: **19/19 tools listed correctly, `getPetById` returns real data from the live Petstore API, all 10 tests pass** (`npm test` in `packages/cli`). This is the generator now doing, automatically, what the spike proved was possible by hand.
+
+**Not yet covered:** no plugins/instrumentation in the generated server yet (that's the next build-order step). No handling yet for OpenAPI response-body schemas beyond "return JSON or text as-is" — response *shape* isn't currently surfaced to the MCP tool definition, only the request-side `inputSchema`. Worth a note for later: MCP tool definitions don't have a standard "output schema" slot the way inputs do, so this may simply not matter much in practice — revisit if real usage says otherwise.
+

@@ -28,6 +28,8 @@ import { listOperations, validateCurationChoice, applyCurationToSpec, CurationVa
 import { promptForCurationChoice } from "../curation/interactive.js";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
+import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
+import { applyConformanceFixes, ConformancePatchError } from "../render/conformance.js";
 
 const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
   [otelPlugin.id]: otelPlugin,
@@ -49,6 +51,26 @@ function parsePluginConfigFlags(flags: string[]): Record<string, Record<string, 
     result[pluginId][key] = value;
   }
   return result;
+}
+
+/**
+ * Resolves a default LICENSE copyright-holder name from local git config
+ * (`git config user.name`), mirroring how most scaffolding tools (e.g.
+ * `npm init`) pick a sensible default without requiring an explicit flag.
+ * Returns undefined (never throws) if git isn't installed or unconfigured —
+ * the caller falls back to a generic placeholder in that case.
+ */
+async function resolveGitAuthorName(): Promise<string | undefined> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync("git", ["config", "user.name"]);
+    const name = stdout.trim();
+    return name.length > 0 ? name : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function registerGenerateCommand(program: Command): void {
@@ -86,6 +108,25 @@ export function registerGenerateCommand(program: Command): void {
       "Plugin config in <pluginId>.<key>=<value> form, repeatable",
       []
     )
+    .option(
+      "--license <id>",
+      `License for the generated server (ARCHITECTURE.md section 27 — MCP servers run with real credentials next to an autonomous agent, so shipping without a license is a real trust gap): ${SUPPORTED_LICENSES.join(", ")}`,
+      "mit"
+    )
+    .option(
+      "--author <name>",
+      "Author/copyright holder name for the generated LICENSE file (default: your git user.name, or \"the project author\" if unset)"
+    )
+    .option(
+      "--transport <type>",
+      "Transport for the generated server: stdio (default), streamable-http, or web (ARCHITECTURE.md section 29 — stdio-only was a v0 guardrail, lifted now that openapi-mcp-generator supports the others natively)",
+      "stdio"
+    )
+    .option(
+      "--port <number>",
+      "Port for the generated server when --transport is streamable-http or web (default: 3000)",
+      (value: string) => parseInt(value, 10)
+    )
     .action(
       async (opts: {
         spec: string;
@@ -98,11 +139,37 @@ export function registerGenerateCommand(program: Command): void {
         interactive: boolean;
         plugin: string[];
         pluginConfig: string[];
+        license: string;
+        author?: string;
+        transport: string;
+        port?: number;
       }) => {
         let tempSpecDir: string | undefined;
         try {
           const specPath = path.resolve(opts.spec);
           const outputDir = path.resolve(opts.out);
+
+          if (!isSupportedLicense(opts.license)) {
+            console.error(`❌ Unknown license "${opts.license}". Supported: ${SUPPORTED_LICENSES.join(", ")}`);
+            process.exitCode = 1;
+            return;
+          }
+          const license = opts.license;
+
+          const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http", "web"] as const;
+          type Transport = (typeof SUPPORTED_TRANSPORTS)[number];
+          if (!(SUPPORTED_TRANSPORTS as readonly string[]).includes(opts.transport)) {
+            console.error(`❌ Unknown transport "${opts.transport}". Supported: ${SUPPORTED_TRANSPORTS.join(", ")}`);
+            process.exitCode = 1;
+            return;
+          }
+          const transport = opts.transport as Transport;
+          const port = opts.port ?? 3000;
+          if (transport !== "stdio" && (!Number.isInteger(port) || port <= 0 || port > 65535)) {
+            console.error(`❌ Invalid --port "${opts.port}" — must be an integer between 1 and 65535.`);
+            process.exitCode = 1;
+            return;
+          }
 
           // Resolve + validate every requested plugin BEFORE generating
           // anything, so we fail fast on a bad --plugin/--plugin-config
@@ -199,12 +266,66 @@ export function registerGenerateCommand(program: Command): void {
             output: outputDir,
             serverName: opts.name,
             baseUrl: opts.baseUrl,
-            transport: "stdio",
+            transport,
+            port: transport !== "stdio" ? port : undefined,
             force: true,
           });
 
           const curationSuffix = hasCuration ? ` (curated from ${operations.length} total)` : "";
-          console.error(`✅ Generated ${tools.length} tool(s)${curationSuffix} in ${outputDir} (via openapi-mcp-generator)`);
+          const transportSuffix = transport !== "stdio" ? ` [${transport}, port ${port}]` : "";
+          console.error(`✅ Generated ${tools.length} tool(s)${curationSuffix} in ${outputDir}${transportSuffix} (via openapi-mcp-generator)`);
+
+          // Apply MCP spec conformance fixes (ARCHITECTURE.md section 28) —
+          // ALWAYS, regardless of --plugin. Unlike plugin instrumentation
+          // (opt-in), these are correctness fixes for spec-required
+          // behavior openapi-mcp-generator's output gets wrong (unknown
+          // tools returning a "successful" result instead of a JSON-RPC
+          // protocol error; execution failures never setting
+          // `isError: true`). Applied before the plugin instrumentation
+          // step below, so instrument.ts's textual patch operates on the
+          // already-conformant source.
+          {
+            const serverFilePath = path.join(outputDir, "src", "index.ts");
+            const serverSource = await readFile(serverFilePath, "utf-8");
+            let conformant: string;
+            try {
+              conformant = applyConformanceFixes(serverSource);
+            } catch (err) {
+              if (err instanceof ConformancePatchError) {
+                console.error(`❌ ${err.message}`);
+                console.error(
+                  `   The server was generated successfully but is NOT spec-conformant for tool errors — see ARCHITECTURE.md section 28.`
+                );
+                process.exitCode = 1;
+                return;
+              }
+              throw err;
+            }
+            await writeFile(serverFilePath, conformant, "utf-8");
+            console.error(`✅ Applied MCP spec conformance fixes (unknown-tool protocol errors, isError on tool failures)`);
+          }
+
+          // Write LICENSE + package.json's `license` field (ARCHITECTURE.md
+          // section 27). Done unconditionally (default "mit") rather than
+          // opt-in, because the absence of a license is itself the gap being
+          // closed — an MCP server silently generated with no license at all
+          // is a worse default than "assume MIT unless told otherwise",
+          // consistent with the "fail loudly, don't guess" principle applied
+          // here as "don't silently omit," not just "don't silently break."
+          if (license !== "none") {
+            const author = opts.author?.trim() || (await resolveGitAuthorName()) || "the project author";
+            const licenseText = getLicenseText(license, author, new Date().getFullYear());
+            if (licenseText) {
+              await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
+            }
+            const packageJsonPath = path.join(outputDir, "package.json");
+            const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
+            packageJson.license = getPackageJsonLicenseField(license);
+            await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), "utf-8");
+            console.error(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
+          } else {
+            console.error(`⚠️  Generated with --license none — no LICENSE file written. Consider adding one before distributing this server (see ARCHITECTURE.md section 27).`);
+          }
 
           if (plugins.length > 0) {
             const serverFilePath = path.join(outputDir, "src", "index.ts");
@@ -252,7 +373,8 @@ export function registerGenerateCommand(program: Command): void {
             console.error(`✅ Instrumented with: ${plugins.map((p) => p.id).join(", ")}`);
           }
 
-          console.error(`   Next: cd ${opts.out} && npm install && npm run build && npm start`);
+          const startScript = transport === "stdio" ? "npm start" : transport === "web" ? "npm run start:web" : "npm run start:http";
+          console.error(`   Next: cd ${opts.out} && npm install && npm run build && ${startScript}`);
         } catch (err) {
           console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
           process.exitCode = 1;

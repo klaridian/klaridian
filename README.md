@@ -72,7 +72,9 @@ This project has a working v0 built on `openapi-mcp-generator`: OpenAPI → MCP 
 
 **Plugins available:** `otel` (engineering observability) and `posthog` (product observability) — composable together on the same server (`--plugin otel --plugin posthog`). See [ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026) for how composition works and what it validated.
 
-Next up: business-model validation (waitlist/telemetry per PLAN.md), and considering a Datadog-specific plugin (thin wrapper over the OTel exporter) if there's demand for it over generic OTel.
+**Competitive check (Aug 30, 2026):** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry by default, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so mcpforge's OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin remains the one clearly unique offering in the whole space. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-mcpforge-vs-fastmcp-aug-30-2026) for the full matrix and [section 22](ARCHITECTURE.md#22-differentiation-paths-under-consideration-aug-30-2026) for candidate differentiation paths under discussion (multi-language support, deeper product observability, usage-driven tool curation, the hosted correlation layer, or an instrumentation-only generator-agnostic pivot) — no direction chosen yet.
+
+Next up: pick a differentiation path (see above) before further generator-level feature work.
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap

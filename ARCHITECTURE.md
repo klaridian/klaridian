@@ -458,3 +458,55 @@ Ships the second plugin from PLAN.md's roadmap and — more importantly — prov
 All 7 tests pass (`npm test`): the 2 canary tests (section 19), 2 single-plugin/no-plugin E2E tests (section 16/18), the new multi-plugin E2E test, and 2 unit tests for the instrumentation patch's failure modes.
 
 **Not yet covered:** PostHog's own posthog-node has real capabilities (feature flags, session recording, group analytics) deliberately left out of scope for v0, same restraint as the OTel plugin's OTLP-only choice — no speculative feature-building without a concrete need. The `distinctId: "mcp-server"` simplification means all events currently look identical regardless of which MCP client/end-user triggered them; acceptable for v0's "is this tool used at all" question, not yet sufficient for per-user product analytics.
+
+## 21. Competitive feature matrix: mcpforge vs. FastMCP (Aug 30, 2026)
+
+Researched after shipping the PostHog plugin (section 20), to sanity-check mcpforge's differentiation before continuing. Important framing correction made during this research: **FastMCP and mcpforge are not the same product category.** FastMCP is a Python *framework* for building MCP servers by hand (with `from_openapi()` as one ingestion path among several); mcpforge is a TypeScript *generator* that produces a standalone server from an OpenAPI spec, delegating the actual generation to `openapi-mcp-generator` (section 16). The fairer comparison is "mcpforge + openapi-mcp-generator" vs. "FastMCP + `from_openapi()`", and even that undersells FastMCP's scope — it's a full application framework, we're a narrower code generator plus an instrumentation layer.
+
+| Feature | mcpforge | FastMCP 3.0/4.0 |
+|---|---|---|
+| Language | TypeScript/Node | Python |
+| License | MIT/Apache (planned) | Apache 2.0 |
+| Model | Generates standalone code (via `openapi-mcp-generator`) | Runtime framework — no code generation |
+| OpenAPI 3.0/3.1 | Yes (via `openapi-mcp-generator`) | Yes |
+| Transports | stdio only | stdio, HTTP, SSE |
+| **OpenTelemetry** | Opt-in plugin (`--plugin otel`), our own vendored instrumentation | **Native, on by default since v3.0/4.0**, zero-config, no-op without an SDK configured (same "bring your own backend" principle we independently chose for our plugin) |
+| **PostHog / product observability** | Plugin (`--plugin posthog`) — appears to be genuinely unique in the space | None found — not in FastMCP itself, not in the most OTel-forward OpenAPI→FastMCP generator (`mcp-generator-3.x`) |
+| Auth | Bearer + API key (via `openapi-mcp-generator`) | Bearer, full OAuth2 (proxy + Dynamic Client Registration), JWT/JWKS, `MultiAuth` composition |
+| Middleware / request pipeline | None | Full pipeline: logging, rate limiting, retries, caching, structured error handling, built-in + custom hooks (`on_call_tool`, `on_request`, etc.) |
+| Server composition | None | `mount()`, `ProxyProvider`, namespacing, multi-server aggregation |
+| MCP Resources | None | Yes |
+| Component versioning | None | Yes (multiple tool versions coexist) |
+| Maturity / adoption | Personal project, days old | ~16M PyPI downloads/week, reported as powering the majority of MCP servers in production |
+
+**A second, more direct competitor surfaced during this research:** [`mcp-generator-3.x`](https://github.com/quotentiroler/mcp-generator-3.x) (Python, Apache 2.0, actively maintained) generates **FastMCP 3.x servers from OpenAPI specs** — i.e. it already combines "OpenAPI→MCP generation" with FastMCP's native OTel, plus JWT/JWKS auth, OAuth2 flows, a real middleware stack, MCP Resources, and modular sub-servers. It has **no PostHog/product-observability equivalent either** (confirmed by its own feature table, which lists OpenTelemetry but nothing product-analytics-shaped).
+
+**What this changes about mcpforge's differentiation:**
+- The OTel plugin has **no differentiation value in the Python ecosystem** — anyone on FastMCP already gets engineering observability for free, natively. Its value is now specifically "there's no equivalent zero-config OTel story in the Node/TypeScript OpenAPI→MCP generator space" — a narrower, still-real, but smaller claim than originally assumed.
+- The PostHog plugin remains the one clearly validated, unique differentiator — nobody else in the space (Python or TypeScript, framework or generator) combines OpenAPI→MCP generation with product observability.
+- On every other axis (auth sophistication, middleware, composition, transports, MCP Resources), a mature Python competitor is already ahead of mcpforge's current TypeScript stack — these aren't gaps mcpforge invented, they're gaps inherited from depending on `openapi-mcp-generator`'s current scope (itself narrower than FastMCP's).
+
+See section 22 for the differentiation paths this points toward.
+
+## 22. Differentiation paths under consideration (Aug 30, 2026)
+
+Raised directly by the section 21 finding: "generate a server with observability" is no longer a clean, uncontested niche — FastMCP-based competitors already do OTel+auth+middleware natively, and mcpforge's own OTel plugin is redundant for anyone already on FastMCP. This section lists candidate differentiation paths, not decisions — none of these are committed to; they need discussion and, per PLAN.md's guiding principle, real signal before building.
+
+### a) Multi-language: generate the SAME instrumentation for Python (FastMCP) targets too
+Instead of competing with FastMCP's native OTel, **plug into it** — ship a `--target fastmcp` (or similar) generation mode that produces a Python/FastMCP server (or a `fastmcp.json` config) with mcpforge's PostHog plugin wired in on top of FastMCP's own native OTel, rather than reinventing OTel wiring FastMCP already does for free. This reframes mcpforge from "OpenAPI→MCP generator, TypeScript only" to "the product-observability layer for OpenAPI-generated MCP servers, regardless of which generator/language produced them." Concretely lower-risk than it sounds: the PostHog plugin's actual logic (capture one event per tool call, with duration/success/error) is a thin, portable pattern — the hard part is finding FastMCP's own equivalent single-call-site injection point (its "component" execution path), which needs research before assuming it's as simple as `openapi-mcp-generator`'s single `executeApiTool()` was (section 20).
+
+**Trade-off:** real engineering investment (a second target language/runtime), and it repositions the whole project — no longer "a generator with plugins," more "an instrumentation layer that works across generators." Needs explicit buy-in before starting, not a small addition.
+
+### b) Double down on product observability itself — go deeper than one PostHog event
+Rather than spreading thin across languages, make the PostHog plugin itself meaningfully better than any DIY integration a developer would hand-roll in 20 minutes: per-argument/parameter analytics (which fields get used, not just which tool), automatic funnel construction across multi-tool agent sessions (tool A → tool B → tool C sequences), correlation with MCP client identity (once available via protocol extensions), or opinionated dashboards/insights pre-built for "MCP tool usage" as a first-class PostHog data shape (not just raw events the user has to build charts for themselves). This is the lowest-risk path — no new language, no new competitor category — but needs validation that the shallow version (what exists today) isn't already "enough" for real users; more depth is only valuable if someone's asking for it.
+
+### c) Tool curation / pruning (the FastMCP-author critique from section 16)
+Already flagged as a validated-but-unbuilt direction: the FastMCP author's own critique of OpenAPI→MCP auto-conversion (too many tools, context bloat, agents perform worse) points at a real, different problem nobody in this space solves — automatic or semi-automatic curation of which of the N generated tools an agent should actually see, based on usage data (which the PostHog plugin is already collecting). This could be a genuinely novel combination: **use our own product-observability data to drive automatic tool pruning/prioritization** — closing the loop between "we measure usage" and "we use that measurement to improve the generated server," which no generator (FastMCP-based or otherwise) currently does. Needs real usage data to be believable, though — a chicken-and-egg problem with adoption.
+
+### d) The hosted correlation/fleet layer (already in PLAN.md section 4)
+Restating the existing plan rather than a new idea: cross-server task correlation, fleet inventory, unified cost attribution, smart routing — deliberately positioned to never duplicate Datadog/PostHog/FastMCP's own capabilities. This remains the most defensible long-term moat (a generator/framework is commodity, a hosted aggregation layer isn't), but is explicitly gated on 20-50 real users per the existing Phase 0/Phase 1 plan — not something to pull forward just because the generator-level differentiation narrowed.
+
+### e) Do less generation, more "bring your own generator" — become instrumentation-only, generator-agnostic
+A more radical version of (a): stop shipping a generator at all (or make it optional), and instead ship the instrumentation layer as something that attaches to *any* already-generated MCP server (FastMCP output, `openapi-mcp-generator` output, hand-written servers) via a post-processing CLI step (`mcpforge instrument ./my-server --plugin posthog`) — closer to a linter/codemod tool than a scaffolder. This sidesteps the "which generator is best" competition entirely and repositions around the one piece nobody else has (PostHog), applied universally. Highest strategic coherence with the section 21 finding, but also the biggest scope change — effectively obsoletes the `generate` command as currently built (sections 16-19) in favor of a new `instrument` command working on arbitrary input.
+
+**No decision made in this session.** Recorded for discussion; PLAN.md section 5 ("open questions") should reference this section once a direction is chosen.

@@ -1,0 +1,45 @@
+# Contributing to mcpforge
+
+Thanks for considering a contribution! mcpforge is early — the project is still validating its core direction (see [PLAN.md](PLAN.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for the current thinking), so please open an issue to discuss non-trivial changes before investing time in a PR.
+
+## Ground rules
+
+- **ARCHITECTURE.md is the source of truth for technical design decisions.** Read it before making non-trivial changes — it documents not just what was built, but why, including dead ends and reversed decisions.
+- **PLAN.md is for business/strategy**, not technical design. Keep the two separate.
+- **"Fail loudly, don't guess."** If a change hits something ambiguous (an unsupported schema shape, a missing config value), it should produce a clear error or warning, never silently do something subtly wrong.
+- **Every non-trivial change should be validated end to end**, not just unit-tested. This project's own tests do real `npm install`/`tsc build`/spawn-and-drive-over-stdio for the TypeScript CLI, and a real FastMCP server + client round-trip for the Python middleware — because the riskiest failure modes only show up at that level.
+
+## Development setup
+
+### TypeScript CLI (`packages/cli`)
+
+```bash
+cd packages/cli
+npm install
+npm run build
+npm test
+```
+
+### Python middleware (`packages/python-posthog-middleware`)
+
+```bash
+cd packages/python-posthog-middleware
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest tests/
+```
+
+## Submitting changes
+
+1. Open an issue first for anything beyond a small bug fix — this saves everyone time if the direction doesn't fit.
+2. Keep PRs focused — one change, one PR.
+3. Add tests. If you're fixing a bug, add a test that would have caught it.
+4. Update ARCHITECTURE.md if you're making a design decision, not just a code change.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+
+## Reporting security issues
+
+See [SECURITY.md](SECURITY.md) — please don't open a public issue for security vulnerabilities.

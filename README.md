@@ -56,6 +56,7 @@ mcpforge/
 │       │   ├── plugins/    # ObservabilityPlugin interface + plugins (otel, posthog)
 │       │   └── commands/   # the `generate` CLI command (delegates generation to openapi-mcp-generator)
 │       └── test/           # end-to-end tests (real npm install + build + run)
+│   └── python-posthog-middleware/  # FastMCP-native PostHog middleware (Python) — no generation/patching, see ARCHITECTURE.md section 23
 ├── examples/
 │   └── petstore/           # real OpenAPI spec used as the test fixture throughout
 ├── spike/                  # throwaway hand-written spike that validated the core mechanic first
@@ -74,7 +75,9 @@ This project has a working v0 built on `openapi-mcp-generator`: OpenAPI → MCP 
 
 **Competitive check (Aug 30, 2026):** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry by default, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so mcpforge's OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin remains the one clearly unique offering in the whole space. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-mcpforge-vs-fastmcp-aug-30-2026) for the full matrix and [section 22](ARCHITECTURE.md#22-differentiation-paths-under-consideration-aug-30-2026) for candidate differentiation paths under discussion (multi-language support, deeper product observability, usage-driven tool curation, the hosted correlation layer, or an instrumentation-only generator-agnostic pivot) — no direction chosen yet.
 
-Next up: pick a differentiation path (see above) before further generator-level feature work.
+**Python/FastMCP support (Aug 30, 2026):** first step on the multi-language path — [`packages/python-posthog-middleware/`](packages/python-posthog-middleware/) ships `PostHogMiddleware`, a native FastMCP middleware (not a generator, not a patch) that attaches product-observability event capture to ANY FastMCP server via `mcp.add_middleware(PostHogMiddleware(...))`. Deliberately doesn't ship an `otel`-equivalent for Python — FastMCP already has that natively. See [ARCHITECTURE.md section 23](ARCHITECTURE.md#23-multi-language-expansion-pythonfastmcp-via-a-native-middleware-aug-30-2026) for the full validation.
+
+Next up: decide whether to publish the Python package to PyPI, and continue evaluating the other differentiation paths in section 22.
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap

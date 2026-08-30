@@ -1,0 +1,5 @@
+{
+  "name": "mcpforge-monorepo",
+  "private": true,
+  "workspaces": ["packages/*"]
+}

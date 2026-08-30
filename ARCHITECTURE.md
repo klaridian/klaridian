@@ -240,3 +240,12 @@ This is where real design judgment is needed, not just plumbing:
 - [ ] Which MCP SDK: official `@modelcontextprotocol/sdk` (assume yes, no reason to deviate).
 - [ ] Package manager for generated projects: npm (safest default, zero assumptions about what the user has installed).
 - [ ] Do we vendor `runtime-otel` as a copied file into each generated project (zero extra install, more duplication) or publish it as a real npm dependency (cleaner, but means generated servers depend on an mcpforge-maintained package before v1 stability)? **Leaning vendored-file for v0** to avoid a premature published-package commitment; revisit once the API stabilizes.
+
+## 11. Findings from building the OpenAPI parser + mapper (Aug 30, 2026)
+
+Implemented and tested (`packages/cli/src/openapi/{parse,map-tools,types}.ts`, `packages/cli/test/map-tools.test.ts`) against the real Petstore spec (all 19 operations map cleanly, 0 errors) plus 5 targeted edge-case fixtures. One real-world finding that wasn't anticipated in section 7:
+
+**`servers[0].url` can be relative, not absolute.** The real Petstore spec declares `servers: [{ url: "/api/v3" }]` — a path, not a full domain. `mapOpenApiToTools()` passes this through as-is rather than guessing a host. **Consequence for the generator/templates (not yet built):** the generated server's config must require an explicit base host from the user when the spec's server URL is relative — don't silently prepend something. This should become a v0 CLI prompt ("spec declares a relative server URL — what host should tools be called against?") rather than a runtime surprise.
+
+Also validated: `@apidevtools/swagger-parser` fully dereferences `$ref`s before our code sees the document, so `map-tools.ts` never needs its own `$ref` resolution logic — confirms the parser choice in section 1/3 was right.
+

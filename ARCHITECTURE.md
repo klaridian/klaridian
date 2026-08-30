@@ -232,6 +232,14 @@ This is where real design judgment is needed, not just plumbing:
 5. CLI polish (prompts, error messages, `--help`).
 6. README + a documented walkthrough using the Petstore example, since that's what launch posts will need anyway.
 
+**Post-v0 roadmap (added Aug 30, 2026 — see section 14 for the full case study):** validating against the real Wavix production API/MCP server surfaced concrete, prioritized next steps beyond the original 6-step list above:
+
+7. `allOf` schema merging in `map-tools.ts` (highest priority — see section 14).
+8. Authentication support (Bearer token at minimum) — currently zero auth story.
+9. OpenAPI 3.1 support, validated with its own test fixture (currently only tested against 3.0.x).
+10. Binary/streaming response handling (generate a `{ downloadUrl, contentType, status }`-shaped tool instead of inlining binary data) — same pattern Wavix's own server uses by hand.
+11. `multipart/form-data` request body support, or an explicit documented limitation.
+
 ---
 
 ## 10. Open technical questions
@@ -275,4 +283,54 @@ Implemented and tested:
 **Validation (`packages/cli/test/otel-plugin.test.ts`):** generates a server with the OTel plugin enabled, runs a real `npm install` (pulling real `@opentelemetry/*` packages), builds, runs it, and — critically — sends it a real `SIGTERM` mid-run to exercise the plugin's shutdown handler. Confirms the invariant from `spike/FINDINGS.md` holds through the full generator, not just the hand-written spike: **stdout stays exactly 2 valid JSON-RPC lines**, even with OTel active and no collector available to receive the exported spans.
 
 Also manually smoke-tested the actual CLI binary (`node dist/src/index.js generate --spec ... --plugin otel --plugin-config otel.serviceName=...`) end to end outside the test suite — correctly surfaced the pre-existing `uploadImage` non-JSON-body warning and generated all 19 tools with OTel wiring. All 11 automated tests pass (`npm test` in `packages/cli`).
+
+## 14. Real-world validation case: could mcpforge replace/generate a Wavix-compatible MCP server? (Aug 30, 2026)
+
+To pressure-test v0 against something harder than the well-formed Petstore spec, we inspected the real, production `Wavix/wavix-mcp-server` (public GitHub repo) and its source spec `Wavix/wavix-openapi`. **Verdict: not today.** The gap is real and instructive, not a minor tweak — documenting it here because it's the clearest signal yet of what "v1" needs to cover to be useful beyond toy specs.
+
+### What the Wavix spec actually looks like, vs. Petstore
+
+| | Petstore (our fixture) | Wavix (real production API) |
+|---|---|---|
+| OpenAPI version | 3.0.x | **3.1.0** (never tested against our parser/mapper) |
+| Paths / operations | 19 | **78 paths, 122 operations** |
+| `allOf` usage | 0 | **151 occurrences** |
+| `oneOf` / `anyOf` usage | 0 | 5 / 14 occurrences |
+| `multipart/form-data` bodies | 0 | 3 endpoints (file uploads: number papers, speech-analytics audio, 10DLC evidence) |
+| Non-JSON responses | 0 | 5 endpoints (`audio/wav`, `application/pdf`, `application/x-ndjson`, `application/octet-stream`) |
+| `servers[0].url` | relative (`/api/v3`) | absolute (`https://api.wavix.com`) — this one's actually easier than Petstore |
+| Auth | none | Bearer token, required on every call |
+
+Our mapper (`map-tools.ts`) **rejects any operation using `allOf`/`oneOf`/`anyOf` as a hard error** by design (section 7/8's "fail loudly" rule). With `allOf` alone appearing 151 times, most of the 122 real Wavix operations would currently be skipped, not mis-mapped — the fail-loudly guardrail did its job, but it also means today's mcpforge covers a small fraction of a real-world API like this.
+
+### How the real Wavix server actually solves these same problems (worth learning from)
+
+`wavix-mcp-server` is Python, built on FastMCP (`FastMCP.from_openapi()`), not custom-generated code like ours. It gets a working server out of a hard spec via targeted spec *preprocessing* before handing it to FastMCP, plus a handful of hand-written escape-hatch tools:
+
+- **`_ensure_request_body_type_object()`** — FastMCP merges `allOf` children into the body schema but doesn't set `type: object` on the result, which then causes single-property body wrappers to get silently stripped. Wavix patches the spec in-memory to add the missing `type` before FastMCP sees it. This is a targeted, well-tested fix (5 unit tests), not a general allOf-merging engine — worth noting because it suggests full oneOf/allOf/anyOf support isn't necessarily "resolve the general case," it can be "handle the specific shapes real specs actually produce."
+- **`_strip_non_json_response_content()`** — drops non-JSON response content types from the spec before FastMCP tries to validate real responses against a schema that doesn't fit streaming/binary payloads.
+- **4 hand-written "escape hatch" tools** (`call_recording_get`, `billing_invoices_download`, `speech_analytics_file_get`, `ten_dlc_brand_evidence_get`) for the binary/streaming endpoints — these are *excluded* from the automatic OpenAPI-driven mapping (via FastMCP route-map excludes) and reimplemented by hand to return a `{download_url, content_type, status_code}` pointing at a pre-signed redirect or an authenticated re-fetchable URL, rather than trying to stream binary data through the MCP tool-call contract at all.
+- **Auth via a custom `httpx.Auth` subclass** that forwards the MCP client's incoming `Authorization` header to the upstream API — with an explicit host allowlist check so the bearer token never leaks to redirect targets (e.g. pre-signed S3 URLs).
+- **Documentation exposed as MCP Resources** (not tools) — the whole Wavix docs site is crawled via `llms.txt` and registered as individually fetchable `wavix://docs/*` resource URIs, cached with ETag revalidation. Out of scope for a "generate tools from an API" tool like mcpforge, but notable as a UX pattern.
+- **Transport: Streamable HTTP**, hosted at `mcp.wavix.com`, not stdio — a deliberate choice for a multi-tenant hosted server, different from our stdio-only v0 default.
+
+### What mcpforge would need, roughly in priority order
+
+**Blocking (without these, most operations stay unmapped):**
+1. **`allOf` merging** — the single highest-value fix; 151 occurrences vs. 5 (`oneOf`) and 14 (`anyOf`). Unlike `oneOf`/`anyOf` (genuinely ambiguous — which branch does a single flat `inputSchema` represent?), `allOf` is a deterministic merge of sibling schemas and is tractable to implement generally, not just spec-specific patching.
+2. **Authentication support** — at minimum, a Bearer-token plugin/config that reads from an env var and attaches it to every generated `fetch` call. Currently mcpforge has zero auth story; every generated server today only works against fully open APIs.
+3. **OpenAPI 3.1 support** — never validated against our parser (`@apidevtools/swagger-parser` claims 3.1 support, but `map-tools.ts` and its tests have only run against a 3.0.x fixture). Needs its own test fixture before trusting it.
+
+**Important, but workaroundable with real but bounded effort:**
+4. **`multipart/form-data` request bodies** — either support file uploads properly, or explicitly document the limitation the way section 8 already frames non-JSON bodies (we already warn and skip the body; the gap is capability, not error handling).
+5. **Binary/streaming responses** — follow Wavix's own pattern directly: for OpenAPI operations whose only response content-type is non-JSON (audio, PDF, octet-stream, ndjson), generate a tool that performs the request and returns a `{ downloadUrl, contentType, status }` shape instead of trying to inline binary data into a tool-call `content` block. This is a generation-time decision, not a runtime hack — should live in `map-tools.ts`/`generate-server-code.ts` as a first-class case, not bolted on.
+
+**Lower priority / possibly intentionally out of scope:**
+6. **`oneOf`/`anyOf`** — likely correct to keep rejecting these (or, longer-term, offer a manual override the way Wavix hand-writes 4 escape-hatch tools) rather than trying to auto-resolve genuinely ambiguous unions into one flat MCP `inputSchema`. Only ~19 of 122 Wavix operations are affected.
+7. **Docs-as-Resources** — a real, validated UX pattern from a production MCP server, but out of scope for "generate tools from an OpenAPI spec." Worth a note for a possible future plugin, not a v1 blocker.
+8. **Streamable HTTP transport** — only matters if/when mcpforge wants to generate hosted, multi-tenant servers rather than local stdio ones (ARCHITECTURE.md section 10's open question, still undecided).
+
+### Bottom line
+
+With items 1-3 solved, a rough estimate is mcpforge could automatically cover something like 85-90 of Wavix's 122 real operations (excluding the ~19 oneOf/anyOf and ~8 binary/multipart ones, which would need the same kind of hand-written escape hatches Wavix itself uses). That's a meaningful chunk of real production-API work, not a rewrite of the generator — but it's also not a "small tweak"; `allOf` merging and an auth story are both non-trivial, multi-session features. This is now the top of the post-v0 roadmap (see section 9's build order, which this case study extends rather than replaces).
 

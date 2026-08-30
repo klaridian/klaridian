@@ -65,7 +65,9 @@ mcpforge/
 
 This project has a working v0: OpenAPI → MCP server generation, plus a real, tested OpenTelemetry plugin. See [ARCHITECTURE.md](ARCHITECTURE.md) sections 9–13 for exactly what's built, what's tested, and what real findings changed the design along the way.
 
-Next up (see ARCHITECTURE.md section 9 build order): CLI polish, then a documented Petstore walkthrough, then a second plugin (PostHog) once the plugin composition question needs answering for real.
+**Real-world validation:** we checked whether mcpforge could generate a server comparable to the production [`Wavix/wavix-mcp-server`](https://github.com/Wavix/wavix-mcp-server) from its real OpenAPI spec (122 operations, heavy `allOf` usage, auth, binary responses). Verdict and prioritized gap list in [ARCHITECTURE.md section 14](ARCHITECTURE.md#14-real-world-validation-case-could-mcpforge-replacegenerate-a-wavix-compatible-mcp-server-aug-30-2026).
+
+Next up (see ARCHITECTURE.md section 9 build order): `allOf` schema merging, authentication support, and OpenAPI 3.1 validation are the top three post-v0 priorities — identified directly from the Wavix case study, not guessed.
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap

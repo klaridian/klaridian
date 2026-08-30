@@ -27,18 +27,29 @@ export class InstrumentationPatchError extends Error {
 
 /**
  * Rewrites the single `executeApiTool(...)` call site in generated server
- * source to route through the plugin's wrap function, and prepends the
- * plugin's import statement.
+ * source to route through every given plugin's wrap function (composed via
+ * nesting — plugins run outside-in in array order, e.g. [otel, posthog]
+ * produces `wrapTool(name, () => wrapPostHogTool(name, () => executeApiTool(...))())()`),
+ * and prepends each plugin's import statement.
  *
  * Fails loudly (ARCHITECTURE.md section 7/8's rule, applied here too) if
  * the expected call site isn't found verbatim — rather than silently
  * producing an uninstrumented server, which would be a much worse failure
  * mode than refusing outright. openapi-mcp-generator's generated shape is
  * not a contract we control, so this needs to be re-verified whenever its
- * version is bumped (see ARCHITECTURE.md section 18 for the follow-up
+ * version is bumped (see ARCHITECTURE.md section 18/19 for the follow-up
  * this implies: pin the version, add a canary test).
+ *
+ * Composition (ARCHITECTURE.md section 20) works because every plugin wraps
+ * a thunk (`() => next()`) and returns a promise — nesting thunks composes
+ * cleanly regardless of plugin count, so 1 plugin and N plugins go through
+ * the exact same code path here (no special-cased 0-or-1 branch anymore).
  */
-export function instrumentGeneratedServer(serverSource: string, plugin: ObservabilityPlugin): string {
+export function instrumentGeneratedServer(serverSource: string, plugins: ObservabilityPlugin[]): string {
+  if (plugins.length === 0) {
+    throw new InstrumentationPatchError("instrumentGeneratedServer called with an empty plugin list — pass at least one plugin.");
+  }
+
   if (!serverSource.includes(CALL_SITE)) {
     throw new InstrumentationPatchError(
       `Could not find the expected executeApiTool call site in the generated server source. ` +
@@ -47,13 +58,22 @@ export function instrumentGeneratedServer(serverSource: string, plugin: Observab
     );
   }
 
-  const wiring = plugin.getServerWiring();
-
-  const instrumentedCallSite = `return await ${wiring.wrapFunctionName}(toolName, () => executeApiTool(toolName, toolDefinition, toolArgs ?? {}, securitySchemes))();`;
+  // Build the nested wrap expression outside-in: the LAST plugin in the
+  // array is innermost (closest to the real call), the FIRST is outermost.
+  // This means --plugin otel --plugin posthog reports otel's span as the
+  // outer span containing posthog's capture, which reads naturally in a
+  // trace viewer (broad engineering span containing the narrower product
+  // event) — an arbitrary but documented and stable ordering choice.
+  let innermost = `executeApiTool(toolName, toolDefinition, toolArgs ?? {}, securitySchemes)`;
+  for (const plugin of [...plugins].reverse()) {
+    const wiring = plugin.getServerWiring();
+    innermost = `${wiring.wrapFunctionName}(toolName, () => ${innermost})()`;
+  }
+  const instrumentedCallSite = `return await ${innermost};`;
 
   const withCallSitePatched = serverSource.replace(CALL_SITE, instrumentedCallSite);
 
-  // Insert the plugin's import right after the last existing top-of-file
+  // Insert every plugin's import right after the last existing top-of-file
   // import statement, so it participates in normal ESM import ordering
   // rather than being appended awkwardly at the end of the import block.
   const importInsertionMarker = "import { z, ZodError } from 'zod';";
@@ -64,25 +84,47 @@ export function instrumentGeneratedServer(serverSource: string, plugin: Observab
     );
   }
 
-  return withCallSitePatched.replace(
-    importInsertionMarker,
-    `${importInsertionMarker}\n${wiring.importStatement}`
-  );
+  const allImports = plugins.map((p) => p.getServerWiring().importStatement).join("\n");
+  return withCallSitePatched.replace(importInsertionMarker, `${importInsertionMarker}\n${allImports}`);
 }
 
 /**
- * Writes the plugin's own contributed files (e.g. the vendored OTel
- * instrumentation module) into the generated project, and returns the npm
- * dependencies the project's package.json needs to add.
+ * Writes every plugin's own contributed files (e.g. the vendored OTel
+ * instrumentation module) into the generated project, and returns the merged
+ * npm dependencies the project's package.json needs to add.
+ *
+ * Detects file-path collisions between plugins loudly rather than letting
+ * one silently overwrite another's contribution — each plugin should write
+ * under its own `src/instrumentation/<plugin-id>.ts`-style namespace (see
+ * otel.plugin.ts), so a collision here means two plugins picked the same
+ * path and needs a real decision, not a silent last-write-wins.
  */
 export function getPluginProjectAdditions(
-  plugin: ObservabilityPlugin,
-  config: ResolvedPluginConfig
+  plugins: ObservabilityPlugin[],
+  configs: Map<string, ResolvedPluginConfig>
 ): { files: { path: string; content: string }[]; dependencies: Record<string, string> } {
-  const contributions = plugin.getTemplateContributions(config);
-  const files = contributions.map((c) => ({
-    path: c.path,
-    content: typeof c.content === "function" ? c.content(config) : c.content,
-  }));
-  return { files, dependencies: plugin.getDependencies() };
+  const filesByPath = new Map<string, { path: string; content: string; pluginId: string }>();
+  let dependencies: Record<string, string> = {};
+
+  for (const plugin of plugins) {
+    const config = configs.get(plugin.id) ?? {};
+    const contributions = plugin.getTemplateContributions(config);
+    for (const c of contributions) {
+      const existing = filesByPath.get(c.path);
+      if (existing) {
+        throw new InstrumentationPatchError(
+          `Plugins "${existing.pluginId}" and "${plugin.id}" both contribute a file at "${c.path}" — ` +
+            `each plugin must write to its own path (e.g. src/instrumentation/<plugin-id>.ts).`
+        );
+      }
+      filesByPath.set(c.path, {
+        path: c.path,
+        content: typeof c.content === "function" ? c.content(config) : c.content,
+        pluginId: plugin.id,
+      });
+    }
+    dependencies = { ...dependencies, ...plugin.getDependencies() };
+  }
+
+  return { files: [...filesByPath.values()].map(({ path, content }) => ({ path, content })), dependencies };
 }

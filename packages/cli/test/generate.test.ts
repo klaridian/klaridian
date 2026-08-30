@@ -85,7 +85,7 @@ test(
         "otel.serviceName=test-petstore-otel",
       ]);
       assert.match(result.stderr, /Generated 19 tool\(s\)/);
-      assert.match(result.stderr, /Instrumented with the "otel" observability plugin/);
+      assert.match(result.stderr, /Instrumented with: otel/);
 
       const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
       assert.match(serverSource, /import \{ wrapTool \} from ".\/instrumentation\/otel\.js";/);
@@ -177,13 +177,167 @@ test(
   }
 );
 
+test(
+  "generate --plugin otel --plugin posthog: composes both plugins, stdout stays clean JSON-RPC",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-multi-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-petstore-multi",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--plugin",
+        "otel",
+        "--plugin",
+        "posthog",
+        "--plugin-config",
+        "otel.serviceName=test-petstore-multi",
+      ]);
+      assert.match(result.stderr, /Generated 19 tool\(s\)/);
+      assert.match(result.stderr, /Instrumented with: otel, posthog/);
+
+      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      assert.match(serverSource, /import \{ wrapTool \} from ".\/instrumentation\/otel\.js";/);
+      assert.match(serverSource, /import \{ wrapPostHogTool \} from ".\/instrumentation\/posthog\.js";/);
+      // otel is outermost (listed first), posthog innermost — see
+      // instrument.ts's documented, stable composition ordering.
+      assert.match(
+        serverSource,
+        /return await wrapTool\(toolName, \(\) => wrapPostHogTool\(toolName, \(\) => executeApiTool\(toolName, toolDefinition, toolArgs \?\? \{\}, securitySchemes\)\)\(\)\)\(\);/
+      );
+
+      const posthogFileContent = await readFile(path.join(outputDir, "src", "instrumentation", "posthog.ts"), "utf-8");
+      assert.match(posthogFileContent, /POSTHOG_API_KEY/);
+      assert.match(posthogFileContent, /posthog\.capture/);
+
+      const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
+      assert.ok(packageJson.dependencies["@opentelemetry/sdk-node"]);
+      assert.ok(packageJson.dependencies["posthog-node"]);
+
+      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 90_000 });
+      const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
+      assert.doesNotMatch(buildResult.stderr, /error TS/);
+
+      // Drive the real compiled server over stdio JSON-RPC with BOTH
+      // plugins' env vars set, confirming composition doesn't corrupt
+      // stdout the way a single plugin already doesn't (section 16's
+      // core invariant, now checked with two plugins nested).
+      const proc = spawn("node", ["build/index.js"], {
+        cwd: outputDir,
+        env: {
+          ...process.env,
+          API_BASE_URL: "https://petstore3.swagger.io/api/v3",
+          POSTHOG_API_KEY: "phc_fake_test_key_for_e2e_test",
+          POSTHOG_API_HOST: "https://us.i.posthog.com",
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      let stdoutBuf = "";
+      let stderrBuf = "";
+      proc.stdout!.on("data", (d) => (stdoutBuf += d.toString()));
+      proc.stderr!.on("data", (d) => (stderrBuf += d.toString()));
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          proc.kill();
+          reject(new Error(`Timed out. stderr so far: ${stderrBuf}`));
+        }, 20_000);
+
+        setTimeout(
+          () =>
+            sendJsonRpc(proc, {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "initialize",
+              params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "multi-test", version: "0.0.1" } },
+            }),
+          300
+        );
+        setTimeout(() => sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), 800);
+        setTimeout(
+          () =>
+            sendJsonRpc(proc, {
+              jsonrpc: "2.0",
+              id: 3,
+              method: "tools/call",
+              params: { name: "getPetById", arguments: { petId: 10 } },
+            }),
+          1300
+        );
+        setTimeout(() => {
+          clearTimeout(timeout);
+          proc.kill("SIGTERM"); // exercises BOTH plugins' shutdown handlers
+          resolve();
+        }, 4000);
+      });
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const lines = stdoutBuf.trim().split("\n").filter(Boolean);
+      assert.equal(lines.length, 3, `Expected 3 JSON-RPC response lines, got ${lines.length}: ${stdoutBuf}`);
+      const parsed = lines.map((line, i) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          assert.fail(`stdout line ${i} is not valid JSON: ${line.slice(0, 200)}`);
+        }
+      });
+
+      const listResponse = parsed.find((r) => r.id === 2);
+      assert.equal(listResponse.result.tools.length, 19);
+
+      const callResponse = parsed.find((r) => r.id === 3);
+      assert.ok(callResponse.result, `getPetById call should succeed with both plugins active: ${JSON.stringify(callResponse)}`);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
 test("instrumentGeneratedServer throws InstrumentationPatchError if the call site isn't found", async () => {
   const { instrumentGeneratedServer, InstrumentationPatchError } = await import("../src/render/instrument.js");
   const { otelPlugin } = await import("../src/plugins/otel/otel.plugin.js");
 
   assert.throws(
-    () => instrumentGeneratedServer("some unrelated source code", otelPlugin),
+    () => instrumentGeneratedServer("some unrelated source code", [otelPlugin]),
     InstrumentationPatchError,
     "should fail loudly rather than silently produce an uninstrumented server"
+  );
+});
+
+test("getPluginProjectAdditions throws InstrumentationPatchError on a file-path collision between plugins", async () => {
+  const { getPluginProjectAdditions, InstrumentationPatchError } = await import("../src/render/instrument.js");
+  const { otelPlugin } = await import("../src/plugins/otel/otel.plugin.js");
+
+  const conflictingPlugin = {
+    ...otelPlugin,
+    id: "otel-clone",
+    // Deliberately reuses otel's exact contributed file path to trigger
+    // the collision guard — a real second plugin would never do this
+    // (each plugin should namespace under its own id), but the guard
+    // needs to actually fire if one ever did by mistake.
+    getTemplateContributions: otelPlugin.getTemplateContributions,
+  };
+
+  assert.throws(
+    () =>
+      getPluginProjectAdditions(
+        [otelPlugin, conflictingPlugin],
+        new Map([
+          ["otel", { otlpEndpoint: "http://localhost:4318/v1/traces", serviceName: "a" }],
+          ["otel-clone", { otlpEndpoint: "http://localhost:4318/v1/traces", serviceName: "b" }],
+        ])
+      ),
+    InstrumentationPatchError,
+    "two plugins contributing the same file path should fail loudly, not silently overwrite"
   );
 });

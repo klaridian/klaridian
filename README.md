@@ -1,5 +1,7 @@
 # mcpforge
 
+[![CI](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml)
+
 > Generate MCP servers with engineering + product observability built in — no manual instrumentation.
 
 **Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec, optionally instrumented with OpenTelemetry and/or PostHog, with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.

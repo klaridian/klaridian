@@ -30,6 +30,8 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
 import { applyConformanceFixes, ConformancePatchError } from "../render/conformance.js";
+import { applySecurityHardening, getSecurityHelpersFileContent, SecurityPatchError } from "../render/security.js";
+import { applyBranding, BrandingPatchError, type Icon } from "../render/branding.js";
 
 const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
   [otelPlugin.id]: otelPlugin,
@@ -70,6 +72,28 @@ async function resolveGitAuthorName(): Promise<string | undefined> {
     return name.length > 0 ? name : undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Infers an icon's MIME type from its URL/path extension, for the common formats. Returns undefined if unrecognized (the field is optional per spec). */
+function inferIconMimeType(src: string): string | undefined {
+  const ext = src.split(".").pop()?.toLowerCase().split(/[?#]/)[0];
+  switch (ext) {
+    case "svg":
+      return "image/svg+xml";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "ico":
+      return "image/x-icon";
+    default:
+      return undefined;
   }
 }
 
@@ -127,6 +151,17 @@ export function registerGenerateCommand(program: Command): void {
       "Port for the generated server when --transport is streamable-http or web (default: 3000)",
       (value: string) => parseInt(value, 10)
     )
+    .option(
+      "--icon <src[|theme]>",
+      "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[]
+    )
+    .option("--website <url>", "Website URL for the server (MCP spec 2025-11-25, purely cosmetic)")
+    .option(
+      "--server-description <text>",
+      "Human-readable description for the server's Implementation metadata (MCP spec 2025-11-25, purely cosmetic — distinct from individual tool descriptions)"
+    )
     .action(
       async (opts: {
         spec: string;
@@ -143,6 +178,9 @@ export function registerGenerateCommand(program: Command): void {
         author?: string;
         transport: string;
         port?: number;
+        icon: string[];
+        website?: string;
+        serverDescription?: string;
       }) => {
         let tempSpecDir: string | undefined;
         try {
@@ -303,6 +341,75 @@ export function registerGenerateCommand(program: Command): void {
             }
             await writeFile(serverFilePath, conformant, "utf-8");
             console.error(`✅ Applied MCP spec conformance fixes (unknown-tool protocol errors, isError on tool failures)`);
+          }
+
+          // Apply security hardening (ARCHITECTURE.md section 30) — ALWAYS,
+          // same discipline as the conformance fixes above: tool
+          // annotations/title, rate limiting, and output sanitization are
+          // spec-recommended/required, not opt-in plugin features. Applied
+          // after conformance so both patches compose against the already-
+          // conformant source (they touch disjoint call sites, but ordering
+          // is kept deterministic rather than incidental).
+          {
+            const serverFilePath = path.join(outputDir, "src", "index.ts");
+            const serverSource = await readFile(serverFilePath, "utf-8");
+            let hardened: string;
+            try {
+              hardened = applySecurityHardening(serverSource);
+            } catch (err) {
+              if (err instanceof SecurityPatchError) {
+                console.error(`❌ ${err.message}`);
+                console.error(
+                  `   The server was generated successfully but is NOT security-hardened (annotations/rate-limiting/output sanitization) — see ARCHITECTURE.md section 30.`
+                );
+                process.exitCode = 1;
+                return;
+              }
+              throw err;
+            }
+            await writeFile(serverFilePath, hardened, "utf-8");
+            await writeFile(path.join(outputDir, "src", "security-helpers.ts"), getSecurityHelpersFileContent(), "utf-8");
+            console.error(`✅ Applied security hardening (tool annotations/title, rate limiting, output sanitization)`);
+          }
+
+          // Apply branding metadata (ARCHITECTURE.md section 31) — OPT-IN,
+          // unlike conformance/security above: only touches source when the
+          // user actually passed --icon/--website/--server-description,
+          // since there's no "wrong until fixed" default here, just an
+          // optional cosmetic addition.
+          if (opts.icon.length > 0 || opts.website || opts.serverDescription) {
+            const icons: Icon[] = opts.icon.map((raw) => {
+              const [src, theme] = raw.split("|");
+              const icon: Icon = { src };
+              const mimeType = inferIconMimeType(src);
+              if (mimeType) icon.mimeType = mimeType;
+              if (theme === "light" || theme === "dark") icon.theme = theme;
+              else if (theme) {
+                console.error(`⚠️  Ignoring unrecognized icon theme "${theme}" for "${src}" — expected "light" or "dark".`);
+              }
+              return icon;
+            });
+
+            const serverFilePath = path.join(outputDir, "src", "index.ts");
+            const serverSource = await readFile(serverFilePath, "utf-8");
+            let branded: string;
+            try {
+              branded = applyBranding(serverSource, {
+                icons: icons.length > 0 ? icons : undefined,
+                websiteUrl: opts.website,
+                description: opts.serverDescription,
+              });
+            } catch (err) {
+              if (err instanceof BrandingPatchError) {
+                console.error(`❌ ${err.message}`);
+                console.error(`   The server was generated successfully but WITHOUT the requested branding metadata — see ARCHITECTURE.md section 31.`);
+                process.exitCode = 1;
+                return;
+              }
+              throw err;
+            }
+            await writeFile(serverFilePath, branded, "utf-8");
+            console.error(`✅ Applied branding metadata (${[icons.length > 0 ? `${icons.length} icon(s)` : null, opts.website ? "website" : null, opts.serverDescription ? "description" : null].filter(Boolean).join(", ")})`);
           }
 
           // Write LICENSE + package.json's `license` field (ARCHITECTURE.md

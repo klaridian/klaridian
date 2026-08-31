@@ -11,11 +11,16 @@
 // Section 20: supports 0, 1, or multiple --plugin flags (the old v0
 // guardrail of "exactly 0 or 1 plugins" is lifted now that a second plugin
 // (posthog) actually exists to validate composition against).
+//
+// Section 32 (ARCHITECTURE.md): --force/--json/--quiet + non-TTY detection
+// for --interactive, following a direct CLI-UX audit against clig.dev and
+// the "designing CLIs for agents" guidelines (agents-json-required,
+// agents-structured-errors, agents-no-prompts-default, agents-yes-flag).
 
 import type { Command } from "commander";
 import path from "node:path";
 import os from "node:os";
-import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp, rm, readdir, stat } from "node:fs/promises";
 import { generateMcpServer, getToolsFromOpenApi } from "openapi-mcp-generator";
 import { instrumentGeneratedServer, getPluginProjectAdditions, InstrumentationPatchError } from "../render/instrument.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
@@ -97,6 +102,46 @@ function inferIconMimeType(src: string): string | undefined {
   }
 }
 
+/**
+ * Shape of the machine-readable summary printed to stdout when --json is
+ * passed. On failure, `success: false` + `error` + `stage` (which step
+ * failed) are set and everything else is omitted — deliberately a single,
+ * predictable JSON value on stdout either way (never a mix of prose and
+ * JSON), so a script/agent doing `mcpforge generate --json ... | jq` always
+ * gets exactly one parseable value regardless of outcome. Exit code (0/1)
+ * still reflects success independent of this payload, so callers that only
+ * check the exit code don't need to parse anything.
+ */
+interface GenerateJsonResult {
+  success: boolean;
+  outputDir?: string;
+  toolCount?: number;
+  curatedFromTotal?: number | null;
+  transport?: string;
+  port?: number | null;
+  license?: string | null;
+  plugins?: string[];
+  branding?: { icons: number; website: boolean; description: boolean } | null;
+  nextSteps?: string;
+  warnings?: string[];
+  error?: string;
+  stage?: string;
+}
+
+async function directoryExistsAndIsNonEmpty(dir: string): Promise<{ exists: boolean; isDirectory: boolean; nonEmpty: boolean }> {
+  let st;
+  try {
+    st = await stat(dir);
+  } catch {
+    return { exists: false, isDirectory: false, nonEmpty: false };
+  }
+  if (!st.isDirectory()) {
+    return { exists: true, isDirectory: false, nonEmpty: false };
+  }
+  const entries = await readdir(dir);
+  return { exists: true, isDirectory: true, nonEmpty: entries.length > 0 };
+}
+
 export function registerGenerateCommand(program: Command): void {
   program
     .command("generate")
@@ -118,7 +163,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--interactive",
-      "Prompt for which tags to include before generating (ARCHITECTURE.md section 24 — user-chosen curation, not LLM-suggested)",
+      "Prompt for which tags to include before generating (ARCHITECTURE.md section 24 — user-chosen curation, not LLM-suggested). Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input.",
       false
     )
     .option(
@@ -162,6 +207,21 @@ export function registerGenerateCommand(program: Command): void {
       "--server-description <text>",
       "Human-readable description for the server's Implementation metadata (MCP spec 2025-11-25, purely cosmetic — distinct from individual tool descriptions)"
     )
+    .option(
+      "--force",
+      "Overwrite --out even if it already exists and is non-empty (default: refuse, to avoid silently destroying unrelated files)",
+      false
+    )
+    .option(
+      "--json",
+      "Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure — always exactly one JSON value, exit code still reflects success)",
+      false
+    )
+    .option(
+      "--quiet",
+      "Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line",
+      false
+    )
     .action(
       async (opts: {
         spec: string;
@@ -181,15 +241,49 @@ export function registerGenerateCommand(program: Command): void {
         icon: string[];
         website?: string;
         serverDescription?: string;
+        force: boolean;
+        json: boolean;
+        quiet: boolean;
       }) => {
+        const jsonMode = opts.json;
+        const quietMode = opts.quiet || opts.json;
+        const warnings: string[] = [];
+
+        /** Human-readable-mode-only progress line; suppressed by --quiet and --json. */
+        const step = (msg: string) => {
+          if (!quietMode) console.error(msg);
+        };
+        /** Always recorded (surfaces in JSON's `warnings` array); also printed to stderr unless --json. */
+        const warn = (msg: string) => {
+          warnings.push(msg);
+          if (!jsonMode) console.error(msg);
+        };
+        /**
+         * Unified failure path for every error branch below: prints a single
+         * JSON error object to stdout in --json mode (tagged with `stage` so
+         * a caller/agent can tell which step failed without string-matching
+         * prose), or the human `❌ message` line(s) on stderr otherwise. Sets
+         * the process exit code either way. Callers still need their own
+         * `return` right after calling this (it doesn't throw/exit itself),
+         * matching every other early-return in this file.
+         */
+        const fail = (message: string, stage: string) => {
+          process.exitCode = 1;
+          if (jsonMode) {
+            const result: GenerateJsonResult = { success: false, error: message, stage, warnings };
+            process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+          } else {
+            console.error(`❌ ${message}`);
+          }
+        };
+
         let tempSpecDir: string | undefined;
         try {
           const specPath = path.resolve(opts.spec);
           const outputDir = path.resolve(opts.out);
 
           if (!isSupportedLicense(opts.license)) {
-            console.error(`❌ Unknown license "${opts.license}". Supported: ${SUPPORTED_LICENSES.join(", ")}`);
-            process.exitCode = 1;
+            fail(`Unknown license "${opts.license}". Supported: ${SUPPORTED_LICENSES.join(", ")}`, "validate-license");
             return;
           }
           const license = opts.license;
@@ -197,15 +291,31 @@ export function registerGenerateCommand(program: Command): void {
           const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http", "web"] as const;
           type Transport = (typeof SUPPORTED_TRANSPORTS)[number];
           if (!(SUPPORTED_TRANSPORTS as readonly string[]).includes(opts.transport)) {
-            console.error(`❌ Unknown transport "${opts.transport}". Supported: ${SUPPORTED_TRANSPORTS.join(", ")}`);
-            process.exitCode = 1;
+            fail(`Unknown transport "${opts.transport}". Supported: ${SUPPORTED_TRANSPORTS.join(", ")}`, "validate-transport");
             return;
           }
           const transport = opts.transport as Transport;
           const port = opts.port ?? 3000;
           if (transport !== "stdio" && (!Number.isInteger(port) || port <= 0 || port > 65535)) {
-            console.error(`❌ Invalid --port "${opts.port}" — must be an integer between 1 and 65535.`);
-            process.exitCode = 1;
+            fail(`Invalid --port "${opts.port}" — must be an integer between 1 and 65535.`, "validate-port");
+            return;
+          }
+
+          // --force / overwrite protection (ARCHITECTURE.md section 32):
+          // refuse to generate into an existing, non-empty directory unless
+          // --force is passed. Checked early — before any spec parsing or
+          // generation work — so a mistaken --out never silently destroys
+          // unrelated files in a directory the user didn't mean to target.
+          const outDirState = await directoryExistsAndIsNonEmpty(outputDir);
+          if (outDirState.exists && !outDirState.isDirectory) {
+            fail(`Output path "${outputDir}" already exists and is not a directory.`, "check-output-dir");
+            return;
+          }
+          if (outDirState.nonEmpty && !opts.force) {
+            fail(
+              `Output directory "${outputDir}" already exists and is not empty. Use --force to overwrite its contents, or choose a different --out.`,
+              "check-output-dir"
+            );
             return;
           }
 
@@ -220,12 +330,27 @@ export function registerGenerateCommand(program: Command): void {
           for (const id of requestedIds) {
             const plugin = AVAILABLE_PLUGINS[id];
             if (!plugin) {
-              console.error(`❌ Unknown plugin "${id}". Available plugins: ${Object.keys(AVAILABLE_PLUGINS).join(", ")}`);
-              process.exitCode = 1;
+              fail(`Unknown plugin "${id}". Available plugins: ${Object.keys(AVAILABLE_PLUGINS).join(", ")}`, "validate-plugin");
               return;
             }
             plugins.push(plugin);
             pluginConfigs.set(plugin.id, resolvePluginConfig(plugin, allConfig[plugin.id] ?? {}));
+          }
+
+          // --interactive + non-TTY detection (ARCHITECTURE.md section 32):
+          // found during a direct CLI-UX audit that `echo "" | mcpforge
+          // generate --interactive` silently proceeded with the prompt
+          // library's default (everything selected) rather than failing —
+          // dangerous for a flag whose entire point is "the user explicitly
+          // chose this," since a script/agent invoking it without a real
+          // terminal would get a silent no-op curation instead of a clear
+          // signal that --interactive doesn't apply to their context.
+          if (opts.interactive && !process.stdin.isTTY) {
+            fail(
+              "--interactive requires an interactive terminal (stdin is not a TTY) — this looks like it's running in a script, CI, or agent context, where there's no one to answer the prompt. Remove --interactive and use --include-tags/--exclude-tags/--exclude-operation-ids instead for scripted curation.",
+              "interactive-requires-tty"
+            );
+            return;
           }
 
           // Tool curation (ARCHITECTURE.md section 24): list operations
@@ -235,8 +360,7 @@ export function registerGenerateCommand(program: Command): void {
           // before committing to a full project generation either way.
           const operations = await listOperations(specPath);
           if (operations.length === 0) {
-            console.error(`❌ No tools could be extracted from this spec — nothing to generate.`);
-            process.exitCode = 1;
+            fail("No tools could be extracted from this spec — nothing to generate.", "list-operations");
             return;
           }
 
@@ -260,8 +384,7 @@ export function registerGenerateCommand(program: Command): void {
             validateCurationChoice(curationChoice, operations);
           } catch (err) {
             if (err instanceof CurationValidationError) {
-              console.error(`❌ ${err.message}`);
-              process.exitCode = 1;
+              fail(err.message, "validate-curation");
               return;
             }
             throw err;
@@ -294,8 +417,10 @@ export function registerGenerateCommand(program: Command): void {
             dereference: true,
           });
           if (tools.length === 0) {
-            console.error(`❌ No tools remain after curation — nothing to generate. Loosen --include-tags/--exclude-tags/--exclude-operation-ids.`);
-            process.exitCode = 1;
+            fail(
+              "No tools remain after curation — nothing to generate. Loosen --include-tags/--exclude-tags/--exclude-operation-ids.",
+              "curation-empty"
+            );
             return;
           }
 
@@ -311,7 +436,7 @@ export function registerGenerateCommand(program: Command): void {
 
           const curationSuffix = hasCuration ? ` (curated from ${operations.length} total)` : "";
           const transportSuffix = transport !== "stdio" ? ` [${transport}, port ${port}]` : "";
-          console.error(`✅ Generated ${tools.length} tool(s)${curationSuffix} in ${outputDir}${transportSuffix} (via openapi-mcp-generator)`);
+          step(`✅ Generated ${tools.length} tool(s)${curationSuffix} in ${outputDir}${transportSuffix} (via openapi-mcp-generator)`);
 
           // Apply MCP spec conformance fixes (ARCHITECTURE.md section 28) —
           // ALWAYS, regardless of --plugin. Unlike plugin instrumentation
@@ -330,17 +455,16 @@ export function registerGenerateCommand(program: Command): void {
               conformant = applyConformanceFixes(serverSource);
             } catch (err) {
               if (err instanceof ConformancePatchError) {
-                console.error(`❌ ${err.message}`);
-                console.error(
-                  `   The server was generated successfully but is NOT spec-conformant for tool errors — see ARCHITECTURE.md section 28.`
+                fail(
+                  `${err.message}\n   The server was generated successfully but is NOT spec-conformant for tool errors — see ARCHITECTURE.md section 28.`,
+                  "apply-conformance"
                 );
-                process.exitCode = 1;
                 return;
               }
               throw err;
             }
             await writeFile(serverFilePath, conformant, "utf-8");
-            console.error(`✅ Applied MCP spec conformance fixes (unknown-tool protocol errors, isError on tool failures)`);
+            step(`✅ Applied MCP spec conformance fixes (unknown-tool protocol errors, isError on tool failures)`);
           }
 
           // Apply security hardening (ARCHITECTURE.md section 30) — ALWAYS,
@@ -358,18 +482,17 @@ export function registerGenerateCommand(program: Command): void {
               hardened = applySecurityHardening(serverSource);
             } catch (err) {
               if (err instanceof SecurityPatchError) {
-                console.error(`❌ ${err.message}`);
-                console.error(
-                  `   The server was generated successfully but is NOT security-hardened (annotations/rate-limiting/output sanitization) — see ARCHITECTURE.md section 30.`
+                fail(
+                  `${err.message}\n   The server was generated successfully but is NOT security-hardened (annotations/rate-limiting/output sanitization) — see ARCHITECTURE.md section 30.`,
+                  "apply-security"
                 );
-                process.exitCode = 1;
                 return;
               }
               throw err;
             }
             await writeFile(serverFilePath, hardened, "utf-8");
             await writeFile(path.join(outputDir, "src", "security-helpers.ts"), getSecurityHelpersFileContent(), "utf-8");
-            console.error(`✅ Applied security hardening (tool annotations/title, rate limiting, output sanitization)`);
+            step(`✅ Applied security hardening (tool annotations/title, rate limiting, output sanitization)`);
           }
 
           // Apply branding metadata (ARCHITECTURE.md section 31) — OPT-IN,
@@ -377,7 +500,8 @@ export function registerGenerateCommand(program: Command): void {
           // user actually passed --icon/--website/--server-description,
           // since there's no "wrong until fixed" default here, just an
           // optional cosmetic addition.
-          if (opts.icon.length > 0 || opts.website || opts.serverDescription) {
+          const brandingRequested = opts.icon.length > 0 || Boolean(opts.website) || Boolean(opts.serverDescription);
+          if (brandingRequested) {
             const icons: Icon[] = opts.icon.map((raw) => {
               const [src, theme] = raw.split("|");
               const icon: Icon = { src };
@@ -385,7 +509,7 @@ export function registerGenerateCommand(program: Command): void {
               if (mimeType) icon.mimeType = mimeType;
               if (theme === "light" || theme === "dark") icon.theme = theme;
               else if (theme) {
-                console.error(`⚠️  Ignoring unrecognized icon theme "${theme}" for "${src}" — expected "light" or "dark".`);
+                warn(`⚠️  Ignoring unrecognized icon theme "${theme}" for "${src}" — expected "light" or "dark".`);
               }
               return icon;
             });
@@ -401,15 +525,18 @@ export function registerGenerateCommand(program: Command): void {
               });
             } catch (err) {
               if (err instanceof BrandingPatchError) {
-                console.error(`❌ ${err.message}`);
-                console.error(`   The server was generated successfully but WITHOUT the requested branding metadata — see ARCHITECTURE.md section 31.`);
-                process.exitCode = 1;
+                fail(
+                  `${err.message}\n   The server was generated successfully but WITHOUT the requested branding metadata — see ARCHITECTURE.md section 31.`,
+                  "apply-branding"
+                );
                 return;
               }
               throw err;
             }
             await writeFile(serverFilePath, branded, "utf-8");
-            console.error(`✅ Applied branding metadata (${[icons.length > 0 ? `${icons.length} icon(s)` : null, opts.website ? "website" : null, opts.serverDescription ? "description" : null].filter(Boolean).join(", ")})`);
+            step(
+              `✅ Applied branding metadata (${[icons.length > 0 ? `${icons.length} icon(s)` : null, opts.website ? "website" : null, opts.serverDescription ? "description" : null].filter(Boolean).join(", ")})`
+            );
           }
 
           // Write LICENSE + package.json's `license` field (ARCHITECTURE.md
@@ -429,9 +556,11 @@ export function registerGenerateCommand(program: Command): void {
             const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
             packageJson.license = getPackageJsonLicenseField(license);
             await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), "utf-8");
-            console.error(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
+            step(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
           } else {
-            console.error(`⚠️  Generated with --license none — no LICENSE file written. Consider adding one before distributing this server (see ARCHITECTURE.md section 27).`);
+            warn(
+              `⚠️  Generated with --license none — no LICENSE file written. Consider adding one before distributing this server (see ARCHITECTURE.md section 27).`
+            );
           }
 
           if (plugins.length > 0) {
@@ -443,11 +572,10 @@ export function registerGenerateCommand(program: Command): void {
               instrumented = instrumentGeneratedServer(serverSource, plugins);
             } catch (err) {
               if (err instanceof InstrumentationPatchError) {
-                console.error(`❌ ${err.message}`);
-                console.error(
-                  `   The server was generated successfully but NOT instrumented — remove --plugin to use it as-is, or file an issue.`
+                fail(
+                  `${err.message}\n   The server was generated successfully but NOT instrumented — remove --plugin to use it as-is, or file an issue.`,
+                  "apply-instrumentation"
                 );
-                process.exitCode = 1;
                 return;
               }
               throw err;
@@ -460,8 +588,7 @@ export function registerGenerateCommand(program: Command): void {
               ({ files, dependencies } = getPluginProjectAdditions(plugins, pluginConfigs));
             } catch (err) {
               if (err instanceof InstrumentationPatchError) {
-                console.error(`❌ ${err.message}`);
-                process.exitCode = 1;
+                fail(err.message, "apply-instrumentation");
                 return;
               }
               throw err;
@@ -477,14 +604,37 @@ export function registerGenerateCommand(program: Command): void {
             packageJson.dependencies = { ...packageJson.dependencies, ...dependencies };
             await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), "utf-8");
 
-            console.error(`✅ Instrumented with: ${plugins.map((p) => p.id).join(", ")}`);
+            step(`✅ Instrumented with: ${plugins.map((p) => p.id).join(", ")}`);
           }
 
           const startScript = transport === "stdio" ? "npm start" : transport === "web" ? "npm run start:web" : "npm run start:http";
-          console.error(`   Next: cd ${opts.out} && npm install && npm run build && ${startScript}`);
+          const nextSteps = `cd ${opts.out} && npm install && npm run build && ${startScript}`;
+
+          if (jsonMode) {
+            const result: GenerateJsonResult = {
+              success: true,
+              outputDir,
+              toolCount: tools.length,
+              curatedFromTotal: hasCuration ? operations.length : null,
+              transport,
+              port: transport !== "stdio" ? port : null,
+              license: license !== "none" ? getPackageJsonLicenseField(license) : null,
+              plugins: plugins.map((p) => p.id),
+              branding: brandingRequested
+                ? { icons: opts.icon.length, website: Boolean(opts.website), description: Boolean(opts.serverDescription) }
+                : null,
+              nextSteps,
+              warnings,
+            };
+            process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+          } else {
+            // The final summary line always prints, even under --quiet —
+            // quiet reduces step-by-step noise, it doesn't hide the one
+            // line a human actually needs to know what to do next.
+            console.error(`   Next: ${nextSteps}`);
+          }
         } catch (err) {
-          console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
-          process.exitCode = 1;
+          fail(err instanceof Error ? err.message : String(err), "unexpected");
         } finally {
           if (tempSpecDir) {
             await rm(tempSpecDir, { recursive: true, force: true });

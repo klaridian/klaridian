@@ -291,3 +291,92 @@ test(
     }
   }
 );
+
+test(
+  "generate --quiet: also suppresses openapi-mcp-generator's own hardcoded progress output (ARCHITECTURE.md section 33)",
+  { timeout: 60_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-quiet-thirdparty-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--license",
+        "none",
+        "--quiet",
+      ]);
+      // These are openapi-mcp-generator's own hardcoded console.error lines
+      // (confirmed by reading its source, ARCHITECTURE.md section 33) —
+      // must be gone too under --quiet, not just mcpforge's own lines.
+      assert.doesNotMatch(result.stderr, /Parsing OpenAPI spec/);
+      assert.doesNotMatch(result.stderr, /Generating server code/);
+      assert.doesNotMatch(result.stderr, /-> Created/);
+      // Only the license warning and the Next: line should remain — assert
+      // the total line count stays exactly at 2, not just that specific
+      // substrings are absent (guards against some other new noise source).
+      const nonEmptyLines = result.stderr.split("\n").filter((l) => l.trim().length > 0);
+      assert.equal(nonEmptyLines.length, 2, `expected exactly 2 stderr lines under --quiet, got: ${JSON.stringify(nonEmptyLines)}`);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "generate --json: stderr is completely empty (openapi-mcp-generator's progress output is suppressed too)",
+  { timeout: 60_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-json-silent-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--license",
+        "none",
+        "--json",
+      ]);
+      assert.equal(result.stderr, "", "expected --json to produce completely empty stderr, third-party noise included");
+      // stdout must still be exactly one parseable JSON value.
+      const parsed = JSON.parse(result.stdout);
+      assert.equal(parsed.success, true);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "generate (no --quiet/--json): openapi-mcp-generator's own progress output is NOT suppressed (default behavior unchanged)",
+  { timeout: 60_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-noquiet-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--license",
+        "none",
+      ]);
+      // Without --quiet/--json, the console-suppression workaround must NOT
+      // engage — openapi-mcp-generator's normal progress output should
+      // still be visible, confirming the suppression is opt-in (via
+      // --quiet/--json), not a silent behavior change for everyone.
+      assert.match(result.stderr, /Parsing OpenAPI spec/);
+      assert.match(result.stderr, /Generating server code/);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);

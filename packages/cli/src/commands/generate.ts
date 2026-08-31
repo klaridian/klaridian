@@ -103,6 +103,38 @@ function inferIconMimeType(src: string): string | undefined {
 }
 
 /**
+ * Runs `fn` with `console.log`/`console.warn`/`console.error` temporarily
+ * replaced with no-ops, restoring the originals in a `finally` no matter
+ * how `fn` exits (including throwing). Workaround for a real, upstream gap
+ * (ARCHITECTURE.md section 33): `openapi-mcp-generator`'s `generateMcpServer()`
+ * writes ~20 lines of its own hardcoded progress text directly to
+ * `console.error`/`console.warn` with no verbosity/logger option exposed in
+ * its public API to control it — confirmed directly by reading its source,
+ * not assumed. This is the only available lever mcpforge has to honor its
+ * own `--quiet`/`--json` contracts without a fork or an upstream fix.
+ *
+ * Deliberately scoped as tightly as possible around the single call site
+ * that needs it (`generateMcpServer()`) rather than applied globally for
+ * the whole command — anything mcpforge's own code logs during that same
+ * window (there is none today, but this guards against a future regression)
+ * would also be silenced otherwise, which isn't the intent.
+ */
+async function withConsoleSuppressed<T>(fn: () => Promise<T>): Promise<T> {
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  const noop = () => {};
+  console.log = noop;
+  console.warn = noop;
+  console.error = noop;
+  try {
+    return await fn();
+  } finally {
+    console.log = original.log;
+    console.warn = original.warn;
+    console.error = original.error;
+  }
+}
+
+/**
  * Shape of the machine-readable summary printed to stdout when --json is
  * passed. On failure, `success: false` + `error` + `stage` (which step
  * failed) are set and everything else is omitted — deliberately a single,
@@ -424,15 +456,17 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
 
-          await generateMcpServer({
-            input: generationSpecPath,
-            output: outputDir,
-            serverName: opts.name,
-            baseUrl: opts.baseUrl,
-            transport,
-            port: transport !== "stdio" ? port : undefined,
-            force: true,
-          });
+          const runGeneration = () =>
+            generateMcpServer({
+              input: generationSpecPath,
+              output: outputDir,
+              serverName: opts.name,
+              baseUrl: opts.baseUrl,
+              transport,
+              port: transport !== "stdio" ? port : undefined,
+              force: true,
+            });
+          await (quietMode ? withConsoleSuppressed(runGeneration) : runGeneration());
 
           const curationSuffix = hasCuration ? ` (curated from ${operations.length} total)` : "";
           const transportSuffix = transport !== "stdio" ? ` [${transport}, port ${port}]` : "";

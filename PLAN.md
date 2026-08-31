@@ -149,4 +149,15 @@ Raised directly: does containerization make sense anywhere in this project? Two 
 
 **Not built in this session:** neither the devcontainer nor `--docker`. Recorded here as validated next steps with their real prerequisites made explicit, not as vague someday-ideas.
 
+## 9. Upstream contributions to `openapi-mcp-generator`: tracked, not yet filed (Aug 30, 2026)
+
+Two real bugs/gaps have been found in `openapi-mcp-generator` (mcpforge's generation-engine dependency, section 16) during mcpforge's own audits — both currently worked around on mcpforge's own side, but the durable fix belongs upstream. Explicitly parked here per direct instruction ("let's discuss a PR to their project later") rather than actioned immediately — recorded now so the intent and the specific asks aren't lost between sessions.
+
+**Item 1 — `streamable-http` transport crash (ARCHITECTURE.md section 29).** Its generated `src/streamable-http.ts` throws `TypeError [ERR_INVALID_STATE]: Invalid state: ReadableStream is locked` (inside the `fetch-to-node` dependency's `http-incoming.js`) on the second HTTP request to an established session — reproduced against a vanilla, unpatched `openapi-mcp-generator` project with zero mcpforge involvement, confirmed on both Node v22.19.0 and v26.7.0/v26.8.1. mcpforge's own workaround: none yet — this transport is generated but documented as not currently usable past the first request (README, ARCHITECTURE.md section 29).
+
+**Item 2 — no verbosity/silent option on `generateMcpServer()` (ARCHITECTURE.md section 33).** `generateMcpServer()` writes ~56 hardcoded `console.error`/`console.warn`/`console.log` progress lines with no way to suppress them via its public `CliOptions` API — meaning every consumer of the library, not just mcpforge, has no supported way to build a quiet/scriptable/JSON-output mode around it. mcpforge's own workaround: `withConsoleSuppressed()`, a scoped `console.*` monkey-patch around the single call site, engaged only under `--quiet`/`--json` (section 33) — functional, but explicitly documented there as a workaround, not the right long-term fix.
+
+**Why parked rather than filed now:** both are real, reproducible, and already have a clear, minimal proposed fix (item 1: root-cause and patch the `fetch-to-node` interaction, or document/skip it; item 2: accept an optional `logger`/`silent` field on `CliOptions`, defaulting to today's behavior for backward compatibility) — but filing a well-formed upstream PR (tests, matching the maintainer's existing code style, a clear repro) is real work worth doing deliberately in a dedicated session, not squeezed in as a side effect of an unrelated task. Both items are good candidates for a **single combined PR session** later: same upstream repo, same general shape ("mcpforge's own audits found these while using your library for real, here's a fix for each").
+
+
 

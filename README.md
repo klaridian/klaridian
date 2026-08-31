@@ -112,6 +112,10 @@ npm test
 
 This runs real end-to-end tests: generating a project, patching in the OTel/PostHog plugins, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
 
+## Development environment
+
+A [devcontainer](.devcontainer/devcontainer.json) is provided, pinned to the exact Node/Python versions [CI](.github/workflows/ci.yml) runs against (Node 22, Python 3.11) plus `gh`. Open this repo in VS Code / GitHub Codespaces and "Reopen in Container" — dependencies for both `packages/cli` and `packages/python-posthog-middleware` install automatically. See [PLAN.md section 11](PLAN.md#11-devcontainer-for-contributors-built-and-validated-aug-31-2026) for what was validated.
+
 ## License
 
 [MIT](LICENSE) for the open-core CLI and base plugins — see [PLAN.md](PLAN.md) section 3 for the open-core model this sits within.

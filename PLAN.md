@@ -175,6 +175,26 @@ Raised directly, since mcpforge's whole domain is MCP servers — worth checking
 
 **Where the answer would flip — recorded, not built:** the hosted correlation/fleet layer (section 4, Phase 1, still gated on real demand signal) is a genuinely different case. If/when that layer exists, it *is* a hosted, stateful, multi-tenant service — exactly the profile the framework says MCP is the right fit for. At that point, that service exposing its own MCP server (so an agent could ask "what's my fleet's current cost per task" without a human opening a dashboard) would be a natural, well-justified feature — not an extension of `generate`'s interface, but a new interface for a genuinely different, future product. Nothing to build now; recorded so the distinction (CLI-only today, MCP-eligible only for the future hosted layer) isn't lost.
 
+## 11. Devcontainer for contributors: built and validated (Aug 31, 2026)
+
+Follows through on section 8's identified-but-unbuilt item: a devcontainer for anyone contributing to mcpforge itself, pinning the exact toolchain versions `.github/workflows/ci.yml` runs against so a contributor's local environment can't silently drift from CI.
+
+**What was built — `.devcontainer/devcontainer.json` + `.devcontainer/post-create.sh`:**
+- Base image `mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm` — Node 22, matching `ci.yml`'s `node-version: "22"` for the CLI job exactly (not "whatever recent LTS," a real version pin).
+- `ghcr.io/devcontainers/features/python:1` at version 3.11 — matching `ci.yml`'s `python-version: "3.11"` for the `python-posthog-middleware` job. One container now covers both CI jobs' toolchains, since this is a small two-package monorepo, not two separate devcontainers.
+- `ghcr.io/devcontainers/features/github-cli:1` — `gh` CLI included, matching how the maintainer already authenticates to GitHub (HTTPS + `gh`, no SSH key, per this profile's own recorded convention).
+- `postCreateCommand` runs `.devcontainer/post-create.sh`, which installs both packages' dependencies (`npm install` for `packages/cli`, `pip install -e ".[dev]"` for `packages/python-posthog-middleware`) — deliberately mirroring `ci.yml`'s own "Install" steps line for line, so "what CI does" and "what a fresh devcontainer does on open" don't silently diverge into two different setup procedures.
+- `remoteUser: "node"` — runs as the base image's existing non-root user, standard devcontainer practice, not root.
+
+**Validated end to end with the real `@devcontainers/cli`, not assumed to work from the config alone:**
+- `npx @devcontainers/cli up --workspace-folder .` — a real container build from the spec above, `postCreateCommand` observed actually running and completing both installs (real `npm install` output, real `pip install` output for `fastmcp`/`posthog`/etc., not a dry run).
+- `npx @devcontainers/cli exec ... -- node --version` / `python3 --version` / `gh --version` — confirmed the exact expected versions inside the running container (Node v22.16.0, Python 3.11.16, `gh` 2.98.0), not just that the feature declarations parsed.
+- **The real test**: ran both packages' actual test suites *inside* the container via `@devcontainers/cli exec` — `cd packages/cli && npm test` (44/44 passing, identical to running outside the container) and `cd packages/python-posthog-middleware && pytest tests/` (3/3 passing) — proving the devcontainer is a genuinely working development environment for this repo, not just a config file that looks plausible.
+- Test container removed after validation (`docker rm -f`), not left running.
+
+**Scope kept deliberately narrow:** no VS Code Codespaces-specific configuration beyond the standard `customizations.vscode.extensions` (ESLint, Prettier, Python) and `editor.formatOnSave` — nothing this project doesn't already conventionally use. No attempt to containerize anything beyond the dev environment itself (the CLI's own runtime, and the generated servers, were both already assessed in section 8 as not benefiting from containerization at this time).
+
+
 
 
 

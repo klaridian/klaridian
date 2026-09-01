@@ -194,6 +194,17 @@ Follows through on section 8's identified-but-unbuilt item: a devcontainer for a
 
 **Scope kept deliberately narrow:** no VS Code Codespaces-specific configuration beyond the standard `customizations.vscode.extensions` (ESLint, Prettier, Python) and `editor.formatOnSave` — nothing this project doesn't already conventionally use. No attempt to containerize anything beyond the dev environment itself (the CLI's own runtime, and the generated servers, were both already assessed in section 8 as not benefiting from containerization at this time).
 
+## 12. Dogfooding against a real public spec: tag-based curation doesn't hold up — now the top priority (Sep 1, 2026)
+
+A deliberate step back before continuing down the technical backlog (naming, upstream PR, `--docker`): every prior validation used either the tiny Petstore fixture or an unnameable "production spec" from an earlier session — never a spec independently checkable, and critically, never one big enough to stress-test the project's own headline differentiator (tool curation, section 5's differentiation research + ARCHITECTURE.md sections 24-25). Chose Stripe's public, MIT-licensed OpenAPI spec (`stripe/openapi`) specifically to avoid any ambiguity about whose data was used — not the maintainer's employer, not any private spec, a spec published by a third party expressly for tools like this to validate against (see ARCHITECTURE.md section 34 for the full technical write-up).
+
+**The finding that changes prioritization:** Stripe's spec — the largest, most-referenced real public API spec in the ecosystem — has **zero OpenAPI tags on any of its 594 operations**. mcpforge's entire tool-curation mechanism (`--include-tags`, `--exclude-tags`, the interactive checkbox prompt) is tag-based, and against this spec it does **nothing at all** — every one of the 594 operations lands in a single "(untagged)" bucket. The only remaining lever, `--exclude-operation-ids`, requires listing hundreds of individual IDs to get down to a workable tool count, which isn't a realistic workflow.
+
+**Why this matters more than the rest of the current backlog:** the tool-bloat/curation problem is mcpforge's most validated differentiator (section 5's 4-pass market research named it the single strongest pain point in the whole MCP ecosystem, stronger than product-analytics demand). Finding that the *mechanism built to solve it* doesn't work against the most realistic large spec available is a bigger problem than anything on the current technical list (npm naming, the upstream PR, `--docker`) — those are all real, but none of them touch whether the core value proposition holds up under realistic conditions. Naming a product well doesn't matter if the thing it names doesn't work against real large APIs.
+
+**Reprioritization, recorded explicitly:** before naming/npm publishing/upstream-PR work, the next concrete technical priority is a **tag-independent curation mechanism** — the shape isn't decided yet (candidates: path-prefix/regex filtering, HTTP-method filtering, a user-supplied operationId allowlist file instead of a CLI-flag list, or resurrecting the LLM-assisted curation idea previously rejected in section 24 but revisiting it now that the rejection's original reasoning — "usage data doesn't exist on day one" — doesn't apply to a *structural* suggestion, not a usage-driven one). Not designed or built in this session; flagged here so it isn't lost under the momentum of the existing backlog items, which are all real but now demonstrably less urgent than this.
+
+
 
 
 

@@ -109,8 +109,8 @@ export const otelPlugin: ObservabilityPlugin = {
   getDependencies(): Record<string, string> {
     return {
       "@opentelemetry/api": "^1.9.0",
-      "@opentelemetry/sdk-node": "^0.55.0",
-      "@opentelemetry/exporter-trace-otlp-http": "^0.55.0",
+      "@opentelemetry/sdk-node": "^0.222.0",
+      "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     };
   },
 

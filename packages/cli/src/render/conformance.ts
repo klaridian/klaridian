@@ -19,11 +19,11 @@
 //    that checks the `isError` field rather than parsing result text.
 //
 // Both bugs are in openapi-mcp-generator's own generated output, not
-// mcpforge's code — so this is a small, ALWAYS-applied textual patch
+// klaridian's code — so this is a small, ALWAYS-applied textual patch
 // (independent of --plugin, unlike instrument.ts), following the same
 // "fail loudly if the expected call site isn't found verbatim" discipline
 // as render/instrument.ts, because openapi-mcp-generator's generated shape
-// is not a contract mcpforge controls.
+// is not a contract klaridian controls.
 
 export class ConformancePatchError extends Error {
   constructor(message: string) {
@@ -97,7 +97,7 @@ const REQUIRED_CALL_SITES: RequiredCallSite[] = [
  *
  * Fails loudly if any expected call site isn't found verbatim, per the same
  * principle as render/instrument.ts — openapi-mcp-generator's generated
- * code shape is not a contract mcpforge controls, so silently skipping a
+ * code shape is not a contract klaridian controls, so silently skipping a
  * missing call site would silently leave that specific bug unfixed with no
  * indication to the user.
  */

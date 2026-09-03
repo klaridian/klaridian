@@ -49,7 +49,7 @@ test(
   "generate: tool annotations/title derived from HTTP method, and output is sanitized",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-security-annotations-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-annotations-"));
     try {
       const genResult = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -129,10 +129,10 @@ test(
 );
 
 test(
-  "generate: rate limiting rejects calls beyond MCPFORGE_RATE_LIMIT_PER_MINUTE with isError: true",
+  "generate: rate limiting rejects calls beyond KLARIDIAN_RATE_LIMIT_PER_MINUTE with isError: true",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-security-ratelimit-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-ratelimit-"));
     try {
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -155,7 +155,7 @@ test(
 
       const serverProcess = spawn("node", ["build/index.js"], {
         cwd: outputDir,
-        env: { ...process.env, MCPFORGE_RATE_LIMIT_PER_MINUTE: "2" },
+        env: { ...process.env, KLARIDIAN_RATE_LIMIT_PER_MINUTE: "2" },
       });
       try {
         sendJsonRpc(serverProcess, {
@@ -200,10 +200,10 @@ test(
 );
 
 test(
-  "generate: MCPFORGE_RATE_LIMIT_PER_MINUTE=0 disables rate limiting entirely",
+  "generate: KLARIDIAN_RATE_LIMIT_PER_MINUTE=0 disables rate limiting entirely",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-security-ratelimit-disabled-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-ratelimit-disabled-"));
     try {
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -226,7 +226,7 @@ test(
 
       const serverProcess = spawn("node", ["build/index.js"], {
         cwd: outputDir,
-        env: { ...process.env, MCPFORGE_RATE_LIMIT_PER_MINUTE: "0" },
+        env: { ...process.env, KLARIDIAN_RATE_LIMIT_PER_MINUTE: "0" },
       });
       try {
         sendJsonRpc(serverProcess, {

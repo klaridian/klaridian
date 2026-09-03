@@ -1,5 +1,5 @@
 {
-  "name": "mcpforge-monorepo",
+  "name": "klaridian-monorepo",
   "private": true,
   "workspaces": ["packages/*"]
 }

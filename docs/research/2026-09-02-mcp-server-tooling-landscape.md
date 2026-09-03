@@ -1,6 +1,6 @@
 # MCP server tooling landscape: build, generate, host, secure, observe, test (Sept 2, 2026)
 
-Research pass conducted 2026-09-02 to inform mcpforge positioning (PLAN.md / ARCHITECTURE.md). Unlike the 2026-08-30 files in this folder (raw subagent JSON), this one is written as a structured report because the request was for a reference map, not a single decision input.
+Research pass conducted 2026-09-02 to inform klaridian positioning (PLAN.md / ARCHITECTURE.md). Unlike the 2026-08-30 files in this folder (raw subagent JSON), this one is written as a structured report because the request was for a reference map, not a single decision input.
 
 **How to read the evidence labels.** Every non-obvious claim is tagged:
 
@@ -45,7 +45,7 @@ Maturity numbers below are from the GitHub REST API and npm/PyPI download APIs o
 
 All **[V]** via API except the Tier column for non-Tier-1 SDKs, which I could not confirm from the tiers page (it lists requirements, not current assignments).
 
-**Read on the numbers.** The v1 TypeScript package still gets ~14× the downloads of the v2 `server` package five weeks after v2 GA — the ecosystem is overwhelmingly on v1 and will be for months. The TS repo README itself says "v1.x continues to receive bug fixes and security updates for at least 6 months after v2's release" and that PRs are limited to 1 per new contributor "while v2 settles." **[V]** This matters for mcpforge: `openapi-mcp-generator`'s output depends on v1 (`@modelcontextprotocol/sdk`), and the v2 migration guide documents a `@modelcontextprotocol/codemod`, split packages (`/server`, `/client`, `/core`, framework adapters `/express`, `/fastify`, `/hono`, `/node`), `zod ^4.2` requirement, `McpError`→`ProtocolError` rename, and `setRequestHandler(Schema,…)`→`setRequestHandler('method/string',…)`. **[V]** — [upgrade guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/upgrade-to-v2.html). Any textual patch coupled to v1 output shape (like `render/instrument.ts` and `render/conformance.ts`) will break on a v2-generating upstream.
+**Read on the numbers.** The v1 TypeScript package still gets ~14× the downloads of the v2 `server` package five weeks after v2 GA — the ecosystem is overwhelmingly on v1 and will be for months. The TS repo README itself says "v1.x continues to receive bug fixes and security updates for at least 6 months after v2's release" and that PRs are limited to 1 per new contributor "while v2 settles." **[V]** This matters for klaridian: `openapi-mcp-generator`'s output depends on v1 (`@modelcontextprotocol/sdk`), and the v2 migration guide documents a `@modelcontextprotocol/codemod`, split packages (`/server`, `/client`, `/core`, framework adapters `/express`, `/fastify`, `/hono`, `/node`), `zod ^4.2` requirement, `McpError`→`ProtocolError` rename, and `setRequestHandler(Schema,…)`→`setRequestHandler('method/string',…)`. **[V]** — [upgrade guide](https://ts.sdk.modelcontextprotocol.io/v2/migration/upgrade-to-v2.html). Any textual patch coupled to v1 output shape (like `render/instrument.ts` and `render/conformance.ts`) will break on a v2-generating upstream.
 
 ### Built-in OAuth helpers per SDK
 
@@ -89,7 +89,7 @@ All numbers **[V]** via API.
 ### FastMCP TypeScript (punkpeye)
 
 - Unrelated to PrefectHQ's project beyond the name. v4.19.0. Supports stdio, SSE, and `httpStream` (Streamable HTTP). Added an **OAuth 2.1 Proxy with RFC 7591 DCR and token-swap/JWT issuance** (commit #210) — so, like the Python one, it can act as a proxying AS. **[V]** — repo file listing.
-- **Directly relevant to mcpforge: in Aug–Sept 2026 it added `fromOpenAPI()` "converter v1 for OpenAPI 3.x specs + real-world benchmark suite" (#349) and follow-up fixes for form-urlencoded bodies and GET→resource mapping (#350, 2026-09-01).** **[V]** — commit messages on the repo landing page. This is a runtime OpenAPI→tools converter inside a TS framework — the TypeScript analogue of FastMCP Python's `OpenAPIProvider`, and a new competitor to `openapi-mcp-generator`'s code-generation approach.
+- **Directly relevant to klaridian: in Aug–Sept 2026 it added `fromOpenAPI()` "converter v1 for OpenAPI 3.x specs + real-world benchmark suite" (#349) and follow-up fixes for form-urlencoded bodies and GET→resource mapping (#350, 2026-09-01).** **[V]** — commit messages on the repo landing page. This is a runtime OpenAPI→tools converter inside a TS framework — the TypeScript analogue of FastMCP Python's `OpenAPIProvider`, and a new competitor to `openapi-mcp-generator`'s code-generation approach.
 - OTel: **[U]**. Pricing: free/MIT, no hosted offering.
 
 ### mcp-use (Manufact, YC S25)
@@ -124,7 +124,7 @@ Build-time discovery ("zero reflection… ~30MB RAM"), stdio + Streamable HTTP/S
 
 ## C. OpenAPI → MCP generators and converters
 
-This is mcpforge's own category. The critical axis is **standalone code generation** (you own the output, no runtime dependency on the generator) vs **runtime conversion** (a server reads the spec at startup/request time; you depend on the converter forever). See §"Standalone vs runtime" for the synthesis.
+This is klaridian's own category. The critical axis is **standalone code generation** (you own the output, no runtime dependency on the generator) vs **runtime conversion** (a server reads the spec at startup/request time; you depend on the converter forever). See §"Standalone vs runtime" for the synthesis.
 
 | Tool | Approach | Lang | License | Stars | Latest | Last push | Pricing |
 |---|---|---|---|---|---|---|---|
@@ -153,7 +153,7 @@ This is mcpforge's own category. The critical axis is **standalone code generati
 
 Numbers **[V]**; approach classification **[V]** from docs unless noted.
 
-### openapi-mcp-generator (harsha-iiiv) — mcpforge's upstream
+### openapi-mcp-generator (harsha-iiiv) — klaridian's upstream
 
 - v4.0.1 on npm (2026-06-14), **51,570 downloads/month**, 632★, MIT. **Last push 2026-06-15 — 2.5 months without a commit** at the time of writing. **[V]** Not yet stale by the census's 6-month rule, but worth watching; it has no GitHub Releases (`/releases/latest` returns 404), so version history is npm-only. **[V]**
 - Features (README): stdio / `web` (SSE via Hono) / `streamable-http` transports; auth via env vars (API key, bearer, basic, OAuth2 client-credentials, `--oauth-creds-in-body`); `--custom-auth` generates an editable `src/auth.ts` hook; `--header-passthrough` for per-user API keys over HTTP; `x-mcp` extension + `--default-include` for **spec-level tool filtering**; `--max-tool-name-length` (Claude Desktop 64-char cap); `--generate-lib`; SSRF-safe external `$ref` disabled by default; programmatic `getToolsFromOpenApi()` with `excludeOperationIds`/`filterFn`. **[V]** — [README](https://github.com/harsha-iiiv/openapi-mcp-generator).
@@ -353,12 +353,12 @@ Two 2026 shifts cut both ways for a codegen tool: (1) the stateless 2026-07-28 p
 ## Gaps nobody fills well (candid)
 
 1. **Inbound OAuth 2.1 in *generated* code.** No standalone generator emits a server that, out of the box, serves RFC 9728 PRM, validates JWTs against a configured issuer, honours RFC 8707 audience, and advertises CIMD — you get outbound API-key/OAuth plumbing (harsha-iiiv), or an OAuth *proxy* for the upstream API (Speakeasy, Stainless), but the resource-server half is left to the developer or a hosted gateway. The SDKs have the primitives (Python `AuthSettings`, Go `auth.RequireBearerToken`, TS auth router); nobody wires them into generated output with IdP-specific presets. **[V]** absence in docs checked; **[I]** that no one does it anywhere.
-2. **OpenTelemetry in generated code.** Zero codegen tools emit OTel instrumentation; the OTel MCP semconv is Development-status and one spec revision behind (issue #437). Runtime gateways (Tyk, IBM) and frameworks (FastMCP) have it; codegen does not. mcpforge is, as far as this pass could find, alone in patching OTel/product-analytics into generated servers. **[V]/[I]** as above.
+2. **OpenTelemetry in generated code.** Zero codegen tools emit OTel instrumentation; the OTel MCP semconv is Development-status and one spec revision behind (issue #437). Runtime gateways (Tyk, IBM) and frameworks (FastMCP) have it; codegen does not. klaridian is, as far as this pass could find, alone in patching OTel/product-analytics into generated servers. **[V]/[I]** as above.
 3. **Tool-count control for large specs in codegen.** Filtering exists everywhere (`x-mcp`, `x-speakeasy-mcp`, AWS tag filters, Tyk filtered discovery) but *automatic* curation — grouping, search-then-call, or code-mode — is only in Stainless/Cloudflare/FastMCP and only at runtime. A generator that emits a two-tool or search+execute server from an OpenAPI spec as standalone code does not exist. **[I]**
 4. **OpenAPI ↔ MCP contract testing.** Nothing verifies that a generated/converted server's tool schemas and behaviour still match the spec after regeneration, or that the upstream API still matches the tools (drift). The official conformance harness tests the *protocol*, MCPJam tests *behaviour with an LLM*, Trust Checker tests *security*. **[U]** after targeted search.
 5. **Stable, protocol-current observability semantics.** See F. Anyone building dashboards on `mcp.session.id` today is building on a deprecated field. **[V]**
 6. **Cross-server / cross-vendor correlation.** Every observability product assumes it instruments the server (or the gateway) itself; none correlates traces across independently operated servers a client talks to. Consistent with the 2026-08-30 fleet-landscape finding. **[I]**
-7. **v1→v2 TypeScript SDK migration for generated servers.** The ecosystem's most-installed codegen tool (`openapi-mcp-generator`) still targets SDK v1, whose support window is "at least 6 months" from late July 2026; upstream has no commits since 2026-06-15. Any downstream tool coupled to its output (mcpforge's `instrument.ts`/`conformance.ts`) carries that risk. **[V]** dates; **[I]** risk assessment.
+7. **v1→v2 TypeScript SDK migration for generated servers.** The ecosystem's most-installed codegen tool (`openapi-mcp-generator`) still targets SDK v1, whose support window is "at least 6 months" from late July 2026; upstream has no commits since 2026-06-15. Any downstream tool coupled to its output (klaridian's `instrument.ts`/`conformance.ts`) carries that risk. **[V]** dates; **[I]** risk assessment.
 8. **Honest pricing transparency in the MCP PaaS layer.** Speakeasy, Stainless (paid tiers), Zuplo, Smithery, Horizon and Scalekit all hide dollar figures behind JS sliders, "contact sales", or unlisted pages; only Alpic, Manufact, AgentCat, liblab, AWS AgentCore and the IdPs publish complete numbers. **[V]** for what was and wasn't retrievable.
 9. **Semgrep/Snyk-style static rules *for MCP server source*.** Snyk's agent-scan and Trust Checker analyse tool manifests, toxic flows and published packages; Semgrep archived its MCP repo; no maintained SAST ruleset targeting MCP-server code patterns (e.g. unvalidated `arguments`, missing `isError`, tool-description injection) was found. **[U]**
 

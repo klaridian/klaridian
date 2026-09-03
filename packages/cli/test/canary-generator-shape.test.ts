@@ -1,6 +1,6 @@
 // packages/cli/test/canary-generator-shape.test.ts
 //
-// Canary test (ARCHITECTURE.md section 18 item 3): mcpforge's instrumentation
+// Canary test (ARCHITECTURE.md section 18 item 3): klaridian's instrumentation
 // patch (render/instrument.ts) depends on the EXACT textual shape of
 // openapi-mcp-generator's generated server code — a call site
 // (`executeApiTool(...)`) and an import marker (the zod import line). That
@@ -46,7 +46,7 @@ test("canary: openapi-mcp-generator version is pinned as expected", async () => 
   assert.equal(
     pkg.version,
     EXPECTED_PINNED_VERSION,
-    `openapi-mcp-generator resolved to ${pkg.version}, but mcpforge expects it pinned to ${EXPECTED_PINNED_VERSION}. ` +
+    `openapi-mcp-generator resolved to ${pkg.version}, but klaridian expects it pinned to ${EXPECTED_PINNED_VERSION}. ` +
       `If this is an intentional upgrade: re-run this whole canary test, review its failures (if any), verify ` +
       `render/instrument.ts's CALL_SITE and importInsertionMarker still match the new generated shape by hand, ` +
       `then update EXPECTED_PINNED_VERSION here and the version in package.json together.`
@@ -58,7 +58,7 @@ test(
   { timeout: 60_000 },
   async () => {
     const pkg = JSON.parse(await readFile(OPENAPI_MCP_GENERATOR_PKG_PATH, "utf-8"));
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-canary-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-canary-"));
     try {
       await generateMcpServer({
         input: PETSTORE_SPEC_PATH,

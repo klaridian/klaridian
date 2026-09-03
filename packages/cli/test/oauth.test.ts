@@ -1,7 +1,7 @@
 // packages/cli/test/oauth.test.ts
 //
 // End-to-end test of --oauth-issuer/--oauth-jwks-uri/--oauth-audience
-// (MCPFO-22): the real `mcpforge generate` binary, a real generated server
+// (MCPFO-22): the real `klaridian generate` binary, a real generated server
 // spawned as streamable-http, and real HTTP requests against it with JWTs
 // signed by a throwaway RSA keypair served over a local HTTP JWKS endpoint —
 // no mocking of jose or the SDK's bearer-auth helpers. Verifies the four
@@ -60,10 +60,10 @@ function waitForListening(proc: ReturnType<typeof spawn>): Promise<void> {
 }
 
 test(
-  "mcpforge generate --oauth-issuer: real resource-server enforcement (401/expiry/audience/valid) — MCPFO-22",
+  "klaridian generate --oauth-issuer: real resource-server enforcement (401/expiry/audience/valid) — MCPFO-22",
   { timeout: 300_000 },
   async () => {
-    const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-oauth-"));
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-oauth-"));
     const { publicKey, privateKey } = await generateKeyPair("RS256");
     const jwk = await exportJWK(publicKey);
     (jwk as Record<string, unknown>).kid = "test-key-1";
@@ -172,8 +172,8 @@ test(
   }
 );
 
-test("mcpforge generate --oauth-issuer with stdio transport fails loudly (MCPFO-22)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-oauth-stdio-bad-"));
+test("klaridian generate --oauth-issuer with stdio transport fails loudly (MCPFO-22)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-oauth-stdio-bad-"));
   try {
     await assert.rejects(
       execFileAsync("node", [
@@ -189,8 +189,8 @@ test("mcpforge generate --oauth-issuer with stdio transport fails loudly (MCPFO-
   }
 });
 
-test("mcpforge generate --oauth-issuer without --oauth-audience fails loudly (MCPFO-22)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-oauth-noaud-"));
+test("klaridian generate --oauth-issuer without --oauth-audience fails loudly (MCPFO-22)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-oauth-noaud-"));
   try {
     await assert.rejects(
       execFileAsync("node", [
@@ -206,8 +206,8 @@ test("mcpforge generate --oauth-issuer without --oauth-audience fails loudly (MC
   }
 });
 
-test("mcpforge generate --oauth-issuer rejects a non-HTTPS issuer (except localhost) (MCPFO-22)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-oauth-http-issuer-"));
+test("klaridian generate --oauth-issuer rejects a non-HTTPS issuer (except localhost) (MCPFO-22)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-oauth-http-issuer-"));
   try {
     await assert.rejects(
       execFileAsync("node", [

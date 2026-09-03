@@ -1,6 +1,6 @@
-# Contributing to mcpforge
+# Contributing to klaridian
 
-Thanks for considering a contribution! mcpforge is early — the project is still validating its core direction (see [PLAN.md](PLAN.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for the current thinking), so please open an issue to discuss non-trivial changes before investing time in a PR.
+Thanks for considering a contribution! klaridian is early — the project is still validating its core direction (see [PLAN.md](PLAN.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for the current thinking), so please open an issue to discuss non-trivial changes before investing time in a PR.
 
 ## Ground rules
 
@@ -44,7 +44,7 @@ Versioning is manual for now (no automated changelog tooling yet — revisit if 
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 3. Create a GitHub Release from the tag (Releases → Draft a new release → pick the tag), with notes describing what changed. GitHub can auto-generate a first draft from merged PRs/commits since the last tag — edit for clarity before publishing.
 
-Packages (`@mcpforge/cli` on npm, `mcpforge-posthog-middleware` on PyPI) are not published yet — both are marked private/pre-release until that's decided.
+Packages (`@klaridian/cli` on npm, `klaridian-posthog-middleware` on PyPI) are not published yet — both are marked private/pre-release until that's decided.
 
 ## Code of Conduct
 

@@ -1,24 +1,24 @@
-# mcpforge-posthog-middleware
+# klaridian-posthog-middleware
 
-Product-observability middleware for [FastMCP](https://gofastmcp.com) servers — the Python counterpart to [mcpforge](https://github.com/ricardocvasconcelos/mcpforge)'s TypeScript `posthog` plugin.
+Product-observability middleware for [FastMCP](https://gofastmcp.com) servers — the Python counterpart to [klaridian](https://github.com/ricardocvasconcelos/klaridian)'s TypeScript `posthog` plugin.
 
-## Why this exists (see [mcpforge ARCHITECTURE.md](https://github.com/ricardocvasconcelos/mcpforge/blob/main/ARCHITECTURE.md) sections 21-23 for the full reasoning)
+## Why this exists (see [klaridian ARCHITECTURE.md](https://github.com/ricardocvasconcelos/klaridian/blob/main/ARCHITECTURE.md) sections 21-23 for the full reasoning)
 
 FastMCP already ships native, zero-config OpenTelemetry (engineering observability) since v3.0/4.0 — there's no gap to fill there. But FastMCP has **no product-observability equivalent**: no per-tool-call event capture for adoption/usage-pattern analysis. This package fills exactly that one gap, as a FastMCP-native middleware — **not** a code generator, **not** a fork of FastMCP, **not** a competing OpenAPI→MCP tool. It attaches to *any* FastMCP server (hand-written, generated via `from_openapi()`, or generated via a third-party tool like `mcp-generator-3.x`) with one line.
 
-This is deliberately the opposite shape from mcpforge's TypeScript side: TypeScript's `openapi-mcp-generator` output has no middleware concept, so mcpforge patches its generated call site directly (`render/instrument.ts`). FastMCP already has a first-class middleware pipeline, so there's nothing to patch — a middleware class is the idiomatic, zero-surprise way to attach behavior in this ecosystem, and using it means we compose cleanly with all of FastMCP's other built-in middleware (logging, rate limiting, auth) without needing to know anything about them.
+This is deliberately the opposite shape from klaridian's TypeScript side: TypeScript's `openapi-mcp-generator` output has no middleware concept, so klaridian patches its generated call site directly (`render/instrument.ts`). FastMCP already has a first-class middleware pipeline, so there's nothing to patch — a middleware class is the idiomatic, zero-surprise way to attach behavior in this ecosystem, and using it means we compose cleanly with all of FastMCP's other built-in middleware (logging, rate limiting, auth) without needing to know anything about them.
 
 ## Install
 
 ```bash
-pip install mcpforge-posthog-middleware
+pip install klaridian-posthog-middleware
 ```
 
 ## Usage
 
 ```python
 from fastmcp import FastMCP
-from mcpforge_posthog_middleware import PostHogMiddleware
+from klaridian_posthog_middleware import PostHogMiddleware
 
 mcp = FastMCP("my-server")
 mcp.add_middleware(PostHogMiddleware(api_key="phc_your_project_key"))
@@ -41,7 +41,7 @@ mcp.add_middleware(PostHogMiddleware())  # reads POSTHOG_API_KEY / POSTHOG_API_H
 
 ## What it captures
 
-One `"mcp tool called"` event per tool call, via `posthog.capture()` (PostHog's Product Analytics — not PostHog's separate Traces/Logs OTel-based feature, see the mcpforge ARCHITECTURE.md note on that distinction):
+One `"mcp tool called"` event per tool call, via `posthog.capture()` (PostHog's Product Analytics — not PostHog's separate Traces/Logs OTel-based feature, see the klaridian ARCHITECTURE.md note on that distinction):
 
 | Property | Description |
 |---|---|

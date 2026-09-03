@@ -1,6 +1,6 @@
 # MCP marketplaces, directories and connector programs — what each requires from a server developer (Sep 2, 2026)
 
-Research pass conducted to answer one question for mcpforge: **what does a generated MCP server need to look like (transport, auth, metadata, licensing, hosting) to be listable in the places users actually discover servers** — in particular the two consumer-scale surfaces, claude.ai's Connectors Directory and ChatGPT's plugin/app directory — and whether "open source" is ever a hard requirement.
+Research pass conducted to answer one question for klaridian: **what does a generated MCP server need to look like (transport, auth, metadata, licensing, hosting) to be listable in the places users actually discover servers** — in particular the two consumer-scale surfaces, claude.ai's Connectors Directory and ChatGPT's plugin/app directory — and whether "open source" is ever a hard requirement.
 
 Method: `web_search` + `web_extract` against official documentation wherever it exists (Anthropic, OpenAI, MCP Registry, Docker, Smithery, Glama, Microsoft Learn, Cursor, GitHub, Cloudflare, Google, Composio). Third-party blog posts were used only for orientation and are marked as such. All URLs and access dates are in the Sources section. Every claim is tagged **[verified]** (read directly on an official page) or **[inferred]** (my reading between the lines, or an undocumented gap).
 
@@ -42,7 +42,7 @@ Official pages: `claude.com/docs/connectors/building/submission`, `.../review-cr
 
 **Claude Code specifics** (`code.claude.com/docs/en/mcp`): `claude mcp add --transport http <name> <url>` is the recommended path (Streamable HTTP; `streamable-http` accepted as alias for `http` in JSON); `--transport sse` supported but deprecated; stdio via command; `--header "Authorization: Bearer …"` for static tokens; OAuth flow runs locally with loopback redirect (see (c)). Directory connectors "use the same MCP infrastructure as Claude Code". [verified]
 
-**Key implication for mcpforge:** an OpenAPI → MCP mapping that emits one tool per operation already satisfies the read/write split *provided* annotations are set correctly (`readOnlyHint: true` for GET-derived tools, `destructiveHint: true` for DELETE and ideally destructive PUT/PATCH/POST). Anything resembling a generic `call_api(method, path)` tool is an automatic rejection. [inferred from verified rules]
+**Key implication for klaridian:** an OpenAPI → MCP mapping that emits one tool per operation already satisfies the read/write split *provided* annotations are set correctly (`readOnlyHint: true` for GET-derived tools, `destructiveHint: true` for DELETE and ideally destructive PUT/PATCH/POST). Anything resembling a generic `call_api(method, path)` tool is an automatic rejection. [inferred from verified rules]
 
 ---
 
@@ -63,7 +63,7 @@ Official pages: `developers.openai.com/plugins/deploy/submission`, `/plugins/dep
 
 **Deep Research / connectors nuance:** Deep research can use custom apps for read/fetch only; Agent mode does not use custom apps; OpenAI-built first-party apps are search-only. [verified]
 
-**Key implication for mcpforge:** OpenAI's "response minimization" rule directly conflicts with returning raw upstream API payloads verbatim — a generated server that echoes full JSON responses including internal IDs/timestamps may be rejected. mcpforge's tool-curation and (future) response-shaping features are relevant here. [inferred]
+**Key implication for klaridian:** OpenAI's "response minimization" rule directly conflicts with returning raw upstream API payloads verbatim — a generated server that echoes full JSON responses including internal IDs/timestamps may be rejected. klaridian's tool-curation and (future) response-shaping features are relevant here. [inferred]
 
 ---
 
@@ -84,7 +84,7 @@ Official pages: `modelcontextprotocol.io/registry/{about,quickstart,authenticati
 
 **Ecosystem role:** intended to be consumed by aggregators (GitHub MCP Registry, PulseMCP, Glama, Docker community registry all ingest it) rather than by end-user clients directly. **Publishing here does NOT surface a server in claude.ai** ("The Anthropic Directory is independent of the open MCP Registry … Publishing to those does not surface your server in Claude") and does not surface it in ChatGPT. It **does** auto-populate GitHub's MCP Registry / VS Code "MCP" gallery and PulseMCP. [verified]
 
-**Key implication for mcpforge:** generating a `server.json` (npm package type + optional `remotes[]` entry), setting `mcpName` in the generated `package.json`, and documenting `mcp-publisher login github && mcp-publisher publish` is a cheap, high-leverage feature — it is the single upstream feed for GitHub/VS Code, PulseMCP, Glama and Docker's community registry. [inferred]
+**Key implication for klaridian:** generating a `server.json` (npm package type + optional `remotes[]` entry), setting `mcpName` in the generated `package.json`, and documenting `mcp-publisher login github && mcp-publisher publish` is a cheap, high-leverage feature — it is the single upstream feed for GitHub/VS Code, PulseMCP, Glama and Docker's community registry. [inferred]
 
 ---
 
@@ -229,11 +229,11 @@ Legend: ✅ required · ⚪ accepted/optional · ❌ not accepted · — n/a · 
 
 ## 14. Practical checklist for a server that wants to be listed everywhere
 
-Ordered by what unlocks the most surfaces. Items marked ★ are things a generator (mcpforge) can emit or enforce automatically.
+Ordered by what unlocks the most surfaces. Items marked ★ are things a generator (klaridian) can emit or enforce automatically.
 
 ### Transport
 - ★ Ship **Streamable HTTP at a stable `https://…/mcp` URL** as the primary transport (Claude, ChatGPT, Copilot Studio, Smithery, Docker-remote, Composio, Cloudflare). Keep SSE off or as a legacy alias only. [verified]
-- ★ Also ship a **stdio entry point** in the same package (MCP Registry, Docker-local, Glama-OSS, Cursor/VS Code/Claude Code/Gemini CLI) — mcpforge already supports both via `openapi-mcp-generator` (ARCHITECTURE.md §29).
+- ★ Also ship a **stdio entry point** in the same package (MCP Registry, Docker-local, Glama-OSS, Cursor/VS Code/Claude Code/Gemini CLI) — klaridian already supports both via `openapi-mcp-generator` (ARCHITECTURE.md §29).
 - ★ Support **stateless operation behind a load balancer** (2026-07-28 spec direction; Glama/Anthropic both note session gotchas). Return proper `401` before the transport handler on `POST /mcp`. [verified]
 - Return **401 (never 403) with `WWW-Authenticate: Bearer resource_metadata="…"`** for unauthenticated requests — required by Anthropic, Smithery, Cloudflare portal detection, and the spec. [verified]
 - Don't put WAF bot-protection in front of the MCP or `.well-known` paths without allowlisting `SmitheryBot/1.0`, Anthropic's and OpenAI's published egress ranges. [verified]
@@ -256,7 +256,7 @@ Ordered by what unlocks the most surfaces. Items marked ★ are things a generat
 - ★ **Descriptions**: state precisely what the tool does and when to call it; for any freeform-query tool, link the upstream API docs. No instructions aimed at the model's behaviour, no references to other tools. Glama's TDQS six dimensions are a good rubric to lint against. [verified]
 - ★ **Response minimization**: strip internal IDs, trace/request IDs, timestamps, telemetry, debug payloads from tool output unless the user asked for them (OpenAI hard rule; Anthropic "token frugality"). Offer a way to exclude verbose fields. Return structured, actionable errors (`isError: true` + message) — never bare "Internal Server Error". [verified]
 - ★ **Input minimization**: don't add optional "just in case" parameters; never request raw location or credentials as tool inputs. [verified]
-- Keep the tool set coherent and small enough to be useful — no hard count limit anywhere, but Cloudflare's Code Mode and Glama's "tool-set coherence" score exist because bloat is the #1 complaint (see 2026-08-30 developer-pain-points research). mcpforge's tool-curation feature (§24) matters for listability, not just UX. [inferred]
+- Keep the tool set coherent and small enough to be useful — no hard count limit anywhere, but Cloudflare's Code Mode and Glama's "tool-set coherence" score exist because bloat is the #1 complaint (see 2026-08-30 developer-pain-points research). klaridian's tool-curation feature (§24) matters for listability, not just UX. [inferred]
 
 ### Metadata & packaging
 - ★ `server.json` (schema `2025-12-11`) with `packages[]` (npm, `transport.type: stdio`) and `remotes[]` (streamable-http URL); `mcpName` in `package.json`; publish via `mcp-publisher login github|dns|http` + `mcp-publisher publish`. Keep under 4 KB. This feeds GitHub/VS Code, PulseMCP, Glama, Docker community registry. [verified]
@@ -267,7 +267,7 @@ Ordered by what unlocks the most surfaces. Items marked ★ are things a generat
 - For MCP Apps (UI): 3–5 PNG screenshots ≥1000 px (Anthropic); CSP `frameDomains` avoided (OpenAI). [verified]
 
 ### Licensing
-- Remote server code can stay closed; **choose MIT or Apache-2.0 for anything you want in Docker-local / Glama-OSS / Cursor / Gemini CLI** ("GPL is not [great]" — Docker). mcpforge's `--license mit|apache-2.0|none` default of MIT already fits. [verified]
+- Remote server code can stay closed; **choose MIT or Apache-2.0 for anything you want in Docker-local / Glama-OSS / Cursor / Gemini CLI** ("GPL is not [great]" — Docker). klaridian's `--license mit|apache-2.0|none` default of MIT already fits. [verified]
 - You must **own or legitimately proxy the upstream API** and the MCP domain should match your brand: Anthropic (§3.F, "API ownership"), OpenAI ("unofficial connectors … cannot be approved"), Microsoft (must own endpoint). **This is the real gate for an OpenAPI-to-MCP generator's users: third parties wrapping someone else's API will be rejected by all three big-vendor directories** — only the API owner (or an authorised partner) can list. [verified]
 
 ### Hosting

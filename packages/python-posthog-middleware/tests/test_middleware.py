@@ -1,6 +1,6 @@
 """Real end-to-end test: a real FastMCP server + real Client round-trip,
 with only PostHog's outbound network call mocked (mirrors the rigor
-mcpforge's TypeScript tests apply via real npm install/build/run)."""
+klaridian's TypeScript tests apply via real npm install/build/run)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastmcp import Client, FastMCP
 
-from mcpforge_posthog_middleware import PostHogMiddleware
+from klaridian_posthog_middleware import PostHogMiddleware
 
 
 def _build_server() -> FastMCP:

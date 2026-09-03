@@ -1,10 +1,10 @@
 """FastMCP middleware: one PostHog Product Analytics event per tool call.
 
-The Python counterpart to mcpforge's TypeScript `posthog` plugin (see
-mcpforge's ARCHITECTURE.md sections 21-23). Deliberately shaped as ordinary
+The Python counterpart to klaridian's TypeScript `posthog` plugin (see
+klaridian's ARCHITECTURE.md sections 21-23). Deliberately shaped as ordinary
 FastMCP middleware rather than a generated/patched artifact — FastMCP
 already has a first-class middleware pipeline (unlike the TypeScript
-openapi-mcp-generator output mcpforge patches directly), so attaching via
+openapi-mcp-generator output klaridian patches directly), so attaching via
 `add_middleware()` is the idiomatic way to do this, and it composes cleanly
 with FastMCP's other built-in middleware for free.
 

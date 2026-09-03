@@ -1,6 +1,6 @@
 // packages/cli/test/license.test.ts
 //
-// End-to-end validation of `mcpforge generate`'s LICENSE/package.json
+// End-to-end validation of `klaridian generate`'s LICENSE/package.json
 // license-field generation (ARCHITECTURE.md section 27 — MCP servers are
 // conventionally open source because they run with real credentials next
 // to an autonomous agent; a generated server with no license at all is a
@@ -35,7 +35,7 @@ test(
   "generate (default license): writes a LICENSE file and sets package.json's license to MIT with no --license flag",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-license-default-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-license-default-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -71,7 +71,7 @@ test(
   "generate --license apache-2.0: writes the Apache-2.0 LICENSE text and sets package.json accordingly",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-license-apache-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-license-apache-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -107,7 +107,7 @@ test(
   "generate --license none: writes no LICENSE file, warns on stderr, and leaves package.json without a license field",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-license-none-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-license-none-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -138,7 +138,7 @@ test(
 );
 
 test("generate --license <unknown>: fails loudly before generating anything", { timeout: 30_000 }, async () => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-license-bad-"));
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-license-bad-"));
   try {
     let caught: unknown;
     try {

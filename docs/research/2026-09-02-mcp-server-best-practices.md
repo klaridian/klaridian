@@ -1,6 +1,6 @@
 # Production MCP Servers — 2026 Best Practices (Research Report)
 
-**Date:** 2026-09-02 · **Audience:** mcpforge maintainers · **Perspective:** the *server developer* (independent of any generator/framework)
+**Date:** 2026-09-02 · **Audience:** klaridian maintainers · **Perspective:** the *server developer* (independent of any generator/framework)
 
 **Method.** Web research over official MCP specification pages (2025-11-25 and 2026-07-28), the MCP blog, Anthropic/OpenAI/Cloudflare/Block/Stainless/AWS/Auth0/Docker engineering posts and docs, OWASP, Invariant Labs, Snyk, npm/PyPI docs, arXiv papers, and GitHub issues. Every externally sourced claim carries a numbered citation `[n]` resolving to the Sources section (URL + access date; all accessed 2026-09-02). Claims are tagged:
 
@@ -206,8 +206,8 @@ How they are actually used in 2026:
 
 ### 4.2 License choice
 
-- The MCP project itself is moving MIT → Apache-2.0 for new contributions (spec, SDKs, reference servers). [41] `openapi-mcp-generator` (mcpforge's upstream) is MIT. **[verified]**
-- **[inferred]** Apache-2.0's explicit patent grant and NOTICE handling suit corporate adopters and align with the MCP org's direction; MIT maximizes simplicity. Either is fine for a generated server; matching the MCP org (Apache-2.0) is the defensible default for a template, MIT for maximum permissiveness. mcpforge already supports both (`--license`).
+- The MCP project itself is moving MIT → Apache-2.0 for new contributions (spec, SDKs, reference servers). [41] `openapi-mcp-generator` (klaridian's upstream) is MIT. **[verified]**
+- **[inferred]** Apache-2.0's explicit patent grant and NOTICE handling suit corporate adopters and align with the MCP org's direction; MIT maximizes simplicity. Either is fine for a generated server; matching the MCP org (Apache-2.0) is the defensible default for a template, MIT for maximum permissiveness. klaridian already supports both (`--license`).
 
 ### 4.3 What a trustworthy open-source MCP server repo looks like (2026)
 
@@ -271,9 +271,9 @@ What changes when strangers connect via claude.ai or ChatGPT:
 
 ---
 
-## 7. Implications for mcpforge (generator vs runtime) — [inferred]
+## 7. Implications for klaridian (generator vs runtime) — [inferred]
 
-- **Standalone generated code wins** for: transparency (users can read every line — the trust argument in §4.1), licensing simplicity, zero runtime dependency on mcpforge, and marketplace review (reviewers see exactly what runs).
+- **Standalone generated code wins** for: transparency (users can read every line — the trust argument in §4.1), licensing simplicity, zero runtime dependency on klaridian, and marketplace review (reviewers see exactly what runs).
 - **A runtime framework wins** for: keeping up with breaking spec revisions (the 2026-07-28 migration is exactly the kind of change you want to ship once, not re-generate into N repos), OAuth resource-server plumbing, token stores, audit/telemetry with redaction, rate limiting, conformance-tested transport code.
 - **The evidence points to a hybrid**: generate the *thin, reviewable part* (tool catalog, schemas, annotations, upstream call mapping, README/SECURITY/LICENSE/server.json scaffolding) and depend on a *versioned, provenance-signed runtime package* for transport/auth/observability. That is roughly what Stainless and Speakeasy do commercially, and what `openapi-mcp-generator` + the official SDK already approximate.
 - **Non-negotiable generator defaults suggested by the evidence**: curated tool selection (never all operations by default), explicit annotations on every tool, split read/write tools, `isError` on every upstream failure, size limits on responses, deterministic `tools/list` with `ttlMs`/`cacheScope:"private"`, no secrets in output, trusted-publishing CI templates, and a conformance-suite step in the generated project's CI.

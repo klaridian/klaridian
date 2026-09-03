@@ -38,7 +38,7 @@ Initial spike used `ConsoleSpanExporter` (no collector needed, simplest to try f
 
 The very first spike run produced zero visible spans because the default `BatchSpanProcessor` batches and flushes periodically / on shutdown, and the test process was killed before either happened. Fixed by explicitly calling `sdk.shutdown()` on `SIGINT`/`SIGTERM` in `instrumentation.js`.
 
-**Consequence for the real plugin:** the generated server's instrumentation module needs proper signal handling wired in by default (not left as an exercise for whoever uses the generated server) — this is exactly the kind of easy-to-miss detail that justifies mcpforge existing in the first place. Should be covered by an integration test in the real project: start the SDK, emit a span, send SIGTERM, assert the span was exported before process exit.
+**Consequence for the real plugin:** the generated server's instrumentation module needs proper signal handling wired in by default (not left as an exercise for whoever uses the generated server) — this is exactly the kind of easy-to-miss detail that justifies klaridian existing in the first place. Should be covered by an integration test in the real project: start the SDK, emit a span, send SIGTERM, assert the span was exported before process exit.
 
 ## What this validates for ARCHITECTURE.md
 

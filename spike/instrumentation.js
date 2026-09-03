@@ -23,7 +23,7 @@ const OTLP_ENDPOINT =
   process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4318/v1/traces";
 
 const sdk = new NodeSDK({
-  serviceName: "mcpforge-spike-petstore",
+  serviceName: "klaridian-spike-petstore",
   traceExporter: new OTLPTraceExporter({ url: OTLP_ENDPOINT }),
 });
 
@@ -34,10 +34,10 @@ sdk.start();
 process.on("SIGINT", () => sdk.shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => sdk.shutdown().finally(() => process.exit(0)));
 
-const tracer = trace.getTracer("mcpforge-spike");
+const tracer = trace.getTracer("klaridian-spike");
 
 /**
- * wrapTool — the core mechanic mcpforge's runtime-otel package will provide.
+ * wrapTool — the core mechanic klaridian's runtime-otel package will provide.
  * Wraps an MCP tool handler in an OTel span, following the shape of the
  * emerging OTel GenAI/tool semantic conventions (tool name, status, duration
  * come for free from the span; args go in as attributes).

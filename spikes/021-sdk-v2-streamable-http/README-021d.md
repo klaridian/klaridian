@@ -20,7 +20,7 @@
 - **query**: `if (args[name] !== undefined) url.searchParams.set(name, String(args[name]))`
 - **header**: `if (args[name] !== undefined) headers[name] = String(args[name])`
 - **body**: present iff `requestBodyContentType` is set; value is `args.requestBody`; sets `Content-Type`
-- **auth**: iff `securityRequirements` non-empty, add `Authorization: Bearer ${MCPFORGE_AUTH_TOKEN}` (mirrors the current stdio path's env-var convention: `MCPFORGE_BASE_URL` + `MCPFORGE_AUTH_TOKEN`)
+- **auth**: iff `securityRequirements` non-empty, add `Authorization: Bearer ${KLARIDIAN_AUTH_TOKEN}` (mirrors the current stdio path's env-var convention: `KLARIDIAN_BASE_URL` + `KLARIDIAN_AUTH_TOKEN`)
 - **result**: `{ content: [{type:"text", text}], isError: !resp.ok }` — upstream non-2xx surfaces as a tool error, not a crash.
 
 ## Caveats / not-covered (carry into the real build, don't silently assume)

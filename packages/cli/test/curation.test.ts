@@ -211,8 +211,8 @@ test("validateCurationChoice rejects an unknown HTTP method", () => {
 });
 
 test("generate --include-paths: produces a working server, tag-independent (real untagged spec, CLI E2E)", { timeout: 120_000 }, async () => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-paths-"));
-  const specDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-spec-"));
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-curation-paths-"));
+  const specDir = await mkdtemp(path.join(tmpdir(), "klaridian-curation-spec-"));
   const specPath = path.join(specDir, "untagged.json");
   const { writeFile } = await import("node:fs/promises");
   await writeFile(
@@ -267,7 +267,7 @@ test(
   "generate --exclude-tags: produces a working server with only the non-excluded operations",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-curation-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -301,7 +301,7 @@ test(
 );
 
 test("generate --exclude-tags with an unknown tag fails loudly with a clear message", { timeout: 60_000 }, async () => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-bad-"));
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-curation-bad-"));
   try {
     await assert.rejects(
       execFileAsync("node", [

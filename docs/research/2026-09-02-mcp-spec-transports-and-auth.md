@@ -1,6 +1,6 @@
 # MCP specification, September 2026: what servers must do for transports and authorization
 
-Research pass conducted 2026-09-02 to inform mcpforge's Streamable HTTP work. Scope is strictly the **specification** (modelcontextprotocol.io, the `modelcontextprotocol` GitHub org, SEPs, official blog). No product comparisons.
+Research pass conducted 2026-09-02 to inform klaridian's Streamable HTTP work. Scope is strictly the **specification** (modelcontextprotocol.io, the `modelcontextprotocol` GitHub org, SEPs, official blog). No product comparisons.
 
 **How to read this document.** Every normative claim below is tagged:
 
@@ -82,7 +82,7 @@ Message directions are now fixed: "servers do not initiate JSON-RPC requests and
 ### 2.2 stdio [verified — S11]
 
 - Client launches the server as a subprocess; server reads JSON-RPC from `stdin`, writes to `stdout`; newline-delimited; messages **MUST NOT** contain embedded newlines.
-- Server **MAY** write UTF-8 to `stderr` for any logging. Server **MUST NOT** write anything to `stdout` that is not a valid MCP message. (This is the transport-corruption failure mode mcpforge's e2e tests already guard against — still normative.)
+- Server **MAY** write UTF-8 to `stderr` for any logging. Server **MUST NOT** write anything to `stdout` that is not a valid MCP message. (This is the transport-corruption failure mode klaridian's e2e tests already guard against — still normative.)
 - Server **MUST NOT** write JSON-RPC *requests* to `stdout`; server→client interactions go via `InputRequiredResult` (MRTR).
 - No header layer; everything is in `_meta`.
 - Cancellation: client sends `notifications/cancelled`; server **SHOULD** stop and **MUST NOT** send further messages for it.
@@ -252,7 +252,7 @@ What stdio servers *do* have to care about in `2026-07-28` [verified — S11, S5
 - The security guidance for locally-run servers: prefer stdio "to limit access to just the MCP client"; if you *do* expose HTTP locally, bind to `127.0.0.1`, validate `Origin` (DNS rebinding), and require a token or use IPC. [S17, S6]
 - Client-side (not server-side) obligations exist around one-click install consent (SEP-1024 lineage) — not the server's job. [S17]
 
-**[inferred]** For mcpforge's current stdio output this means: no OAuth code paths at all; upstream API credentials come from env vars/config as today; the `2026-07-28` work is the stateless/`_meta`/`server/discover`/`resultType`/`ttlMs`/`cacheScope` surface, which the SDK v2 handles if the generator is on it.
+**[inferred]** For klaridian's current stdio output this means: no OAuth code paths at all; upstream API credentials come from env vars/config as today; the `2026-07-28` work is the stateless/`_meta`/`server/discover`/`resultType`/`ttlMs`/`cacheScope` surface, which the SDK v2 handles if the generator is on it.
 
 ---
 
@@ -327,7 +327,7 @@ Still two modes (`form`, `url`), but the *mechanism* changed: servers no longer 
 
 ### 6.9 Error semantics [verified — S15]
 
-Unknown tool → JSON-RPC protocol error `-32602`. API failures, input validation, business-logic errors → tool result with `isError: true`. (This confirms the two conformance fixes mcpforge already applies in `render/conformance.ts` remain correct under `2026-07-28`.)
+Unknown tool → JSON-RPC protocol error `-32602`. API failures, input validation, business-logic errors → tool result with `isError: true`. (This confirms the two conformance fixes klaridian already applies in `render/conformance.ts` remain correct under `2026-07-28`.)
 
 ---
 
@@ -396,7 +396,7 @@ Standards referenced by the spec (not independently re-read in this pass): OAuth
 
 ### Things I did not verify
 
-- Whether `openapi-mcp-generator` (mcpforge's upstream) has adopted TypeScript SDK v2 / `2026-07-28`. Out of scope for a spec report; flagged because bullet 1 of §7 depends on it.
+- Whether `openapi-mcp-generator` (klaridian's upstream) has adopted TypeScript SDK v2 / `2026-07-28`. Out of scope for a spec report; flagged because bullet 1 of §7 depends on it.
 - The current IETF status of the CIMD draft beyond the `-00` pinned by the spec.
 - The status of SEP-2028 (forwarding `_meta` to HTTP headers).
 - Any SDK-specific defaults (e.g. whether SDK v2's HTTP transport validates `Origin` or `Mcp-*` headers by default). The spec requirements are as stated; SDK behavior should be checked in code.

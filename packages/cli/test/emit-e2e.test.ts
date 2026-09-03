@@ -49,7 +49,7 @@ test(
   "v2 emit path: emitted petstore server installs, builds, and answers tools/list + tools/call over stdio",
   { timeout: 300_000 },
   async () => {
-    const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-emit-e2e-"));
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-e2e-"));
     try {
       // 1. Emit the project from real tool data.
       const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
@@ -112,7 +112,7 @@ test(
   "v2 emit path: streamable-http server survives SEQUENTIAL requests (the MCPFO-10 crash is gone)",
   { timeout: 300_000 },
   async () => {
-    const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-emit-http-"));
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-http-"));
     const PORT = 3921;
     try {
       const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });

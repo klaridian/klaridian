@@ -3,7 +3,7 @@
 // MCPFO-20 — when the OpenAPI spec's servers[0].url is relative (e.g. "/api/v3")
 // or missing and the user gave no --base-url, the generated server has no usable
 // default upstream host. The generator must warn clearly at generation time
-// (non-fatal: MCPFORGE_BASE_URL can still be supplied at runtime), telling the
+// (non-fatal: KLARIDIAN_BASE_URL can still be supplied at runtime), telling the
 // author to pass --base-url with an absolute URL.
 
 import { test } from "node:test";

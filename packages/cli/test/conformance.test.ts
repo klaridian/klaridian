@@ -50,7 +50,7 @@ test(
   "generate: fixes MCP spec conformance bugs — unknown tool is a protocol error, execution failures set isError: true",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-conformance-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-conformance-"));
     try {
       const genResult = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -130,7 +130,7 @@ test(
     // Not a conformance test per se — confirms the two ALWAYS-ON fixes
     // (conformance) and the OPT-OUT-able one (license) don't interfere
     // with each other's file-writing order in commands/generate.ts.
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-conformance-license-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-conformance-license-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,

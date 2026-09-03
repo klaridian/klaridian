@@ -43,6 +43,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -94,6 +96,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -138,6 +142,8 @@ test("generate --transport <unknown>: fails loudly before generating anything", 
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -168,6 +174,8 @@ test("generate --transport streamable-http --port 0: rejects an invalid port", {
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",

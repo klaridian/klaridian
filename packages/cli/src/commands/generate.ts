@@ -231,8 +231,8 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--engine <id>",
-      "Generation engine: v1 (default, via openapi-mcp-generator, SDK v1, protocol 2025-06-18) or v2 (mcpforge's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38). v2 is stateless so the streamable-http crash (MCPFO-10) cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
-      "v1"
+      "Generation engine: v2 (default, mcpforge's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38) or v1 (legacy, via openapi-mcp-generator, SDK v1, protocol 2025-06-18; its streamable-http transport crashes on the 2nd request — MCPFO-10). v2 is stateless so that crash cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
+      "v2"
     )
     .option(
       "--icon <src[|theme]>",

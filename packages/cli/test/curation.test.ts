@@ -136,6 +136,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -169,6 +171,8 @@ test("generate --exclude-tags with an unknown tag fails loudly with a clear mess
       execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",

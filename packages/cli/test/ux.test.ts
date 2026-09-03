@@ -34,6 +34,8 @@ test(
         await execFileAsync("node", [
           CLI_ENTRYPOINT,
           "generate",
+          "--engine",
+          "v1",
           "--spec",
           PETSTORE_SPEC_PATH,
           "--out",
@@ -69,6 +71,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -102,6 +106,8 @@ test(
         await execFileAsync("node", [
           CLI_ENTRYPOINT,
           "generate",
+          "--engine",
+          "v1",
           "--spec",
           PETSTORE_SPEC_PATH,
           "--out",
@@ -133,6 +139,8 @@ test(
       const proc = spawn("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -176,6 +184,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -212,6 +222,8 @@ test(
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -241,6 +253,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -269,6 +283,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -301,6 +317,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -335,6 +353,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -362,6 +382,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",

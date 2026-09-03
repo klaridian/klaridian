@@ -40,6 +40,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -74,6 +76,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -108,6 +112,8 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -139,6 +145,8 @@ test("generate --license <unknown>: fails loudly before generating anything", { 
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
+        "--engine",
+        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",

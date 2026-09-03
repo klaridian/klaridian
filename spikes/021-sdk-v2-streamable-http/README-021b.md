@@ -1,12 +1,12 @@
 # Spike 021b — generate a v2 server from getToolsFromOpenApi() DATA (option d)
 
-**Question (Given/When/Then):** Given `openapi-mcp-generator`'s `getToolsFromOpenApi()` output (pure tool data, SDK-version-agnostic), when mcpforge emits a v2 `@modelcontextprotocol/server` stateless server directly from that data (instead of consuming the frozen v1 `generateMcpServer()` code output), then a real, buildable, HTTP-drivable server results — validating ARCHITECTURE.md §37 option (d) as the MCPFO-21 path.
+**Question (Given/When/Then):** Given `openapi-mcp-generator`'s `getToolsFromOpenApi()` output (pure tool data, SDK-version-agnostic), when klaridian emits a v2 `@modelcontextprotocol/server` stateless server directly from that data (instead of consuming the frozen v1 `generateMcpServer()` code output), then a real, buildable, HTTP-drivable server results — validating ARCHITECTURE.md §37 option (d) as the MCPFO-21 path.
 
 ## The seam, verified
 
 `getToolsFromOpenApi(petstore)` returns an **array of pure data** per operation:
 `{ name, description, inputSchema (JSON Schema), method, pathTemplate, parameters, executionParameters, requestBodyContentType, securityRequirements, operationId, tags, deprecated, baseUrl }`.
-No SDK types, no generated code — just the OpenAPI→tool mapping as data. This function is what mcpforge already calls today for its tool-count pre-check, so the dependency is already in place and is **not** coupled to the v1 code generator.
+No SDK types, no generated code — just the OpenAPI→tool mapping as data. This function is what klaridian already calls today for its tool-count pre-check, so the dependency is already in place and is **not** coupled to the v1 code generator.
 
 ## Sub-problem found and solved: schema format
 
@@ -31,7 +31,7 @@ Annotations spot-check on `tools/list`: `getPetById` → `{readOnlyHint:true, de
 
 ## Verdict: VALIDATED
 
-Option (d) works: mcpforge can generate a v2, stateless, HTTP-drivable MCP server directly from `getToolsFromOpenApi()` data, escaping the frozen v1 code generator entirely. Three of mcpforge's existing hand-maintained patches become **free/native on this path**:
+Option (d) works: klaridian can generate a v2, stateless, HTTP-drivable MCP server directly from `getToolsFromOpenApi()` data, escaping the frozen v1 code generator entirely. Three of klaridian's existing hand-maintained patches become **free/native on this path**:
 - **`render/conformance.ts`** — v2 gives `isError:true` on validation failure (req 4) and `-32602` on unknown tool (req 5) **natively**. Both bugs conformance.ts was created to fix are already correct upstream. conformance.ts likely becomes unnecessary on v2.
 - **`render/instrument.ts`** — there is no `executeApiTool` textual call site to patch on this path; instrumentation becomes a clean wrap around each `registerTool` handler at generation time (we control the emission), not a fragile string patch against someone else's output.
 - **MCPFO-23 (marketplace annotations)** — trivially satisfied because *we* emit the annotations from the HTTP method, rather than hoping the upstream generator does.
@@ -43,7 +43,7 @@ Option (d) works: mcpforge can generate a v2, stateless, HTTP-drivable MCP serve
 - This throwaway generator emitted `.mjs` by hand; the real work is emitting a proper TypeScript project (tsconfig, package.json with `@modelcontextprotocol/server`+`/node`+zod v4, build) — mechanical, not risky.
 
 ### Recommendation for the real build
-1. **MCPFO-21 path is option (d), confirmed**: build mcpforge's own v2 emitter over `getToolsFromOpenApi()` data + `json-schema-to-zod`. Stop consuming `generateMcpServer()`'s v1 code output. This is a real rewrite of the generation core, but it's the coherent one and it *shrinks* the fragile surface (kills the textual patches).
+1. **MCPFO-21 path is option (d), confirmed**: build klaridian's own v2 emitter over `getToolsFromOpenApi()` data + `json-schema-to-zod`. Stop consuming `generateMcpServer()`'s v1 code output. This is a real rewrite of the generation core, but it's the coherent one and it *shrinks* the fragile surface (kills the textual patches).
 2. **MCPFO-10 collapses into MCPFO-21**: the streamable-http crash is a v1-only artifact; the v2 path never has it. Reframe MCPFO-10 as "done-by-migration", keep only the optional upstream fetch-to-node PR as good-citizen work.
 3. **Next spike (021c) if continuing**: reach the `2026-07-28` era explicitly and assert `server/discover` + list-result `ttlMs`/`cacheScope`, to close the conformance gap this spike deliberately left open.
 4. Re-emit the real upstream `fetch` (not stubbed) for one write tool + one auth-required tool, to prove the proxy half survives the v2 move.

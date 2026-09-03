@@ -86,7 +86,7 @@ const tools = {
 // --- MCP server wiring ---
 
 const server = new Server(
-  { name: "mcpforge-spike-petstore", version: "0.0.1" },
+  { name: "klaridian-spike-petstore", version: "0.0.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -108,7 +108,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("mcpforge-spike-petstore MCP server running on stdio");
+  console.error("klaridian-spike-petstore MCP server running on stdio");
 }
 
 main().catch((err) => {

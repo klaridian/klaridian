@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenAPI 3.1 fixture",
     "version": "1.0.0",
-    "description": "A small hand-written OpenAPI 3.1 spec used to validate mcpforge against 3.1-specific syntax, since the OpenAPI 3.1 spec is a stricter JSON Schema (2020-12) superset of 3.0. Not a real API — for testing only."
+    "description": "A small hand-written OpenAPI 3.1 spec used to validate klaridian against 3.1-specific syntax, since the OpenAPI 3.1 spec is a stricter JSON Schema (2020-12) superset of 3.0. Not a real API — for testing only."
   },
   "servers": [{ "url": "https://api.example.com" }],
   "security": [{ "bearerAuth": [] }],

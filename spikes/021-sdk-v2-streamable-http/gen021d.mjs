@@ -5,7 +5,7 @@ import { getToolsFromOpenApi } from 'openapi-mcp-generator';
 import { jsonSchemaToZod } from 'json-schema-to-zod';
 import { writeFileSync } from 'node:fs';
 
-const SPEC = '/Users/ricardo.vasconcelos/projects/mcpforge/examples/petstore/openapi.json';
+const SPEC = '/Users/ricardo.vasconcelos/projects/klaridian/examples/petstore/openapi.json';
 
 const tools = await getToolsFromOpenApi(SPEC, { dereference: true });
 
@@ -17,15 +17,15 @@ function emitHandlerBody(t) {
   const hasBody = !!t.requestBodyContentType;
   const hasAuth = Array.isArray(t.securityRequirements) && t.securityRequirements.length > 0;
   return `
-      const base = process.env.MCPFORGE_BASE_URL;
-      if (!base) throw new Error("MCPFORGE_BASE_URL not set");
+      const base = process.env.KLARIDIAN_BASE_URL;
+      if (!base) throw new Error("KLARIDIAN_BASE_URL not set");
       let path = ${JSON.stringify(t.pathTemplate)};
       ${pathParams.map(p => `path = path.replace(${JSON.stringify('{'+p+'}')}, encodeURIComponent(String(args[${JSON.stringify(p)}])));`).join('\n      ')}
       const url = new URL(base.replace(/\\/$/, '') + path);
       ${queryParams.map(p => `if (args[${JSON.stringify(p)}] !== undefined) url.searchParams.set(${JSON.stringify(p)}, String(args[${JSON.stringify(p)}]));`).join('\n      ')}
       const headers = {};
       ${headerParams.map(p => `if (args[${JSON.stringify(p)}] !== undefined) headers[${JSON.stringify(p)}] = String(args[${JSON.stringify(p)}]);`).join('\n      ')}
-      ${hasAuth ? `if (process.env.MCPFORGE_AUTH_TOKEN) headers["Authorization"] = "Bearer " + process.env.MCPFORGE_AUTH_TOKEN;` : ''}
+      ${hasAuth ? `if (process.env.KLARIDIAN_AUTH_TOKEN) headers["Authorization"] = "Bearer " + process.env.KLARIDIAN_AUTH_TOKEN;` : ''}
       ${hasBody ? `headers["Content-Type"] = ${JSON.stringify(t.requestBodyContentType)};` : ''}
       const resp = await fetch(url, {
         method: ${JSON.stringify((t.method || 'get').toUpperCase())},

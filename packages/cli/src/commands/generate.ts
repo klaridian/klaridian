@@ -1,11 +1,11 @@
 // packages/cli/src/commands/generate.ts
 //
-// Implements `mcpforge generate` — ARCHITECTURE.md section 16/18 pivot:
+// Implements `klaridian generate` — ARCHITECTURE.md section 16/18 pivot:
 // delegates the actual OpenAPI -> MCP server generation to
 // openapi-mcp-generator (a mature, MIT-licensed library, validated against
 // a large real-world production API spec in section 16), then post-processes
-// the generated server with mcpforge's own observability instrumentation layer
-// (instrument.ts). mcpforge's own code no longer parses OpenAPI or renders
+// the generated server with klaridian's own observability instrumentation layer
+// (instrument.ts). klaridian's own code no longer parses OpenAPI or renders
 // server source from scratch — that's the whole point of the pivot.
 //
 // Section 20: supports 0, 1, or multiple --plugin flags (the old v0
@@ -111,12 +111,12 @@ function inferIconMimeType(src: string): string | undefined {
  * writes ~20 lines of its own hardcoded progress text directly to
  * `console.error`/`console.warn` with no verbosity/logger option exposed in
  * its public API to control it — confirmed directly by reading its source,
- * not assumed. This is the only available lever mcpforge has to honor its
+ * not assumed. This is the only available lever klaridian has to honor its
  * own `--quiet`/`--json` contracts without a fork or an upstream fix.
  *
  * Deliberately scoped as tightly as possible around the single call site
  * that needs it (`generateMcpServer()`) rather than applied globally for
- * the whole command — anything mcpforge's own code logs during that same
+ * the whole command — anything klaridian's own code logs during that same
  * window (there is none today, but this guards against a future regression)
  * would also be silenced otherwise, which isn't the intent.
  */
@@ -140,7 +140,7 @@ async function withConsoleSuppressed<T>(fn: () => Promise<T>): Promise<T> {
  * passed. On failure, `success: false` + `error` + `stage` (which step
  * failed) are set and everything else is omitted — deliberately a single,
  * predictable JSON value on stdout either way (never a mix of prose and
- * JSON), so a script/agent doing `mcpforge generate --json ... | jq` always
+ * JSON), so a script/agent doing `klaridian generate --json ... | jq` always
  * gets exactly one parseable value regardless of outcome. Exit code (0/1)
  * still reflects success independent of this payload, so callers that only
  * check the exit code don't need to parse anything.
@@ -247,7 +247,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--engine <id>",
-      "Generation engine: v2 (default, mcpforge's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38) or v1 (legacy, via openapi-mcp-generator, SDK v1, protocol 2025-06-18; its streamable-http transport crashes on the 2nd request — MCPFO-10). v2 is stateless so that crash cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
+      "Generation engine: v2 (default, klaridian's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38) or v1 (legacy, via openapi-mcp-generator, SDK v1, protocol 2025-06-18; its streamable-http transport crashes on the 2nd request — MCPFO-10). v2 is stateless so that crash cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
       "v2"
     )
     .option(
@@ -519,7 +519,7 @@ export function registerGenerateCommand(program: Command): void {
           }
 
           // --interactive + non-TTY detection (ARCHITECTURE.md section 32):
-          // found during a direct CLI-UX audit that `echo "" | mcpforge
+          // found during a direct CLI-UX audit that `echo "" | klaridian
           // generate --interactive` silently proceeded with the prompt
           // library's default (everything selected) rather than failing —
           // dangerous for a flag whose entire point is "the user explicitly
@@ -592,7 +592,7 @@ export function registerGenerateCommand(program: Command): void {
           if (hasCuration) {
             const doc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
             const curated = applyCurationToSpec(doc, curationChoice);
-            tempSpecDir = await mkdtemp(path.join(os.tmpdir(), "mcpforge-curated-spec-"));
+            tempSpecDir = await mkdtemp(path.join(os.tmpdir(), "klaridian-curated-spec-"));
             generationSpecPath = path.join(tempSpecDir, "spec.json");
             await writeFile(generationSpecPath, JSON.stringify(curated), "utf-8");
           }
@@ -613,7 +613,7 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
 
-          // --- Engine v2: mcpforge's own emitter (MCPFO-21, ARCHITECTURE.md
+          // --- Engine v2: klaridian's own emitter (MCPFO-21, ARCHITECTURE.md
           // section 38). Emits a stateless @modelcontextprotocol/server (SDK v2)
           // project directly from `tools` data — no generateMcpServer(), no
           // textual conformance/security/instrument patches (v2 gives native

@@ -1,12 +1,12 @@
 // Spike 021b — generate a v2 MCP server from getToolsFromOpenApi() DATA.
-// Proves ARCHITECTURE.md §37 option (d): mcpforge consumes openapi-mcp-generator's
+// Proves ARCHITECTURE.md §37 option (d): klaridian consumes openapi-mcp-generator's
 // pure tool DATA (not its v1 code output) and emits a v2 server itself.
 // This is a throwaway generator: enough to prove the path end to end, not production.
 import { getToolsFromOpenApi } from 'openapi-mcp-generator';
 import { jsonSchemaToZod } from 'json-schema-to-zod';
 import { writeFileSync } from 'node:fs';
 
-const SPEC = '/Users/ricardo.vasconcelos/projects/mcpforge/examples/petstore/openapi.json';
+const SPEC = '/Users/ricardo.vasconcelos/projects/klaridian/examples/petstore/openapi.json';
 const BASE_URL = 'https://petstore3.swagger.io/api/v3';
 
 const tools = await getToolsFromOpenApi(SPEC);

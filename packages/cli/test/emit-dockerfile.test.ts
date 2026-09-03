@@ -19,7 +19,7 @@ test("Dockerfile is multi-stage, runs as non-root, and binds 0.0.0.0", () => {
   const cmdIdx = df.indexOf("CMD");
   assert.ok(userIdx !== -1 && cmdIdx !== -1 && userIdx < cmdIdx, "USER precedes CMD");
   // reachable inside the container
-  assert.match(df, /MCPFORGE_BIND_HOST=0\.0\.0\.0/, "binds all interfaces in-container");
+  assert.match(df, /KLARIDIAN_BIND_HOST=0\.0\.0\.0/, "binds all interfaces in-container");
   assert.match(df, /EXPOSE\s+3000/, "exposes the configured port");
 });
 

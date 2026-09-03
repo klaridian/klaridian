@@ -25,7 +25,7 @@ test(
   "generate: refuses to overwrite a non-empty --out without --force",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-force-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-force-"));
     try {
       await writeFile(path.join(outputDir, "keep-me.txt"), "important", "utf-8");
 
@@ -64,7 +64,7 @@ test(
   "generate --force: overwrites a non-empty --out, preserving unrelated files alongside the new output",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-force-yes-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-force-yes-"));
     try {
       await writeFile(path.join(outputDir, "keep-me.txt"), "important", "utf-8");
 
@@ -96,7 +96,7 @@ test(
   "generate --out <path that is a file, not a directory>: fails loudly regardless of --force",
   { timeout: 30_000 },
   async () => {
-    const parentDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-force-file-"));
+    const parentDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-force-file-"));
     const filePath = path.join(parentDir, "not-a-directory");
     try {
       await writeFile(filePath, "I am a file", "utf-8");
@@ -131,7 +131,7 @@ test(
   "generate --interactive with a non-TTY stdin: fails loudly instead of silently proceeding",
   { timeout: 30_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-interactive-notty-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-interactive-notty-"));
     try {
       // spawn (not execFile) so we control stdin directly: piped stdin is
       // never a TTY, reproducing the exact scenario the audit found
@@ -179,7 +179,7 @@ test(
   "generate --json: prints exactly one valid JSON object to stdout on success, with the expected fields",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-json-ok-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-json-ok-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -248,7 +248,7 @@ test(
   "generate --json: --icon with an unrecognized theme surfaces as a warning in the JSON, not just stderr",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-json-warn-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-json-warn-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -275,10 +275,10 @@ test(
 );
 
 test(
-  "generate --quiet: suppresses mcpforge's own step-by-step lines but keeps warnings and the final Next: line",
+  "generate --quiet: suppresses klaridian's own step-by-step lines but keeps warnings and the final Next: line",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-quiet-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-quiet-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -293,7 +293,7 @@ test(
         "none",
         "--quiet",
       ]);
-      // Suppressed: mcpforge's own "✅ Applied ..." progress lines.
+      // Suppressed: klaridian's own "✅ Applied ..." progress lines.
       assert.doesNotMatch(result.stderr, /✅ Generated \d+ tool/);
       assert.doesNotMatch(result.stderr, /✅ Applied MCP spec conformance fixes/);
       assert.doesNotMatch(result.stderr, /✅ Applied security hardening/);
@@ -312,7 +312,7 @@ test(
   "generate --quiet: also suppresses openapi-mcp-generator's own hardcoded progress output (ARCHITECTURE.md section 33)",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-quiet-thirdparty-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-quiet-thirdparty-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -329,7 +329,7 @@ test(
       ]);
       // These are openapi-mcp-generator's own hardcoded console.error lines
       // (confirmed by reading its source, ARCHITECTURE.md section 33) —
-      // must be gone too under --quiet, not just mcpforge's own lines.
+      // must be gone too under --quiet, not just klaridian's own lines.
       assert.doesNotMatch(result.stderr, /Parsing OpenAPI spec/);
       assert.doesNotMatch(result.stderr, /Generating server code/);
       assert.doesNotMatch(result.stderr, /-> Created/);
@@ -348,7 +348,7 @@ test(
   "generate --json: stderr is completely empty (openapi-mcp-generator's progress output is suppressed too)",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-json-silent-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-json-silent-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -377,7 +377,7 @@ test(
   "generate (no --quiet/--json): openapi-mcp-generator's own progress output is NOT suppressed (default behavior unchanged)",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-ux-noquiet-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-noquiet-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,

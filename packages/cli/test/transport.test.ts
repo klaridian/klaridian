@@ -2,7 +2,7 @@
 //
 // End-to-end validation of `--transport` (ARCHITECTURE.md section 29 — v0's
 // stdio-only guardrail lifted, since openapi-mcp-generator natively supports
-// streamable-http and web transports and mcpforge's own conformance/plugin
+// streamable-http and web transports and klaridian's own conformance/plugin
 // patches operate on the same shared CallToolRequestSchema handler
 // regardless of transport). Covers: flag validation, correct pass-through to
 // openapi-mcp-generator, and that the conformance fixes (section 28) still
@@ -13,7 +13,7 @@
 // ARCHITECTURE.md section 29's "Known upstream limitation" for why: a real,
 // reproducible crash exists in openapi-mcp-generator's own generated
 // src/streamable-http.ts (a `fetch-to-node` incompatibility, unrelated to
-// any mcpforge code) on the second HTTP request to a session. Confirmed
+// any klaridian code) on the second HTTP request to a session. Confirmed
 // directly against an unpatched vanilla-generated project, so it is not a
 // regression this project introduced — but it means "spawn and drive over
 // real HTTP" isn't a reliable test today for this path. What CAN be, and is,
@@ -38,7 +38,7 @@ test(
   "generate --transport streamable-http: generates a buildable server with conformance fixes applied",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-transport-http-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-http-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -91,7 +91,7 @@ test(
   "generate --transport web: generates a buildable server with conformance fixes applied",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-transport-web-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-web-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -135,7 +135,7 @@ test(
 );
 
 test("generate --transport <unknown>: fails loudly before generating anything", { timeout: 30_000 }, async () => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-transport-bad-"));
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-bad-"));
   try {
     let caught: unknown;
     try {
@@ -167,7 +167,7 @@ test("generate --transport <unknown>: fails loudly before generating anything", 
 });
 
 test("generate --transport streamable-http --port 0: rejects an invalid port", { timeout: 30_000 }, async () => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-transport-badport-"));
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-badport-"));
   try {
     let caught: unknown;
     try {

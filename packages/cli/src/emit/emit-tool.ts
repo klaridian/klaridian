@@ -3,7 +3,7 @@
 // Emits a single `server.registerTool(...)` block for the v2 MCP SDK
 // (@modelcontextprotocol/server) from openapi-mcp-generator's pure tool DATA
 // (getToolsFromOpenApi output). This is the "option d" path decided in
-// ARCHITECTURE.md sections 37/38: mcpforge emits the v2 tool surface itself
+// ARCHITECTURE.md sections 37/38: klaridian emits the v2 tool surface itself
 // instead of consuming the frozen v1 code generator. The upstream-fetch
 // mapping below was validated end to end in spikes/021-sdk-v2-streamable-http
 // (README-021d): path/query/header params, JSON body, and Bearer auth.
@@ -75,8 +75,8 @@ function emitHandlerBody(tool: McpToolDefinition): string {
   const method = (tool.method || "get").toUpperCase();
 
   const lines: string[] = [];
-  lines.push(`      const base = process.env.MCPFORGE_BASE_URL;`);
-  lines.push(`      if (!base) throw new Error("MCPFORGE_BASE_URL is not set");`);
+  lines.push(`      const base = process.env.KLARIDIAN_BASE_URL;`);
+  lines.push(`      if (!base) throw new Error("KLARIDIAN_BASE_URL is not set");`);
   lines.push(`      let path = ${JSON.stringify(tool.pathTemplate)};`);
   for (const p of pathParams) {
     lines.push(
@@ -96,7 +96,7 @@ function emitHandlerBody(tool: McpToolDefinition): string {
     );
   }
   if (hasAuth) {
-    lines.push(`      if (process.env.MCPFORGE_AUTH_TOKEN) headers["Authorization"] = "Bearer " + process.env.MCPFORGE_AUTH_TOKEN;`);
+    lines.push(`      if (process.env.KLARIDIAN_AUTH_TOKEN) headers["Authorization"] = "Bearer " + process.env.KLARIDIAN_AUTH_TOKEN;`);
   }
   if (hasBody) {
     lines.push(`      headers["Content-Type"] = ${JSON.stringify(tool.requestBodyContentType)};`);

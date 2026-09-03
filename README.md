@@ -1,8 +1,8 @@
-# mcpforge
+# klaridian
 
-[![CI](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/mcpforge/actions/workflows/ci.yml)
+[![CI](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml)
 
-![mcpforge: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
+![klaridian: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
 
 > Generate MCP servers with engineering + product observability built in — no manual instrumentation.
 
@@ -10,7 +10,7 @@
 
 ## What is this?
 
-`mcpforge` is a CLI that generates MCP servers — from an OpenAPI spec — with observability and tool curation wired in from the start:
+`klaridian` is a CLI that generates MCP servers — from an OpenAPI spec — with observability and tool curation wired in from the start:
 
 - **Engineering observability** (`otel` plugin) — OpenTelemetry spans for every tool call, exportable via OTLP to Datadog, Grafana, Honeycomb, New Relic, or any other OTLP-compatible backend. Latency, errors, and status per call, with zero manual instrumentation. One plugin reaches every backend here because OTel/OTLP is a genuine open wire protocol.
 - **Product observability** — an event per tool call (`tool_name`, `duration_ms`, `success`) captured by whichever provider you pick: `posthog`, `amplitude`, or `mixpanel` plugins. Unlike OTel, there's no shared standard for product analytics ingestion, so this is three separate plugins rather than one — see [ARCHITECTURE.md section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why that's a structural difference, not an oversight.
@@ -18,11 +18,11 @@
 
 You pick the plugins you want at generation time — e.g. `--plugin otel --plugin posthog`, or `--plugin otel --plugin amplitude --plugin mixpanel` (any combination composes automatically). The server that comes out the other end is already instrumented.
 
-OpenAPI parsing and MCP server code generation are handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator); mcpforge's own code is the instrumentation and curation layer on top of that output.
+OpenAPI parsing and MCP server code generation are handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator); klaridian's own code is the instrumentation and curation layer on top of that output.
 
 ## Why
 
-Building an MCP server today means writing the server, then manually wiring up tracing and analytics — repetitive work every MCP server author does from scratch. Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own, but those let an agent *query* those platforms — they don't instrument a *new* server you're building. `mcpforge` closes that gap.
+Building an MCP server today means writing the server, then manually wiring up tracing and analytics — repetitive work every MCP server author does from scratch. Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own, but those let an agent *query* those platforms — they don't instrument a *new* server you're building. `klaridian` closes that gap.
 
 ## Quickstart
 
@@ -50,14 +50,14 @@ npm start
 
 Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--include-tags`/`--exclude-tags`/`--exclude-operation-ids` (tag-based) or `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` (regex/HTTP-method, tag-independent — works even on specs with zero OpenAPI tags), or `--interactive`, to curate which operations become tools — see [ARCHITECTURE.md section 40](ARCHITECTURE.md#40-mcpfo-8-phase-1-implemented--tag-independent-structural-curation-sep-3-2026) for details.
 
-Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning) — MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-mcpforge-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
+Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning) — MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-klaridian-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
 
 ## Repository layout
 
 ```
-mcpforge/
+klaridian/
 ├── packages/
-│   └── cli/                # the mcpforge CLI
+│   └── cli/                # the klaridian CLI
 │       ├── src/
 │       │   ├── render/instrument.ts  # patches the generated server output to wire in a plugin
 │       │   ├── plugins/    # ObservabilityPlugin interface + plugins (otel, posthog)
@@ -83,15 +83,15 @@ Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry + PostHog 
 
 **MCP spec conformance:** every generated server is patched to fix two real MCP spec (2025-06-18) conformance bugs found in `openapi-mcp-generator`'s own output — unknown-tool calls now return a genuine JSON-RPC protocol error instead of a "successful" result, and tool execution failures now set `isError: true`. Applied always, not opt-in. See [ARCHITECTURE.md section 28](ARCHITECTURE.md#28-mcp-spec-conformance-audit--fixes-aug-30-2026) for the audit methodology and what's still an open gap (rate limiting, output sanitization, tool annotations).
 
-**Transports:** `--transport stdio` (default), `--transport streamable-http`, or `--transport web` (with `--port`, default 3000). Non-stdio transports come straight from `openapi-mcp-generator`; conformance fixes and plugin instrumentation apply identically across all three. **Known limitation:** `streamable-http` crashes on the second HTTP request to a session due to an upstream `fetch-to-node` bug in `openapi-mcp-generator`'s own generated code (reproduced against a vanilla, unpatched project — not caused by mcpforge). See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026).
+**Transports:** `--transport stdio` (default), `--transport streamable-http`, or `--transport web` (with `--port`, default 3000). Non-stdio transports come straight from `openapi-mcp-generator`; conformance fixes and plugin instrumentation apply identically across all three. **Known limitation:** `streamable-http` crashes on the second HTTP request to a session due to an upstream `fetch-to-node` bug in `openapi-mcp-generator`'s own generated code (reproduced against a vanilla, unpatched project — not caused by klaridian). See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026).
 
-**Security hardening (always on):** every tool gets a `title` and MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`, derived from its HTTP method), a configurable per-tool rate limit (`MCPFORGE_RATE_LIMIT_PER_MINUTE`, default 60/min, `0` disables), and output sanitization (size cap + an explicit untrusted-data framing note — a defense-in-depth mitigation for prompt-injection-via-tool-output, not a full fix). See [ARCHITECTURE.md section 30](ARCHITECTURE.md#30-closing-the-remaining-audit-gaps-tool-annotationstitle-rate-limiting-output-sanitization-aug-30-2026).
+**Security hardening (always on):** every tool gets a `title` and MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`, derived from its HTTP method), a configurable per-tool rate limit (`KLARIDIAN_RATE_LIMIT_PER_MINUTE`, default 60/min, `0` disables), and output sanitization (size cap + an explicit untrusted-data framing note — a defense-in-depth mitigation for prompt-injection-via-tool-output, not a full fix). See [ARCHITECTURE.md section 30](ARCHITECTURE.md#30-closing-the-remaining-audit-gaps-tool-annotationstitle-rate-limiting-output-sanitization-aug-30-2026).
 
 **Branding (opt-in):** `--icon <src[|light|dark]>` (repeatable), `--website <url>`, `--server-description <text>` set the server's icons/websiteUrl/description (MCP spec 2025-11-25, purely cosmetic — no effect if omitted). See [ARCHITECTURE.md section 31](ARCHITECTURE.md#31-cosmetic-branding-metadata-icons-websiteurl-description-aug-30-2026).
 
-**CLI ergonomics:** `--force` to overwrite a non-empty `--out` (refused by default); `--json` for a single machine-readable result on stdout (success or failure, with a stable `stage` tag on error — built for scripts/agents); `--quiet` to suppress step-by-step progress while keeping warnings and the final summary; `--interactive` fails loudly instead of silently proceeding when stdin isn't a real terminal. Both `--quiet` and `--json` also suppress `openapi-mcp-generator`'s own progress output (worked around on mcpforge's side — see [ARCHITECTURE.md section 33](ARCHITECTURE.md#33-closing-the-unquietable-third-party-noise-gap-suppressing-openapi-mcp-generators-own-console-output-under---quiet--json-aug-30-2026); a real upstream fix is tracked but not yet filed, [PLAN.md section 9](PLAN.md#9-upstream-contributions-to-openapi-mcp-generator-tracked-not-yet-filed-aug-30-2026)). See [ARCHITECTURE.md section 32](ARCHITECTURE.md#32-cli-ux-audit---force---json---quiet-non-tty-detection-for---interactive-aug-30-2026) for the audit these came from.
+**CLI ergonomics:** `--force` to overwrite a non-empty `--out` (refused by default); `--json` for a single machine-readable result on stdout (success or failure, with a stable `stage` tag on error — built for scripts/agents); `--quiet` to suppress step-by-step progress while keeping warnings and the final summary; `--interactive` fails loudly instead of silently proceeding when stdin isn't a real terminal. Both `--quiet` and `--json` also suppress `openapi-mcp-generator`'s own progress output (worked around on klaridian's side — see [ARCHITECTURE.md section 33](ARCHITECTURE.md#33-closing-the-unquietable-third-party-noise-gap-suppressing-openapi-mcp-generators-own-console-output-under---quiet--json-aug-30-2026); a real upstream fix is tracked but not yet filed, [PLAN.md section 9](PLAN.md#9-upstream-contributions-to-openapi-mcp-generator-tracked-not-yet-filed-aug-30-2026)). See [ARCHITECTURE.md section 32](ARCHITECTURE.md#32-cli-ux-audit---force---json---quiet-non-tty-detection-for---interactive-aug-30-2026) for the audit these came from.
 
-**Competitive positioning:** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so the OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin and tool curation are the clearer differentiators today. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-mcpforge-vs-fastmcp-aug-30-2026) for the full matrix.
+**Competitive positioning:** FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTelemetry, and a competing generator already combines OpenAPI→FastMCP with OTel, OAuth2/JWT auth, and middleware — so the OTel plugin isn't differentiated for anyone already on FastMCP/Python. The PostHog plugin and tool curation are the clearer differentiators today. See [ARCHITECTURE.md section 21](ARCHITECTURE.md#21-competitive-feature-matrix-klaridian-vs-fastmcp-aug-30-2026) for the full matrix.
 
 **Python/FastMCP support:** [`packages/python-posthog-middleware/`](packages/python-posthog-middleware/) ships `PostHogMiddleware`, a native FastMCP middleware (not a generator, not a patch) that attaches product-observability event capture to any FastMCP server via `mcp.add_middleware(PostHogMiddleware(...))`. Deliberately doesn't ship an `otel`-equivalent for Python — FastMCP already has that natively. See [ARCHITECTURE.md section 23](ARCHITECTURE.md#23-multi-language-expansion-pythonfastmcp-via-a-native-middleware-aug-30-2026).
 

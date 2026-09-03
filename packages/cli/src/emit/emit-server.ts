@@ -44,7 +44,7 @@ export type EmittedProject = Record<string, string>;
  * MCPFO-20 — returns a human-readable warning if the generated server would have
  * no usable absolute upstream base URL, else null. `override` is --base-url;
  * `specServerUrl` is the spec's resolved servers[0].url (may be relative). An
- * absolute override always wins. Non-fatal: MCPFORGE_BASE_URL can still be set
+ * absolute override always wins. Non-fatal: KLARIDIAN_BASE_URL can still be set
  * at runtime, but the author almost always wants to bake in an absolute default.
  */
 export function resolveBaseUrlWarning(
@@ -62,9 +62,9 @@ export function resolveBaseUrlWarning(
     : "the spec declares no absolute server URL";
   return (
     `Base URL is not absolute: ${offending}. The generated server reads ` +
-    `MCPFORGE_BASE_URL at runtime, but you should pass --base-url <https://host/...> ` +
+    `KLARIDIAN_BASE_URL at runtime, but you should pass --base-url <https://host/...> ` +
     `so it has a usable default. Without it, tool calls will fail until ` +
-    `MCPFORGE_BASE_URL is set in the environment.`
+    `KLARIDIAN_BASE_URL is set in the environment.`
   );
 }
 
@@ -105,10 +105,10 @@ const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
 // Bind host is configurable so the same server is secure locally (default
 // 127.0.0.1, per MCP spec) and reachable inside a container (set
-// MCPFORGE_BIND_HOST=0.0.0.0 — see the generated Dockerfile). Host-header
+// KLARIDIAN_BIND_HOST=0.0.0.0 — see the generated Dockerfile). Host-header
 // validation still restricts callers to localhost, so 0.0.0.0 only widens the
 // network interface, not the accepted Host set.
-const bindHost = process.env.MCPFORGE_BIND_HOST || "127.0.0.1";
+const bindHost = process.env.KLARIDIAN_BIND_HOST || "127.0.0.1";
 createServer(async (req, res) => {
   if (!validateHost(req, res) || !validateOrigin(req, res)) return;
 ${authGate}  void nodeHandler(req, res);

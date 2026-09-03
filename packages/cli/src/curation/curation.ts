@@ -6,7 +6,7 @@
 // tags/operations to include or exclude, full stop. Addresses the strongest
 // validated pain point in the MCP ecosystem (tool bloat/context overload,
 // see docs/research/2026-08-30-developer-pain-points.md) at the one point
-// mcpforge actually controls: which operations exist as tools in the first
+// klaridian actually controls: which operations exist as tools in the first
 // place, before the server is ever generated.
 //
 // Mechanism: pre-process the parsed OpenAPI document, setting `x-mcp: false`

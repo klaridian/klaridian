@@ -1,9 +1,9 @@
 // packages/cli/test/generate.test.ts
 //
 // End-to-end validation of the post-pivot pipeline (ARCHITECTURE.md
-// section 16/18): mcpforge's `generate` command delegates OpenAPI parsing
+// section 16/18): klaridian's `generate` command delegates OpenAPI parsing
 // and server generation to openapi-mcp-generator, then instruments the
-// result with mcpforge's own observability plugin layer
+// result with klaridian's own observability plugin layer
 // (render/instrument.ts). These tests exercise the full CLI, not just
 // individual functions — mirroring the level of rigor used for the
 // pre-pivot pipeline (spike/FINDINGS.md, sections 12-13).
@@ -30,7 +30,7 @@ test(
   "generate (no plugin): produces a working, uninstrumented server via openapi-mcp-generator",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-plain-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-plain-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -68,7 +68,7 @@ test(
   "generate --plugin otel: instruments the openapi-mcp-generator output, stdout stays clean JSON-RPC",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-otel-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-otel-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -185,7 +185,7 @@ test(
   "generate --plugin otel --plugin posthog: composes both plugins, stdout stays clean JSON-RPC",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-multi-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-multi-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -313,7 +313,7 @@ test(
   "generate --plugin amplitude --plugin mixpanel: two product-analytics plugins compose, stdout stays clean JSON-RPC",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-gen-analytics-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-analytics-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,

@@ -1,7 +1,7 @@
 // packages/cli/test/engine-v2.test.ts
 //
 // End-to-end test of the CLI with --engine v2 (MCPFO-21 Task 3.1): the real
-// `mcpforge generate --engine v2` binary path, install/build/spawn/drive.
+// `klaridian generate --engine v2` binary path, install/build/spawn/drive.
 // Complements emit-e2e.test.ts (which tests the emitter module directly) by
 // proving the CLI wiring, curation reuse, and license step all work on v2.
 
@@ -40,10 +40,10 @@ function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
 }
 
 test(
-  "mcpforge generate --engine v2: real CLI generates a v2 server that installs, builds and runs",
+  "klaridian generate --engine v2: real CLI generates a v2 server that installs, builds and runs",
   { timeout: 300_000 },
   async () => {
-    const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-engine-v2-"));
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-engine-v2-"));
     try {
       const gen = await execFileAsync("node", [
         CLI_ENTRYPOINT, "generate",
@@ -90,8 +90,8 @@ test(
   }
 );
 
-test("mcpforge generate --engine bogus: fails loudly before generating", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-engine-bad-"));
+test("klaridian generate --engine bogus: fails loudly before generating", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-engine-bad-"));
   try {
     await assert.rejects(
       execFileAsync("node", [
@@ -105,8 +105,8 @@ test("mcpforge generate --engine bogus: fails loudly before generating", async (
   }
 });
 
-test("mcpforge generate --engine v2 --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-docker-"));
+test("klaridian generate --engine v2 --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-docker-"));
   try {
     await execFileAsync("node", [
       CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
@@ -116,7 +116,7 @@ test("mcpforge generate --engine v2 --docker: emits Dockerfile + .dockerignore f
     const df = await readFile(path.join(outDir, "Dockerfile"), "utf-8");
     assert.match(df, /FROM node:\d+/, "pins a Node base");
     assert.match(df, /USER node/, "non-root");
-    assert.match(df, /MCPFORGE_BIND_HOST=0\.0\.0\.0/, "reachable in-container");
+    assert.match(df, /KLARIDIAN_BIND_HOST=0\.0\.0\.0/, "reachable in-container");
     assert.match(df, /EXPOSE 3000/, "exposes the port");
     const di = await readFile(path.join(outDir, ".dockerignore"), "utf-8");
     assert.match(di, /node_modules/);
@@ -125,8 +125,8 @@ test("mcpforge generate --engine v2 --docker: emits Dockerfile + .dockerignore f
   }
 });
 
-test("mcpforge generate --docker with stdio transport fails loudly (MCPFO-12)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-docker-bad-"));
+test("klaridian generate --docker with stdio transport fails loudly (MCPFO-12)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-docker-bad-"));
   try {
     await assert.rejects(
       execFileAsync("node", [
@@ -141,8 +141,8 @@ test("mcpforge generate --docker with stdio transport fails loudly (MCPFO-12)", 
   }
 });
 
-test("mcpforge generate --engine v2: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-relbase-"));
+test("klaridian generate --engine v2: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-relbase-"));
   const specPath = path.join(outDir, "relspec.json");
   const spec = {
     openapi: "3.0.0",

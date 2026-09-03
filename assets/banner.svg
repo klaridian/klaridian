@@ -19,7 +19,7 @@
 
   <!-- Title -->
   <circle cx="46" cy="52" r="6" fill="#22d3ee"/>
-  <text x="64" y="60" fill="white" font-size="34" font-weight="700" letter-spacing="-0.5">mcpforge</text>
+  <text x="64" y="60" fill="white" font-size="34" font-weight="700" letter-spacing="-0.5">klaridian</text>
   <text x="46" y="90" fill="#94a3b8" font-size="14">Generate MCP servers with observability + tool curation built in</text>
 
   <!-- Pipeline: OpenAPI Spec -->
@@ -30,9 +30,9 @@
   <!-- Arrow 1 -->
   <line x1="206" y1="236" x2="278" y2="236" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
-  <!-- Pipeline: mcpforge (brand node) -->
+  <!-- Pipeline: klaridian (brand node) -->
   <rect x="280" y="176" width="220" height="120" rx="10" fill="rgba(8, 66, 78, 0.45)" stroke="url(#brandGrad)" stroke-width="2"/>
-  <text x="390" y="216" fill="white" font-size="17" font-weight="700" text-anchor="middle">mcpforge</text>
+  <text x="390" y="216" fill="white" font-size="17" font-weight="700" text-anchor="middle">klaridian</text>
   <text x="390" y="240" fill="#67e8f9" font-size="9" text-anchor="middle">generate --plugin otel</text>
   <text x="390" y="254" fill="#67e8f9" font-size="9" text-anchor="middle">--plugin posthog</text>
   <text x="390" y="276" fill="#94a3b8" font-size="9" text-anchor="middle">curate tools • instrument • ship</text>

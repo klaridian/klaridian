@@ -49,7 +49,7 @@ test(
   "generate --icon/--website/--server-description: real initialize response carries the branding metadata",
   { timeout: 120_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-branding-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-branding-"));
     try {
       const genResult = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -127,7 +127,7 @@ test(
   "generate (no branding flags): does not modify the Server construction call at all",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-branding-none-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-branding-none-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
@@ -161,7 +161,7 @@ test(
   "generate --icon <src>|badtheme: warns and ignores the unrecognized theme rather than failing",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-branding-badtheme-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-branding-badtheme-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,

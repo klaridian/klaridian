@@ -105,6 +105,42 @@ test("mcpforge generate --engine bogus: fails loudly before generating", async (
   }
 });
 
+test("mcpforge generate --engine v2 --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-docker-"));
+  try {
+    await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
+      "--name", "d", "--base-url", "https://x/api", "--engine", "v2",
+      "--transport", "streamable-http", "--port", "3000", "--docker", "--license", "none",
+    ]);
+    const df = await readFile(path.join(outDir, "Dockerfile"), "utf-8");
+    assert.match(df, /FROM node:\d+/, "pins a Node base");
+    assert.match(df, /USER node/, "non-root");
+    assert.match(df, /MCPFORGE_BIND_HOST=0\.0\.0\.0/, "reachable in-container");
+    assert.match(df, /EXPOSE 3000/, "exposes the port");
+    const di = await readFile(path.join(outDir, ".dockerignore"), "utf-8");
+    assert.match(di, /node_modules/);
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("mcpforge generate --docker with stdio transport fails loudly (MCPFO-12)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-docker-bad-"));
+  try {
+    await assert.rejects(
+      execFileAsync("node", [
+        CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
+        "--name", "d", "--base-url", "https://x/api", "--engine", "v2",
+        "--transport", "stdio", "--docker", "--license", "none",
+      ]),
+      /--docker requires --transport streamable-http/
+    );
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("mcpforge generate --engine v2: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
   const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-relbase-"));
   const specPath = path.join(outDir, "relspec.json");

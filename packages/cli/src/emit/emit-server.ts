@@ -11,6 +11,7 @@ import type { McpToolDefinition } from "openapi-mcp-generator";
 import { emitToolBlock } from "./emit-tool.js";
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
 import { emitDockerfile, emitDockerignore } from "./emit-dockerfile.js";
+import { emitAuthModule } from "../render/auth.js";
 
 export type Transport = "stdio" | "streamable-http";
 
@@ -33,6 +34,8 @@ export interface EmitOptions {
   registryName?: string;
   /** Emit a Dockerfile + .dockerignore (MCPFO-12). streamable-http only. */
   docker?: boolean;
+  /** OAuth 2.1 Resource Server config (MCPFO-22). streamable-http only. */
+  auth?: { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] };
 }
 
 export type EmittedProject = Record<string, string>;
@@ -83,11 +86,18 @@ ${toolBlocks}
 
   if (transport === "streamable-http") {
     const port = opts.port ?? 3000;
+    const authImport = opts.auth ? `import { authenticate } from "./auth.js";\n` : "";
+    const authGate = opts.auth
+      ? `  const authResult = await authenticate(req, res);
+  if (authResult === "handled") return;
+  (req as unknown as { auth?: typeof authResult }).auth = authResult;
+`
+      : "";
     return `${baseImports.join("\n")}
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServer } from "node:http";
 import { toNodeHandler, localhostHostValidation, localhostOriginValidation } from "@modelcontextprotocol/node";
-
+${authImport}
 const handler = createMcpHandler(${factoryBody});
 
 const nodeHandler = toNodeHandler(handler);
@@ -99,9 +109,9 @@ const validateOrigin = localhostOriginValidation();
 // validation still restricts callers to localhost, so 0.0.0.0 only widens the
 // network interface, not the accepted Host set.
 const bindHost = process.env.MCPFORGE_BIND_HOST || "127.0.0.1";
-createServer((req, res) => {
+createServer(async (req, res) => {
   if (!validateHost(req, res) || !validateOrigin(req, res)) return;
-  void nodeHandler(req, res);
+${authGate}  void nodeHandler(req, res);
 }).listen(${port}, bindHost, () => {
   console.error(\`MCP server (streamable-http) on http://\${bindHost}:${port}/mcp\`);
 });
@@ -121,8 +131,14 @@ serveStdio(${factoryBody});
 
 export function emitServerProject(opts: EmitOptions): EmittedProject {
   const transport: Transport = opts.transport ?? "stdio";
+  // MCPFO-22: auth only applies to network transports — a stdio server MUST
+  // NOT implement it per spec (credentials come from the launching process's
+  // environment instead).
+  if (opts.auth && transport !== "streamable-http") {
+    throw new Error("OAuth (opts.auth) is only supported for --transport streamable-http.");
+  }
   const files: EmittedProject = {
-    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName),
+    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName, Boolean(opts.auth)),
     "tsconfig.json": emitTsconfig(),
     "src/index.ts": emitIndex(opts),
     "server.json": emitServerJson({
@@ -132,6 +148,9 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
       registryName: opts.registryName,
     }),
   };
+  if (opts.auth) {
+    files["src/auth.ts"] = emitAuthModule(opts.auth);
+  }
   for (const [p, content] of Object.entries(opts.extraFiles ?? {})) {
     files[p] = content;
   }

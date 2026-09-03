@@ -34,6 +34,34 @@ export interface EmitOptions {
 
 export type EmittedProject = Record<string, string>;
 
+/**
+ * MCPFO-20 — returns a human-readable warning if the generated server would have
+ * no usable absolute upstream base URL, else null. `override` is --base-url;
+ * `specServerUrl` is the spec's resolved servers[0].url (may be relative). An
+ * absolute override always wins. Non-fatal: MCPFORGE_BASE_URL can still be set
+ * at runtime, but the author almost always wants to bake in an absolute default.
+ */
+export function resolveBaseUrlWarning(
+  override: string | undefined,
+  specServerUrl: string | undefined
+): string | null {
+  const isAbsolute = (u: string | undefined): boolean => {
+    if (!u) return false;
+    return /^https?:\/\//i.test(u.trim());
+  };
+  if (isAbsolute(override)) return null;
+  if (isAbsolute(specServerUrl)) return null;
+  const offending = specServerUrl && specServerUrl.trim()
+    ? `the spec's server URL is relative ("${specServerUrl}")`
+    : "the spec declares no absolute server URL";
+  return (
+    `Base URL is not absolute: ${offending}. The generated server reads ` +
+    `MCPFORGE_BASE_URL at runtime, but you should pass --base-url <https://host/...> ` +
+    `so it has a usable default. Without it, tool calls will fail until ` +
+    `MCPFORGE_BASE_URL is set in the environment.`
+  );
+}
+
 function emitIndex(opts: EmitOptions): string {
   const transport: Transport = opts.transport ?? "stdio";
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;

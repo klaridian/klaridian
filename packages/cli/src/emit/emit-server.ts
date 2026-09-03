@@ -10,6 +10,7 @@
 import type { McpToolDefinition } from "openapi-mcp-generator";
 import { emitToolBlock } from "./emit-tool.js";
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
+import { emitDockerfile, emitDockerignore } from "./emit-dockerfile.js";
 
 export type Transport = "stdio" | "streamable-http";
 
@@ -30,6 +31,8 @@ export interface EmitOptions {
   /** Reverse-DNS MCP Registry name, e.g. "io.github.acme/petstore" (MCPFO-25).
    *  When set, package.json gains an `mcpName` and server.json uses it. */
   registryName?: string;
+  /** Emit a Dockerfile + .dockerignore (MCPFO-12). streamable-http only. */
+  docker?: boolean;
 }
 
 export type EmittedProject = Record<string, string>;
@@ -90,11 +93,17 @@ const handler = createMcpHandler(${factoryBody});
 const nodeHandler = toNodeHandler(handler);
 const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
+// Bind host is configurable so the same server is secure locally (default
+// 127.0.0.1, per MCP spec) and reachable inside a container (set
+// MCPFORGE_BIND_HOST=0.0.0.0 — see the generated Dockerfile). Host-header
+// validation still restricts callers to localhost, so 0.0.0.0 only widens the
+// network interface, not the accepted Host set.
+const bindHost = process.env.MCPFORGE_BIND_HOST || "127.0.0.1";
 createServer((req, res) => {
   if (!validateHost(req, res) || !validateOrigin(req, res)) return;
   void nodeHandler(req, res);
-}).listen(${port}, "127.0.0.1", () => {
-  console.error("MCP server (streamable-http) on http://127.0.0.1:${port}/mcp");
+}).listen(${port}, bindHost, () => {
+  console.error(\`MCP server (streamable-http) on http://\${bindHost}:${port}/mcp\`);
 });
 
 process.on("SIGINT", async () => { await handler.close(); process.exit(0); });
@@ -125,6 +134,11 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
   };
   for (const [p, content] of Object.entries(opts.extraFiles ?? {})) {
     files[p] = content;
+  }
+  // MCPFO-12: containerization only makes sense for a network transport.
+  if (opts.docker && transport === "streamable-http") {
+    files["Dockerfile"] = emitDockerfile({ port: opts.port ?? 3000 });
+    files[".dockerignore"] = emitDockerignore();
   }
   return files;
 }

@@ -239,6 +239,11 @@ export function registerGenerateCommand(program: Command): void {
       "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it (MCPFO-25). v2 engine only."
     )
     .option(
+      "--docker",
+      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server (MCPFO-12). Requires --transport streamable-http (a containerized stdio server leaks orphaned containers). v2 engine only.",
+      false
+    )
+    .option(
       "--icon <src[|theme]>",
       "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
       (value: string, previous: string[]) => [...previous, value],
@@ -282,6 +287,7 @@ export function registerGenerateCommand(program: Command): void {
         port?: number;
         engine: string;
         registryName?: string;
+        docker: boolean;
         icon: string[];
         website?: string;
         serverDescription?: string;
@@ -351,6 +357,19 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
           const engine = opts.engine as (typeof SUPPORTED_ENGINES)[number];
+
+          // MCPFO-12: --docker only makes sense for a network transport.
+          if (opts.docker && transport !== "streamable-http") {
+            fail(
+              `--docker requires --transport streamable-http (a containerized stdio server leaks orphaned containers when the client session ends).`,
+              "validate-docker"
+            );
+            return;
+          }
+          if (opts.docker && engine !== "v2") {
+            fail(`--docker is only supported by --engine v2.`, "validate-docker");
+            return;
+          }
           if (engine === "v2" && transport === "web") {
             fail(`--engine v2 does not support --transport web (v1-only). Use stdio or streamable-http.`, "validate-engine");
             return;
@@ -524,6 +543,7 @@ export function registerGenerateCommand(program: Command): void {
               extraDependencies,
               description: opts.serverDescription,
               registryName: opts.registryName,
+              docker: opts.docker,
             });
 
             await mkdir(outputDir, { recursive: true });

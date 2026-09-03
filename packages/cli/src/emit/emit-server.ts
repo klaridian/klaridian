@@ -9,7 +9,7 @@
 
 import type { McpToolDefinition } from "openapi-mcp-generator";
 import { emitToolBlock } from "./emit-tool.js";
-import { emitPackageJson, emitTsconfig } from "./emit-project-files.js";
+import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
 
 export type Transport = "stdio" | "streamable-http";
 
@@ -25,6 +25,11 @@ export interface EmitOptions {
   extraFiles?: Record<string, string>;
   /** Extra npm dependencies for the generated project (e.g. a plugin's SDKs). */
   extraDependencies?: Record<string, string>;
+  /** Short description used in server.json (MCPFO-25). */
+  description?: string;
+  /** Reverse-DNS MCP Registry name, e.g. "io.github.acme/petstore" (MCPFO-25).
+   *  When set, package.json gains an `mcpName` and server.json uses it. */
+  registryName?: string;
 }
 
 export type EmittedProject = Record<string, string>;
@@ -80,9 +85,15 @@ serveStdio(${factoryBody});
 export function emitServerProject(opts: EmitOptions): EmittedProject {
   const transport: Transport = opts.transport ?? "stdio";
   const files: EmittedProject = {
-    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies),
+    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName),
     "tsconfig.json": emitTsconfig(),
     "src/index.ts": emitIndex(opts),
+    "server.json": emitServerJson({
+      serverName: opts.serverName,
+      description: opts.description ?? "",
+      transport,
+      registryName: opts.registryName,
+    }),
   };
   for (const [p, content] of Object.entries(opts.extraFiles ?? {})) {
     files[p] = content;

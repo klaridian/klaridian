@@ -52,6 +52,7 @@ test(
         "--name", "engine-v2-test",
         "--base-url", "https://petstore3.swagger.io/api/v3",
         "--engine", "v2",
+        "--registry-name", "io.github.acme/engine-v2-test",
         "--license", "none",
       ]);
       assert.match(gen.stderr, /engine v2/, "reports v2 engine");
@@ -60,6 +61,12 @@ test(
       const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));
       assert.ok(pkg.dependencies["@modelcontextprotocol/server"], "v2 server dep present");
       assert.ok(!pkg.dependencies["@modelcontextprotocol/sdk"], "no v1 sdk dep");
+
+      // MCPFO-25: server.json + matching mcpName for the official MCP Registry
+      const serverJson = JSON.parse(await readFile(path.join(outDir, "server.json"), "utf-8"));
+      assert.equal(serverJson.name, "io.github.acme/engine-v2-test", "server.json name = registry name");
+      assert.equal(serverJson["$schema"], "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json");
+      assert.equal(pkg.mcpName, serverJson.name, "package.json mcpName matches server.json name (ownership proof)");
 
       await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outDir, timeout: 180_000 });
       await execFileAsync("npm", ["run", "build"], { cwd: outDir, timeout: 120_000 });

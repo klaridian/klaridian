@@ -235,6 +235,10 @@ export function registerGenerateCommand(program: Command): void {
       "v2"
     )
     .option(
+      "--registry-name <name>",
+      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it (MCPFO-25). v2 engine only."
+    )
+    .option(
       "--icon <src[|theme]>",
       "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
       (value: string, previous: string[]) => [...previous, value],
@@ -277,6 +281,7 @@ export function registerGenerateCommand(program: Command): void {
         transport: string;
         port?: number;
         engine: string;
+        registryName?: string;
         icon: string[];
         website?: string;
         serverDescription?: string;
@@ -507,6 +512,8 @@ export function registerGenerateCommand(program: Command): void {
               wiring,
               extraFiles,
               extraDependencies,
+              description: opts.serverDescription,
+              registryName: opts.registryName,
             });
 
             await mkdir(outputDir, { recursive: true });

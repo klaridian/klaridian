@@ -18,6 +18,7 @@
     "@inquirer/prompts": "^8.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^15.0.0",
+    "jose": "^6.2.10",
     "json-schema-to-zod": "^2.8.1",
     "mixpanel": "^0.23.0",
     "openapi-mcp-generator": "4.0.1",

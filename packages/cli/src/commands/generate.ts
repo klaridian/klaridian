@@ -244,6 +244,22 @@ export function registerGenerateCommand(program: Command): void {
       false
     )
     .option(
+      "--oauth-issuer <url>",
+      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server (MCPFO-22). Requires --transport streamable-http and --engine v2. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
+    )
+    .option(
+      "--oauth-jwks-uri <url>",
+      "JWKS URI to fetch the IdP's signing keys from. When omitted, resolved automatically from --oauth-issuer's OIDC discovery document (<issuer>/.well-known/openid-configuration) at generation time."
+    )
+    .option(
+      "--oauth-audience <uri>",
+      "Expected token audience (RFC 8707) — the canonical URI this server will be reachable at, e.g. https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected."
+    )
+    .option(
+      "--oauth-required-scopes <scopes>",
+      "Comma-separated OAuth scopes required on every tool call (default: none beyond token validity)"
+    )
+    .option(
       "--icon <src[|theme]>",
       "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
       (value: string, previous: string[]) => [...previous, value],
@@ -288,6 +304,10 @@ export function registerGenerateCommand(program: Command): void {
         engine: string;
         registryName?: string;
         docker: boolean;
+        oauthIssuer?: string;
+        oauthJwksUri?: string;
+        oauthAudience?: string;
+        oauthRequiredScopes?: string;
         icon: string[];
         website?: string;
         serverDescription?: string;
@@ -373,6 +393,73 @@ export function registerGenerateCommand(program: Command): void {
           if (engine === "v2" && transport === "web") {
             fail(`--engine v2 does not support --transport web (v1-only). Use stdio or streamable-http.`, "validate-engine");
             return;
+          }
+
+          // MCPFO-22: OAuth resource-server validation. stdio servers MUST
+          // NOT implement authorization per spec (they get credentials from
+          // their launching process's environment instead) — the flag
+          // combination is rejected outright rather than silently ignored.
+          let authConfig: { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] } | undefined;
+          if (opts.oauthIssuer) {
+            if (engine !== "v2") {
+              fail(`--oauth-issuer is only supported by --engine v2.`, "validate-oauth");
+              return;
+            }
+            if (transport !== "streamable-http") {
+              fail(
+                `--oauth-issuer requires --transport streamable-http (stdio servers must not implement authorization per the MCP spec — they read credentials from their environment instead).`,
+                "validate-oauth"
+              );
+              return;
+            }
+            if (!opts.oauthAudience) {
+              fail(`--oauth-audience is required together with --oauth-issuer (the canonical URI tokens must be bound to, e.g. https://mcp.example.com/mcp).`, "validate-oauth");
+              return;
+            }
+            let issuerUrl: URL;
+            try {
+              issuerUrl = new URL(opts.oauthIssuer);
+            } catch {
+              fail(`Invalid --oauth-issuer URL "${opts.oauthIssuer}".`, "validate-oauth");
+              return;
+            }
+            if (issuerUrl.protocol !== "https:" && issuerUrl.hostname !== "localhost" && issuerUrl.hostname !== "127.0.0.1") {
+              fail(`--oauth-issuer must be HTTPS (got "${opts.oauthIssuer}") — plain HTTP is only accepted for localhost during local testing.`, "validate-oauth");
+              return;
+            }
+
+            let jwksUri = opts.oauthJwksUri;
+            if (!jwksUri) {
+              // Resolve from the issuer's OIDC discovery document — the
+              // standard convention every OAuth 2.1/OIDC-conformant IdP
+              // (WorkOS, Auth0, Clerk, Okta, Entra, Keycloak, ...) publishes.
+              const discoveryUrl = new URL("/.well-known/openid-configuration", issuerUrl).toString();
+              try {
+                const res = await fetch(discoveryUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const doc = (await res.json()) as { jwks_uri?: string };
+                if (!doc.jwks_uri) throw new Error("discovery document has no jwks_uri");
+                jwksUri = doc.jwks_uri;
+              } catch (err) {
+                fail(
+                  `Could not resolve a JWKS URI from --oauth-issuer's OIDC discovery document (${discoveryUrl}): ${
+                    err instanceof Error ? err.message : String(err)
+                  }. Pass --oauth-jwks-uri explicitly if this IdP doesn't publish standard OIDC discovery.`,
+                  "validate-oauth"
+                );
+                return;
+              }
+            }
+
+            authConfig = {
+              issuer: opts.oauthIssuer,
+              jwksUri,
+              audience: opts.oauthAudience,
+              requiredScopes: opts.oauthRequiredScopes
+                ?.split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            };
           }
 
           // --force / overwrite protection (ARCHITECTURE.md section 32):
@@ -544,6 +631,7 @@ export function registerGenerateCommand(program: Command): void {
               description: opts.serverDescription,
               registryName: opts.registryName,
               docker: opts.docker,
+              auth: authConfig,
             });
 
             await mkdir(outputDir, { recursive: true });

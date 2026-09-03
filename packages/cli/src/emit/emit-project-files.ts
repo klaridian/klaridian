@@ -11,12 +11,14 @@ import type { Transport } from "./emit-server.js";
 const SDK_SERVER_VERSION = "^2.0.0";
 const SDK_NODE_VERSION = "^2.0.0";
 const ZOD_VERSION = "^4.2.0";
+const JOSE_VERSION = "^6.2.0";
 
 export function emitPackageJson(
   serverName: string,
   transport: Transport,
   extraDependencies: Record<string, string> = {},
-  registryName?: string
+  registryName?: string,
+  needsAuth = false
 ): string {
   const dependencies: Record<string, string> = {
     "@modelcontextprotocol/server": SDK_SERVER_VERSION,
@@ -27,6 +29,11 @@ export function emitPackageJson(
   // validation + toNodeHandler; stdio uses @modelcontextprotocol/server/stdio.
   if (transport === "streamable-http") {
     dependencies["@modelcontextprotocol/node"] = SDK_NODE_VERSION;
+  }
+  // MCPFO-22: jose is the zero-dependency JOSE/JWT library used by
+  // src/auth.ts for remote-JWKS bearer token verification.
+  if (needsAuth) {
+    dependencies["jose"] = JOSE_VERSION;
   }
 
   const startScript =

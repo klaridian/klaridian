@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Mirrors .github/workflows/ci.yml so a broken push fails locally, not on GitHub.
+# Enable once per clone with: git config core.hooksPath .githooks
+set -euo pipefail
+
+echo "[pre-push] Running CLI build + real E2E tests (packages/cli)..."
+(cd packages/cli && npm install --no-audit --no-fund && npm test)
+
+echo "[pre-push] Running Python PostHog middleware tests (packages/python-posthog-middleware)..."
+(
+  cd packages/python-posthog-middleware
+  python3 -m venv .venv-prepush >/dev/null 2>&1 || true
+  source .venv-prepush/bin/activate
+  pip install -q --upgrade pip
+  pip install -q -e ".[dev]"
+  pytest -q tests/
+)
+
+echo "[pre-push] All checks passed."

@@ -23,6 +23,7 @@ import os from "node:os";
 import { readFile, writeFile, mkdir, mkdtemp, rm, readdir, stat } from "node:fs/promises";
 import { generateMcpServer, getToolsFromOpenApi } from "openapi-mcp-generator";
 import { instrumentGeneratedServer, getPluginProjectAdditions, InstrumentationPatchError } from "../render/instrument.js";
+import { emitServerProject } from "../emit/emit-server.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -229,6 +230,11 @@ export function registerGenerateCommand(program: Command): void {
       (value: string) => parseInt(value, 10)
     )
     .option(
+      "--engine <id>",
+      "Generation engine: v1 (default, via openapi-mcp-generator, SDK v1, protocol 2025-06-18) or v2 (mcpforge's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38). v2 is stateless so the streamable-http crash (MCPFO-10) cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
+      "v1"
+    )
+    .option(
       "--icon <src[|theme]>",
       "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
       (value: string, previous: string[]) => [...previous, value],
@@ -270,6 +276,7 @@ export function registerGenerateCommand(program: Command): void {
         author?: string;
         transport: string;
         port?: number;
+        engine: string;
         icon: string[];
         website?: string;
         serverDescription?: string;
@@ -330,6 +337,17 @@ export function registerGenerateCommand(program: Command): void {
           const port = opts.port ?? 3000;
           if (transport !== "stdio" && (!Number.isInteger(port) || port <= 0 || port > 65535)) {
             fail(`Invalid --port "${opts.port}" — must be an integer between 1 and 65535.`, "validate-port");
+            return;
+          }
+
+          const SUPPORTED_ENGINES = ["v1", "v2"] as const;
+          if (!(SUPPORTED_ENGINES as readonly string[]).includes(opts.engine)) {
+            fail(`Unknown engine "${opts.engine}". Supported: ${SUPPORTED_ENGINES.join(", ")}`, "validate-engine");
+            return;
+          }
+          const engine = opts.engine as (typeof SUPPORTED_ENGINES)[number];
+          if (engine === "v2" && transport === "web") {
+            fail(`--engine v2 does not support --transport web (v1-only). Use stdio or streamable-http.`, "validate-engine");
             return;
           }
 
@@ -453,6 +471,86 @@ export function registerGenerateCommand(program: Command): void {
               "No tools remain after curation — nothing to generate. Loosen --include-tags/--exclude-tags/--exclude-operation-ids.",
               "curation-empty"
             );
+            return;
+          }
+
+          // --- Engine v2: mcpforge's own emitter (MCPFO-21, ARCHITECTURE.md
+          // section 38). Emits a stateless @modelcontextprotocol/server (SDK v2)
+          // project directly from `tools` data — no generateMcpServer(), no
+          // textual conformance/security/instrument patches (v2 gives native
+          // isError/-32602, and instrumentation wraps at the registerTool
+          // boundary via the same plugin interface). Returns early.
+          if (engine === "v2") {
+            const serverName = opts.name ?? path.basename(outputDir);
+            const baseUrl = opts.baseUrl ?? "";
+            let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
+            let extraFiles: Record<string, string> = {};
+            let extraDependencies: Record<string, string> = {};
+            if (plugins.length > 0) {
+              if (plugins.length > 1) {
+                fail(`--engine v2 currently supports at most one --plugin (got ${plugins.length}).`, "emit-v2");
+                return;
+              }
+              const plugin = plugins[0];
+              wiring = plugin.getServerWiring();
+              const additions = getPluginProjectAdditions(plugins, pluginConfigs);
+              extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
+              extraDependencies = additions.dependencies;
+            }
+
+            const project = emitServerProject({
+              serverName,
+              tools,
+              baseUrl,
+              transport: transport === "streamable-http" ? "streamable-http" : "stdio",
+              port: transport === "streamable-http" ? port : undefined,
+              wiring,
+              extraFiles,
+              extraDependencies,
+            });
+
+            await mkdir(outputDir, { recursive: true });
+            for (const [rel, content] of Object.entries(project)) {
+              const full = path.join(outputDir, rel);
+              await mkdir(path.dirname(full), { recursive: true });
+              await writeFile(full, content, "utf-8");
+            }
+
+            // License (same policy as v1: default MIT, --license none warns).
+            if (license !== "none") {
+              const author = opts.author?.trim() || (await resolveGitAuthorName()) || "the project author";
+              const licenseText = getLicenseText(license, author, new Date().getFullYear());
+              if (licenseText) await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
+              const pkgPath = path.join(outputDir, "package.json");
+              const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+              pkg.license = getPackageJsonLicenseField(license);
+              await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+            }
+
+            const transportSuffix = transport === "streamable-http" ? ` [streamable-http, port ${port}]` : "";
+            const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
+            step(`✅ Generated ${tools.length} tool(s) in ${outputDir}${transportSuffix} (engine v2: @modelcontextprotocol/server, stateless, protocol 2025-11-25)${pluginSuffix}`);
+
+            const startScript = transport === "streamable-http" ? "npm start" : "npm start";
+            const nextSteps = `cd ${opts.out} && npm install && npm run build && ${startScript}`;
+            if (jsonMode) {
+              const result: GenerateJsonResult = {
+                success: true,
+                outputDir,
+                toolCount: tools.length,
+                curatedFromTotal: hasCuration ? operations.length : null,
+                transport,
+                port: transport === "streamable-http" ? port : null,
+                license: license !== "none" ? getPackageJsonLicenseField(license) : null,
+                plugins: plugins.map((p) => p.id),
+                branding: null,
+                nextSteps,
+                warnings,
+              };
+              process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+            } else {
+              console.error(`   Next: ${nextSteps}`);
+            }
             return;
           }
 

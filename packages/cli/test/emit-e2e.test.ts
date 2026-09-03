@@ -88,6 +88,11 @@ test(
         const getPet = listResp.result.tools.find((t: any) => t.name === "getPetById");
         assert.ok(getPet, "getPetById present");
         assert.equal(getPet.annotations?.readOnlyHint, true, "GET tool annotated read-only");
+        assert.equal(getPet.annotations?.openWorldHint, true, "tool annotated open-world (calls external API)");
+        assert.equal(getPet.annotations?.idempotentHint, true, "GET tool annotated idempotent");
+        assert.ok(getPet.annotations?.title || getPet.title, "tool carries a human-readable title (marketplace requirement)");
+        const delPet = listResp.result.tools.find((t: any) => t.name === "deletePet");
+        if (delPet) assert.equal(delPet.annotations?.destructiveHint, true, "DELETE tool annotated destructive");
 
         // tools/call unknown -> native protocol error (-32602), no conformance patch needed
         sendJsonRpc(proc, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "noSuchTool", arguments: {} } });

@@ -14,7 +14,7 @@
 
 - **Engineering observability** (`otel` plugin) — OpenTelemetry spans for every tool call, exportable via OTLP to Datadog, Grafana, Honeycomb, New Relic, or any other OTLP-compatible backend. Latency, errors, and status per call, with zero manual instrumentation. One plugin reaches every backend here because OTel/OTLP is a genuine open wire protocol.
 - **Product observability** — an event per tool call (`tool_name`, `duration_ms`, `success`) captured by whichever provider you pick: `posthog`, `amplitude`, or `mixpanel` plugins. Unlike OTel, there's no shared standard for product analytics ingestion, so this is three separate plugins rather than one — see [ARCHITECTURE.md section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why that's a structural difference, not an oversight.
-- **Tool curation** — choose which OpenAPI operations become tools at generation time (`--include-tags`, `--exclude-tags`, `--exclude-operation-ids`, or an interactive prompt), so you don't ship every operation in a large spec as a tool by default.
+- **Tool curation** — choose which OpenAPI operations become tools at generation time (`--include-tags`/`--exclude-tags`/`--exclude-operation-ids`, or tag-independent `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` regex/HTTP-method filters for specs with no OpenAPI tags at all, or an interactive prompt), so you don't ship every operation in a large spec as a tool by default.
 
 You pick the plugins you want at generation time — e.g. `--plugin otel --plugin posthog`, or `--plugin otel --plugin amplitude --plugin mixpanel` (any combination composes automatically). The server that comes out the other end is already instrumented.
 
@@ -48,7 +48,7 @@ export POSTHOG_API_KEY=phc_your_project_key
 npm start
 ```
 
-Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--include-tags`, `--exclude-tags`, `--exclude-operation-ids`, or `--interactive` to curate which operations become tools — see [ARCHITECTURE.md section 25](ARCHITECTURE.md#25-tool-curation-implemented-and-validated-end-to-end-aug-30-2026) for details.
+Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--include-tags`/`--exclude-tags`/`--exclude-operation-ids` (tag-based) or `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` (regex/HTTP-method, tag-independent — works even on specs with zero OpenAPI tags), or `--interactive`, to curate which operations become tools — see [ARCHITECTURE.md section 40](ARCHITECTURE.md#40-mcpfo-8-phase-1-implemented--tag-independent-structural-curation-sep-3-2026) for details.
 
 Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning) — MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-mcpforge-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
 

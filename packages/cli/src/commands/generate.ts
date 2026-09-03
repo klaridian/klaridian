@@ -195,6 +195,22 @@ export function registerGenerateCommand(program: Command): void {
       "Exclude these specific operationIds regardless of tags (comma-separated)"
     )
     .option(
+      "--include-paths <patterns>",
+      "MCPFO-8: only include operations whose path matches at least one of these regex patterns (comma-separated). Tag-independent — works even when the spec has zero OpenAPI tags (e.g. Stripe's public spec), since real-world APIs are almost always structured by path. Composes with --include-tags (both must pass)."
+    )
+    .option(
+      "--exclude-paths <patterns>",
+      "MCPFO-8: exclude operations whose path matches any of these regex patterns (comma-separated)"
+    )
+    .option(
+      "--include-methods <methods>",
+      "MCPFO-8: only include operations using one of these HTTP methods (comma-separated, e.g. get,post). Tag-independent."
+    )
+    .option(
+      "--exclude-methods <methods>",
+      "MCPFO-8: exclude operations using any of these HTTP methods (comma-separated)"
+    )
+    .option(
       "--interactive",
       "Prompt for which tags to include before generating (ARCHITECTURE.md section 24 — user-chosen curation, not LLM-suggested). Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input.",
       false
@@ -294,6 +310,10 @@ export function registerGenerateCommand(program: Command): void {
         includeTags?: string;
         excludeTags?: string;
         excludeOperationIds?: string;
+        includePaths?: string;
+        excludePaths?: string;
+        includeMethods?: string;
+        excludeMethods?: string;
         interactive: boolean;
         plugin: string[];
         pluginConfig: string[];
@@ -535,6 +555,10 @@ export function registerGenerateCommand(program: Command): void {
             includeTags: parseCommaList(opts.includeTags),
             excludeTags: parseCommaList(opts.excludeTags),
             excludeOperationIds: parseCommaList(opts.excludeOperationIds),
+            includePathPatterns: parseCommaList(opts.includePaths),
+            excludePathPatterns: parseCommaList(opts.excludePaths),
+            includeMethods: parseCommaList(opts.includeMethods),
+            excludeMethods: parseCommaList(opts.excludeMethods),
           };
 
           if (opts.interactive) {
@@ -554,7 +578,11 @@ export function registerGenerateCommand(program: Command): void {
           const hasCuration =
             (curationChoice.includeTags?.length ?? 0) > 0 ||
             (curationChoice.excludeTags?.length ?? 0) > 0 ||
-            (curationChoice.excludeOperationIds?.length ?? 0) > 0;
+            (curationChoice.excludeOperationIds?.length ?? 0) > 0 ||
+            (curationChoice.includePathPatterns?.length ?? 0) > 0 ||
+            (curationChoice.excludePathPatterns?.length ?? 0) > 0 ||
+            (curationChoice.includeMethods?.length ?? 0) > 0 ||
+            (curationChoice.excludeMethods?.length ?? 0) > 0;
 
           // If the user chose to curate, pre-process the spec (setting
           // x-mcp: false on excluded operations, per curation.ts) and write

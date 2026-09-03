@@ -125,6 +125,142 @@ test("applyCurationToSpec excludeOperationIds overrides regardless of tags", () 
   assert.equal(petsOp["x-mcp"], false);
 });
 
+// --- MCPFO-8: tag-independent structural filters (path regex, HTTP method) ---
+// Motivated directly by ARCHITECTURE.md section 34/36: Stripe's real public
+// spec has zero OpenAPI tags on any of its 594 operations, so
+// includeTags/excludeTags/excludeOperationIds are useless against it.
+// buildTestDoc() below deliberately omits tags on the admin path to model
+// that same untagged-real-API shape.
+
+function buildUntaggedDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Untagged", version: "1.0.0" },
+    paths: {
+      "/customers": {
+        get: { operationId: "listCustomers", responses: { "200": { description: "OK" } } },
+        post: { operationId: "createCustomer", responses: { "200": { description: "OK" } } },
+      },
+      "/customers/{id}": {
+        get: { operationId: "getCustomer", responses: { "200": { description: "OK" } } },
+        delete: { operationId: "deleteCustomer", responses: { "200": { description: "OK" } } },
+      },
+      "/invoices": {
+        get: { operationId: "listInvoices", responses: { "200": { description: "OK" } } },
+      },
+    },
+  };
+}
+
+function xmcp(doc: OpenAPIV3.Document, path: string, method: string): boolean | undefined {
+  const op = (doc.paths![path] as Record<string, OpenAPIV3.OperationObject>)[method] as
+    | (OpenAPIV3.OperationObject & { "x-mcp"?: boolean })
+    | undefined;
+  return op?.["x-mcp"];
+}
+
+test("applyCurationToSpec --include-paths works on a spec with ZERO tags (the Stripe case)", () => {
+  const curated = applyCurationToSpec(buildUntaggedDoc(), { includePathPatterns: ["^/customers"] });
+  assert.equal(xmcp(curated, "/customers", "get"), undefined, "matches pattern -> survives");
+  assert.equal(xmcp(curated, "/customers/{id}", "delete"), undefined, "matches pattern -> survives");
+  assert.equal(xmcp(curated, "/invoices", "get"), false, "does not match pattern -> excluded");
+});
+
+test("applyCurationToSpec --exclude-paths drops matching operations", () => {
+  const curated = applyCurationToSpec(buildUntaggedDoc(), { excludePathPatterns: ["\\{id\\}"] });
+  assert.equal(xmcp(curated, "/customers/{id}", "get"), false);
+  assert.equal(xmcp(curated, "/customers/{id}", "delete"), false);
+  assert.equal(xmcp(curated, "/customers", "get"), undefined, "non-matching path survives");
+});
+
+test("applyCurationToSpec --include-methods/--exclude-methods filter by HTTP verb, tag-independent", () => {
+  const onlyReads = applyCurationToSpec(buildUntaggedDoc(), { includeMethods: ["get"] });
+  assert.equal(xmcp(onlyReads, "/customers", "get"), undefined);
+  assert.equal(xmcp(onlyReads, "/customers", "post"), false);
+  assert.equal(xmcp(onlyReads, "/customers/{id}", "delete"), false);
+
+  const noDeletes = applyCurationToSpec(buildUntaggedDoc(), { excludeMethods: ["delete"] });
+  assert.equal(xmcp(noDeletes, "/customers/{id}", "delete"), false);
+  assert.equal(xmcp(noDeletes, "/customers/{id}", "get"), undefined);
+});
+
+test("applyCurationToSpec composes path/method filters with tag filters", () => {
+  // pets is tagged, admin/health are not — mirrors a spec with partial tagging.
+  const curated = applyCurationToSpec(buildTestDoc(), {
+    excludeTags: ["admin"],
+    includeMethods: ["get"],
+  });
+  const petsOp = (curated.paths!["/pets"] as OpenAPIV3.PathItemObject).get as OpenAPIV3.OperationObject & {
+    "x-mcp"?: boolean;
+  };
+  assert.equal(petsOp["x-mcp"], undefined, "GET + not admin-tagged -> survives both filters");
+});
+
+test("validateCurationChoice rejects an invalid regex in --include-paths/--exclude-paths", () => {
+  assert.throws(
+    () => validateCurationChoice({ includePathPatterns: ["[unclosed"] }, SAMPLE_OPERATIONS),
+    CurationValidationError
+  );
+});
+
+test("validateCurationChoice rejects an unknown HTTP method", () => {
+  assert.throws(
+    () => validateCurationChoice({ includeMethods: ["fetch"] }, SAMPLE_OPERATIONS),
+    CurationValidationError
+  );
+});
+
+test("generate --include-paths: produces a working server, tag-independent (real untagged spec, CLI E2E)", { timeout: 120_000 }, async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-paths-"));
+  const specDir = await mkdtemp(path.join(tmpdir(), "mcpforge-curation-spec-"));
+  const specPath = path.join(specDir, "untagged.json");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(
+    specPath,
+    JSON.stringify({
+      openapi: "3.0.0",
+      info: { title: "untagged-api", version: "1.0.0" },
+      servers: [{ url: "https://api.example.com/v1" }],
+      paths: {
+        "/customers": {
+          get: { operationId: "listCustomers", responses: { "200": { description: "ok" } } },
+          post: { operationId: "createCustomer", responses: { "200": { description: "ok" } } },
+        },
+        "/customers/{id}": {
+          get: {
+            operationId: "getCustomer",
+            parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+            responses: { "200": { description: "ok" } },
+          },
+        },
+        "/invoices": {
+          get: { operationId: "listInvoices", responses: { "200": { description: "ok" } } },
+        },
+      },
+    })
+  );
+  try {
+    const result = await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate",
+      "--spec", specPath,
+      "--out", outputDir,
+      "--name", "curated-paths-test",
+      "--include-paths", "^/customers",
+      "--license", "none",
+    ]);
+    assert.match(result.stderr, /Generated 3 tool\(s\)/, "only the 3 /customers operations survive, out of 4 total");
+
+    const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+    assert.match(serverSource, /listCustomers/);
+    assert.match(serverSource, /createCustomer/);
+    assert.match(serverSource, /getCustomer/);
+    assert.doesNotMatch(serverSource, /listInvoices/, "non-matching path excluded despite having no tags at all");
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+    await rm(specDir, { recursive: true, force: true });
+  }
+});
+
 // --- End-to-end: the actual CLI flags against the real Petstore fixture ---
 
 test(

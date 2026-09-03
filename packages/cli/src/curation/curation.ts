@@ -25,6 +25,20 @@ export interface CurationChoice {
   excludeTags?: string[];
   /** Specific operationIds to exclude, regardless of tags. */
   excludeOperationIds?: string[];
+  /**
+   * Regex patterns (MCPFO-8): only operations whose path template matches at
+   * least one pattern survive. Tag-independent — works on specs with zero
+   * OpenAPI tags (e.g. Stripe's public spec, ARCHITECTURE.md section 34),
+   * since real-world APIs are almost always structured by path even when
+   * untagged (e.g. every Stripe operation lives under /v1/<resource>/...).
+   */
+  includePathPatterns?: string[];
+  /** Regex patterns; operations whose path template matches any are dropped. */
+  excludePathPatterns?: string[];
+  /** HTTP methods (case-insensitive, e.g. "GET"); if non-empty, only operations using one of these methods survive. Tag-independent. */
+  includeMethods?: string[];
+  /** HTTP methods; operations using any of these methods are dropped. */
+  excludeMethods?: string[];
 }
 
 export interface OperationSummary {
@@ -91,6 +105,23 @@ export function validateCurationChoice(choice: CurationChoice, operations: Opera
       throw new CurationValidationError(`Unknown operationId "${operationId}" — not found in this spec's operations.`);
     }
   }
+  for (const pattern of [...(choice.includePathPatterns ?? []), ...(choice.excludePathPatterns ?? [])]) {
+    try {
+      new RegExp(pattern);
+    } catch (err) {
+      throw new CurationValidationError(
+        `Invalid regex "${pattern}" in --include-paths/--exclude-paths: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+  const knownMethods = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+  for (const method of [...(choice.includeMethods ?? []), ...(choice.excludeMethods ?? [])]) {
+    if (!knownMethods.has(method.toLowerCase())) {
+      throw new CurationValidationError(
+        `Unknown HTTP method "${method}" in --include-methods/--exclude-methods — expected one of: ${[...knownMethods].join(", ")}`
+      );
+    }
+  }
 }
 
 /**
@@ -107,10 +138,16 @@ export function applyCurationToSpec(doc: OpenAPIV3.Document, choice: CurationCho
   const includeTags = choice.includeTags && choice.includeTags.length > 0 ? new Set(choice.includeTags) : undefined;
   const excludeTags = new Set(choice.excludeTags ?? []);
   const excludeOperationIds = new Set(choice.excludeOperationIds ?? []);
+  const includePathRegexes = (choice.includePathPatterns ?? []).map((p) => new RegExp(p));
+  const excludePathRegexes = (choice.excludePathPatterns ?? []).map((p) => new RegExp(p));
+  const includeMethods = choice.includeMethods && choice.includeMethods.length > 0
+    ? new Set(choice.includeMethods.map((m) => m.toLowerCase()))
+    : undefined;
+  const excludeMethods = new Set((choice.excludeMethods ?? []).map((m) => m.toLowerCase()));
 
   const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
 
-  for (const pathItem of Object.values(cloned.paths ?? {})) {
+  for (const [pathTemplate, pathItem] of Object.entries(cloned.paths ?? {})) {
     if (!pathItem) continue;
     for (const method of methods) {
       const operation = (pathItem as Record<string, OpenAPIV3.OperationObject | undefined>)[method];
@@ -127,6 +164,23 @@ export function applyCurationToSpec(doc: OpenAPIV3.Document, choice: CurationCho
         excluded = true;
       }
       if (operationId && excludeOperationIds.has(operationId)) {
+        excluded = true;
+      }
+      // MCPFO-8: tag-independent structural filters — path pattern and HTTP
+      // method — evaluated the same way as the tag/operationId filters above
+      // (include narrows, exclude always wins), so they compose freely with
+      // tag-based curation on specs that DO have tags, and work standalone
+      // on specs that don't (e.g. Stripe's public spec, zero tags).
+      if (includePathRegexes.length > 0 && !includePathRegexes.some((re) => re.test(pathTemplate))) {
+        excluded = true;
+      }
+      if (excludePathRegexes.some((re) => re.test(pathTemplate))) {
+        excluded = true;
+      }
+      if (includeMethods && !includeMethods.has(method)) {
+        excluded = true;
+      }
+      if (excludeMethods.has(method)) {
         excluded = true;
       }
 

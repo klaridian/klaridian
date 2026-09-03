@@ -104,3 +104,35 @@ test("mcpforge generate --engine bogus: fails loudly before generating", async (
     await rm(outDir, { recursive: true, force: true });
   }
 });
+
+test("mcpforge generate --engine v2: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "mcpforge-relbase-"));
+  const specPath = path.join(outDir, "relspec.json");
+  const spec = {
+    openapi: "3.0.0",
+    info: { title: "rel", version: "1.0.0" },
+    servers: [{ url: "/api/v3" }],
+    paths: { "/ping": { get: { operationId: "ping", responses: { "200": { description: "ok" } } } } },
+  };
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(specPath, JSON.stringify(spec));
+  try {
+    // No --base-url; spec url is relative → should warn on stderr but still succeed.
+    const gen = await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate", "--spec", specPath, "--out", path.join(outDir, "gen"),
+      "--name", "rel", "--engine", "v2", "--license", "none",
+    ]);
+    assert.match(gen.stderr, /--base-url/, "warns and names the flag");
+    assert.match(gen.stderr, /\/api\/v3/, "quotes the relative url");
+
+    // With --base-url absolute → no warning.
+    const gen2 = await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate", "--spec", specPath, "--out", path.join(outDir, "gen2"),
+      "--name", "rel", "--engine", "v2", "--base-url", "https://api.example.com/v3", "--license", "none",
+    ]);
+    assert.doesNotMatch(gen2.stderr, /Base URL is not absolute/, "no warning with absolute base-url");
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+

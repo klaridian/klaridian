@@ -23,7 +23,7 @@ import os from "node:os";
 import { readFile, writeFile, mkdir, mkdtemp, rm, readdir, stat } from "node:fs/promises";
 import { generateMcpServer, getToolsFromOpenApi } from "openapi-mcp-generator";
 import { instrumentGeneratedServer, getPluginProjectAdditions, InstrumentationPatchError } from "../render/instrument.js";
-import { emitServerProject } from "../emit/emit-server.js";
+import { emitServerProject, resolveBaseUrlWarning } from "../emit/emit-server.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -488,6 +488,16 @@ export function registerGenerateCommand(program: Command): void {
           if (engine === "v2") {
             const serverName = opts.name ?? path.basename(outputDir);
             const baseUrl = opts.baseUrl ?? "";
+
+            // MCPFO-20: warn if neither --base-url nor the spec provides an
+            // absolute upstream host. tools[0].baseUrl is the resolved spec
+            // server URL (or the override, if given).
+            const specServerUrl = (tools[0] as { baseUrl?: string } | undefined)?.baseUrl;
+            const baseUrlWarning = resolveBaseUrlWarning(opts.baseUrl, specServerUrl);
+            if (baseUrlWarning) {
+              warnings.push(baseUrlWarning);
+              warn(baseUrlWarning);
+            }
             let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
             let extraFiles: Record<string, string> = {};
             let extraDependencies: Record<string, string> = {};

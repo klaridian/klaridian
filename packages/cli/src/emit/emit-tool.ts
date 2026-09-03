@@ -12,13 +12,56 @@ import type { McpToolDefinition } from "openapi-mcp-generator";
 import { jsonSchemaToZod } from "json-schema-to-zod";
 
 /**
- * Maps an HTTP method to MCP tool annotations. GET is read-only; DELETE is
- * destructive; everything else is neither (a write that isn't a delete).
- * Marketplaces (Claude/ChatGPT) require these hints — see MCPFO-23.
+ * Maps an HTTP method to MCP tool annotations required by marketplace review
+ * (Claude + ChatGPT) — see MCPFO-23 and docs/research/2026-09-02-mcp-
+ * marketplaces-and-connector-requirements.md line 254 [verified].
+ *
+ * - readOnlyHint:    true for GET/HEAD (no state change).
+ * - destructiveHint: true for DELETE and PUT (PUT fully replaces/overwrites a
+ *                    resource). POST/PATCH default to false (create / partial
+ *                    update) — we cannot statically prove a POST is destructive,
+ *                    and over-flagging harms the author's tool UX.
+ * - idempotentHint:  true for the idempotent HTTP methods GET/HEAD/PUT/DELETE;
+ *                    false for POST/PATCH. Only meaningful when not read-only,
+ *                    but emitted uniformly for clarity.
+ * - openWorldHint:   always true — every generated tool proxies to an external
+ *                    upstream HTTP API. OpenAI requires this hint.
  */
-export function annotationsForMethod(method: string): { readOnlyHint: boolean; destructiveHint: boolean } {
+export function annotationsForMethod(method: string): {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+} {
   const m = (method || "get").toLowerCase();
-  return { readOnlyHint: m === "get", destructiveHint: m === "delete" };
+  const readOnly = m === "get" || m === "head";
+  const idempotent = m === "get" || m === "head" || m === "put" || m === "delete";
+  const destructive = m === "delete" || m === "put";
+  return {
+    readOnlyHint: readOnly,
+    destructiveHint: destructive,
+    idempotentHint: idempotent,
+    openWorldHint: true,
+  };
+}
+
+/**
+ * Human-readable tool title required by both marketplaces. Prefers an explicit
+ * OpenAPI summary; otherwise humanizes the operation name (camelCase and
+ * snake_case → "Title Case Words").
+ */
+export function titleForTool(tool: { name: string; operationId?: string; summary?: string }): string {
+  const summary = (tool.summary ?? "").trim();
+  if (summary) return summary;
+  const raw = tool.operationId || tool.name || "";
+  const words = raw
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 /** Emits the handler body that proxies to the upstream HTTP API. */
@@ -78,14 +121,20 @@ function emitHandlerBody(tool: McpToolDefinition): string {
 export function emitToolBlock(tool: McpToolDefinition, wrap?: { fn: string }): string {
   const zodSrc = jsonSchemaToZod(tool.inputSchema ?? { type: "object", properties: {} });
   const ann = annotationsForMethod(tool.method || "get");
+  const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
   const handlerOpen = wrap ? `${wrap.fn}(${JSON.stringify(tool.name)}, async (args) => {` : `async (args) => {`;
   const handlerClose = wrap ? `    })` : `    }`;
+  const annotations =
+    `{ title: ${JSON.stringify(title)}, readOnlyHint: ${ann.readOnlyHint}, ` +
+    `destructiveHint: ${ann.destructiveHint}, idempotentHint: ${ann.idempotentHint}, ` +
+    `openWorldHint: ${ann.openWorldHint} }`;
   return `  server.registerTool(
     ${JSON.stringify(tool.name)},
     {
+      title: ${JSON.stringify(title)},
       description: ${JSON.stringify(tool.description ?? "")},
       inputSchema: ${zodSrc},
-      annotations: { readOnlyHint: ${ann.readOnlyHint}, destructiveHint: ${ann.destructiveHint} },
+      annotations: ${annotations},
     },
     ${handlerOpen}
 ${emitHandlerBody(tool)}

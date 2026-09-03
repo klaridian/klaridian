@@ -23,7 +23,7 @@ import time
 from typing import Any
 
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from mcp import types as mt
 from posthog import Posthog
 

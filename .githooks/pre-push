@@ -9,11 +9,26 @@ echo "[pre-push] Running CLI build + real E2E tests (packages/cli)..."
 echo "[pre-push] Running Python PostHog middleware tests (packages/python-posthog-middleware)..."
 (
   cd packages/python-posthog-middleware
-  python3 -m venv .venv-prepush >/dev/null 2>&1 || true
-  source .venv-prepush/bin/activate
-  pip install -q --upgrade pip
-  pip install -q -e ".[dev]"
-  pytest -q tests/
+  # package requires Python >=3.10; the system python3 here is 3.9, so pick
+  # the newest interpreter available (matches CI's setup-python 3.11) rather
+  # than silently failing the venv install.
+  PYBIN=""
+  for c in python3.11 python3.12 python3.13 python3.14 /opt/homebrew/bin/python3.14 python3; do
+    if command -v "$c" >/dev/null 2>&1; then
+      ver=$("$c" -c 'import sys; print(f"{sys.version_info[0]}{sys.version_info[1]:02d}")' 2>/dev/null || echo 0)
+      if [ "$ver" -ge 310 ]; then PYBIN="$c"; break; fi
+    fi
+  done
+  if [ -z "$PYBIN" ]; then
+    echo "[pre-push] WARNING: no Python >=3.10 interpreter found; skipping this check (CI still runs it on 3.11)." >&2
+  else
+    "$PYBIN" -m venv .venv-prepush >/dev/null 2>&1 || true
+    source .venv-prepush/bin/activate
+    pip install -q --upgrade pip
+    pip install -q -e ".[dev]"
+    pytest -q tests/
+    deactivate
+  fi
 )
 
 echo "[pre-push] All checks passed."

@@ -8,6 +8,8 @@ Guidance for AI agents (Claude Code, Hermes, or others) working in this reposito
 
 **This is Ricardo's personal project** (github.com/ricardocvasconcelos/mcpforge).
 
+**Rebrand in progress (Sep 3, 2026, PLAN.md section 13):** the project name `mcpforge` collided with existing real products and is being renamed to **`klaridian`** (verified clean on domain/package-registry/trademark axes; tracked as Plane MCPFO-13). The repo, package name, CLI binary, and this doc still say `mcpforge` until the rename execution lands — don't be surprised by the mismatch, and don't start a fresh rename pass without checking MCPFO-13's current state first.
+
 **Architecture pivot (Aug 30, 2026, ARCHITECTURE.md section 16):** mcpforge no longer parses OpenAPI or generates server code itself. That's delegated to [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator), a mature MIT-licensed library that does it better than the earlier hand-rolled implementation (sections 9-15, kept as historical reference — don't resurrect it). mcpforge's own code is now entirely the *instrumentation* layer: a small textual patch (`render/instrument.ts`) that rewrites the one call site `openapi-mcp-generator` always generates (`executeApiTool`) to route through an `ObservabilityPlugin`.
 
 ## Working agreements

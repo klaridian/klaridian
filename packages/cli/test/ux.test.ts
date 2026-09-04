@@ -13,12 +13,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { execFile, spawn } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
+import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
 
 test(

@@ -15,17 +15,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { spawn, execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
+import { execFileAsync, CLI_ENTRYPOINT, sendJsonRpc } from "./test-helpers.js";
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
-
-function sendJsonRpc(proc: ReturnType<typeof spawn>, msg: unknown) {
-  proc.stdin!.write(JSON.stringify(msg) + "\n");
-}
 
 test(
   "generate (no plugin): produces a working, uninstrumented v2 server that installs and builds",

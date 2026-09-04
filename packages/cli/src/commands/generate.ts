@@ -38,6 +38,7 @@ import { promptForCurationChoice } from "../curation/interactive.js";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
+import { isSwagger2Document, convertSwagger2ToOpenApi3, Swagger2ConversionError } from "../spec/swagger2-conversion.js";
 import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
@@ -235,9 +236,9 @@ export function registerGenerateCommand(program: Command): void {
           }
         };
 
-        let tempSpecDir: string | undefined;
+        let tempSpecDirs: string[] = [];
         try {
-          const specPath = path.resolve(opts.spec);
+          let specPath = path.resolve(opts.spec);
           const outputDir = path.resolve(opts.out);
 
           if (!isSupportedLicense(opts.license)) {
@@ -390,6 +391,36 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
 
+          // MCPFO-27 / ARCHITECTURE.md section 36: transparently convert a
+          // Swagger 2.0 input spec to OpenAPI 3.0 before anything else touches
+          // it. openapi-mcp-generator only understands OpenAPI 3.x — handed a
+          // raw Swagger 2.0 doc, listOperations()/getToolsFromOpenApi() below
+          // would silently produce tools with empty inputSchema.properties
+          // for every operation (the exact bug reproduced and fixed in
+          // section 35/36 against the real Slack spec). Detect once here,
+          // ahead of curation and the tool-extraction pre-check, so every
+          // downstream step (curation, tool count, emission) operates on the
+          // same real OpenAPI 3.0 document either way.
+          const rawParsedSpec = await SwaggerParser.parse(specPath);
+          if (isSwagger2Document(rawParsedSpec)) {
+            step(
+              `Detected Swagger 2.0 spec — converting to OpenAPI 3.0 before generation (swagger2openapi, MCPFO-27)`
+            );
+            let converted: OpenAPIV3.Document;
+            try {
+              converted = await convertSwagger2ToOpenApi3(rawParsedSpec);
+            } catch (err) {
+              if (err instanceof Swagger2ConversionError) {
+                fail(err.message, "convert-swagger2");
+                return;
+              }
+              throw err;
+            }
+            tempSpecDirs.push(await mkdtemp(path.join(os.tmpdir(), "klaridian-converted-spec-")));
+            specPath = path.join(tempSpecDirs[tempSpecDirs.length - 1], "spec.json");
+            await writeFile(specPath, JSON.stringify(converted), "utf-8");
+          }
+
           // Tool curation (ARCHITECTURE.md section 24): list operations
           // once, up front, so both the interactive prompt and the
           // non-interactive flags can validate/resolve against the same
@@ -448,8 +479,8 @@ export function registerGenerateCommand(program: Command): void {
           if (hasCuration) {
             const doc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
             const curated = applyCurationToSpec(doc, curationChoice);
-            tempSpecDir = await mkdtemp(path.join(os.tmpdir(), "klaridian-curated-spec-"));
-            generationSpecPath = path.join(tempSpecDir, "spec.json");
+            tempSpecDirs.push(await mkdtemp(path.join(os.tmpdir(), "klaridian-curated-spec-")));
+            generationSpecPath = path.join(tempSpecDirs[tempSpecDirs.length - 1], "spec.json");
             await writeFile(generationSpecPath, JSON.stringify(curated), "utf-8");
           }
 
@@ -589,8 +620,8 @@ export function registerGenerateCommand(program: Command): void {
         } catch (err) {
           fail(err instanceof Error ? err.message : String(err), "unexpected");
         } finally {
-          if (tempSpecDir) {
-            await rm(tempSpecDir, { recursive: true, force: true });
+          for (const dir of tempSpecDirs) {
+            await rm(dir, { recursive: true, force: true });
           }
         }
       }

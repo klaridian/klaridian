@@ -67,7 +67,7 @@ klaridian/
 │   └── python-posthog-middleware/  # FastMCP-native PostHog middleware (Python) — no generation/patching, see ARCHITECTURE.md section 23
 ├── examples/
 │   └── petstore/           # real OpenAPI spec used as the test fixture throughout
-├── spike/                  # throwaway hand-written spike that validated the core mechanic first
+├── spikes/                  # throwaway spikes that validated risky mechanics before building for real (see spikes/README.md)
 ├── PLAN.md                 # business/strategy plan
 ├── ARCHITECTURE.md         # technical design, decisions, and validation history
 └── CLAUDE.md               # working agreements for AI agents contributing to this repo

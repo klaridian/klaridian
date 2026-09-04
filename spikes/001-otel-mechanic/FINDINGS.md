@@ -10,8 +10,8 @@ actually work end to end — before building any generator abstraction.
 ## What's here
 
 - `examples/petstore/openapi.json` — real Swagger Petstore v3 OpenAPI spec (fetched from petstore3.swagger.io), used as the test fixture.
-- `spike/server.js` — hand-written MCP server exposing 2 tools (`getPetById`, `findPetsByStatus`) mapped manually from 2 OpenAPI operations, calling the real public Petstore API.
-- `spike/instrumentation.js` — hand-written OTel wiring: a `wrapTool()` helper that wraps any tool handler in a span (tool name, arguments, status, exceptions).
+- `spikes/001-otel-mechanic/server.js` — hand-written MCP server exposing 2 tools (`getPetById`, `findPetsByStatus`) mapped manually from 2 OpenAPI operations, calling the real public Petstore API.
+- `spikes/001-otel-mechanic/instrumentation.js` — hand-written OTel wiring: a `wrapTool()` helper that wraps any tool handler in a span (tool name, arguments, status, exceptions).
 
 ## How it was tested
 
@@ -32,7 +32,7 @@ Commands sent: `initialize`, `tools/list`, `tools/call` (both tools).
 
 Initial spike used `ConsoleSpanExporter` (no collector needed, simplest to try first). Verified directly: it prints the full span object via `console.dir`, which goes to **stdout**. For any stdio-transport MCP server, stdout must carry *only* JSON-RPC messages — anything else corrupts the protocol from the client's point of view.
 
-**Consequence for the real plugin:** the OTel plugin's generated instrumentation code must default to `OTLPTraceExporter` (exports over HTTP to a collector, never touches stdout) for any stdio-transport server. If a future "debug output" mode is offered, it must be hard-wired to stderr, never console.log/console.dir. This is now documented directly in `spike/instrumentation.js` as a comment, and should become an explicit rule in `runtime-otel`'s implementation and in its tests (a test asserting stdout stays clean under span export is cheap and high-value).
+**Consequence for the real plugin:** the OTel plugin's generated instrumentation code must default to `OTLPTraceExporter` (exports over HTTP to a collector, never touches stdout) for any stdio-transport server. If a future "debug output" mode is offered, it must be hard-wired to stderr, never console.log/console.dir. This is now documented directly in `spikes/001-otel-mechanic/instrumentation.js` as a comment, and should become an explicit rule in `runtime-otel`'s implementation and in its tests (a test asserting stdout stays clean under span export is cheap and high-value).
 
 ### Finding 2: span flushing needs explicit handling, not just "start the SDK and go"
 

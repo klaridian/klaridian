@@ -220,7 +220,7 @@ This is where real design judgment is needed, not just plumbing:
 
 1. **Spike (throwaway):** manually generate one MCP server from the Petstore OpenAPI spec, wire OTel by hand, confirm the mechanics actually work end to end (spec → tool → span → OTLP collector) before building any generator abstraction. This validates the riskiest assumption first.
 
-   > **✅ Done (Aug 30, 2026).** See `spike/FINDINGS.md` for full results. Two findings changed downstream design:
+   > **✅ Done (Aug 30, 2026).** See `spikes/001-otel-mechanic/FINDINGS.md` for full results. Two findings changed downstream design:
    > - `ConsoleSpanExporter` writes to **stdout**, which corrupts stdio-transport MCP servers (stdout must carry JSON-RPC only). The real OTel plugin must default to `OTLPTraceExporter`; any debug console output must go to stderr, hard-wired, never left to the implementer to get right.
    > - Span flushing needs explicit `SIGINT`/`SIGTERM` handling (`sdk.shutdown()`) — the default batch processor can lose spans on process exit otherwise. `runtime-otel` must wire this by default, not leave it as an exercise for generated-server users.
    >
@@ -282,7 +282,7 @@ Implemented and tested:
 
 **v0 scope decision made here:** exactly 0 or 1 plugins per generated server for now — `generateServerSource` throws if given more than one. Composing multiple plugins around the same tool call site (e.g. OTel + PostHog both wrapping the same handler) needs a real composition strategy that isn't worth building until a second plugin actually exists. Documented directly in code, not just here.
 
-**Validation (`packages/cli/test/otel-plugin.test.ts`):** generates a server with the OTel plugin enabled, runs a real `npm install` (pulling real `@opentelemetry/*` packages), builds, runs it, and — critically — sends it a real `SIGTERM` mid-run to exercise the plugin's shutdown handler. Confirms the invariant from `spike/FINDINGS.md` holds through the full generator, not just the hand-written spike: **stdout stays exactly 2 valid JSON-RPC lines**, even with OTel active and no collector available to receive the exported spans.
+**Validation (`packages/cli/test/otel-plugin.test.ts`):** generates a server with the OTel plugin enabled, runs a real `npm install` (pulling real `@opentelemetry/*` packages), builds, runs it, and — critically — sends it a real `SIGTERM` mid-run to exercise the plugin's shutdown handler. Confirms the invariant from `spikes/001-otel-mechanic/FINDINGS.md` holds through the full generator, not just the hand-written spike: **stdout stays exactly 2 valid JSON-RPC lines**, even with OTel active and no collector available to receive the exported spans.
 
 Also manually smoke-tested the actual CLI binary (`node dist/src/index.js generate --spec ... --plugin otel --plugin-config otel.serviceName=...`) end to end outside the test suite — correctly surfaced the pre-existing `uploadImage` non-JSON-body warning and generated all 19 tools with OTel wiring. All 11 automated tests pass (`npm test` in `packages/cli`).
 

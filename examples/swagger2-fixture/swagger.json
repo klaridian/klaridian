@@ -1,0 +1,89 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Mini Swagger 2.0 Fixture",
+    "description": "MCPFO-27 test fixture: a deliberately small Swagger 2.0 (OpenAPI 2.0) spec exercising the exact shape that broke openapi-mcp-generator's tool extraction before the swagger2openapi pre-conversion step (ARCHITECTURE.md sections 35/36) -- flat `in: \"query\"` array/enum parameters, a path parameter, and a body parameter, all of which must survive conversion with real, non-empty schemas.",
+    "version": "1.0.0"
+  },
+  "host": "api.example.com",
+  "basePath": "/v1",
+  "schemes": ["https"],
+  "paths": {
+    "/widgets": {
+      "get": {
+        "operationId": "listWidgets",
+        "summary": "List widgets",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["active", "archived"]
+            },
+            "collectionFormat": "csv",
+            "description": "Status values to filter by"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "description": "Max results to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWidget",
+        "summary": "Create a widget",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string", "description": "Widget name" },
+                "quantity": { "type": "integer" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/widgets/{widgetId}": {
+      "get": {
+        "operationId": "getWidget",
+        "summary": "Get a widget by id",
+        "parameters": [
+          {
+            "name": "widgetId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Widget identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  }
+}

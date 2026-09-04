@@ -1,24 +1,13 @@
 // packages/cli/test/transport.test.ts
 //
 // End-to-end validation of `--transport` (ARCHITECTURE.md section 29 — v0's
-// stdio-only guardrail lifted, since openapi-mcp-generator natively supports
-// streamable-http and web transports and klaridian's own conformance/plugin
-// patches operate on the same shared CallToolRequestSchema handler
-// regardless of transport). Covers: flag validation, correct pass-through to
-// openapi-mcp-generator, and that the conformance fixes (section 28) still
-// land correctly in the generated source for non-stdio transports.
-//
-// Deliberately does NOT attempt a real spawned-server HTTP round-trip test
-// for streamable-http/web the way generate.test.ts does for stdio — see
-// ARCHITECTURE.md section 29's "Known upstream limitation" for why: a real,
-// reproducible crash exists in openapi-mcp-generator's own generated
-// src/streamable-http.ts (a `fetch-to-node` incompatibility, unrelated to
-// any klaridian code) on the second HTTP request to a session. Confirmed
-// directly against an unpatched vanilla-generated project, so it is not a
-// regression this project introduced — but it means "spawn and drive over
-// real HTTP" isn't a reliable test today for this path. What CAN be, and is,
-// validated for real: successful generation, correct build, and correct
-// conformance-patch presence in the generated source.
+// stdio-only guardrail lifted). Since the MCPFO-21 cutover (section 49) the v2
+// emitter is the only engine: `stdio` (default) and `streamable-http` are
+// supported, `web` was v1-only and is gone. The v2 streamable-http server is
+// stateless by construction, so the v1 2nd-request crash (MCPFO-10) does not
+// apply — a real sequential-request HTTP round-trip is covered in
+// emit-e2e.test.ts. This file covers CLI-level flag validation and that
+// `--transport streamable-http` produces a buildable project.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -35,7 +24,7 @@ const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
 
 test(
-  "generate --transport streamable-http: generates a buildable server with conformance fixes applied",
+  "generate --transport streamable-http: generates a buildable stateless v2 server",
   { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-http-"));
@@ -43,8 +32,6 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -61,22 +48,16 @@ test(
         "none",
       ]);
       assert.match(result.stderr, /\[streamable-http, port 3987\]/);
-      assert.match(result.stderr, /Applied MCP spec conformance fixes/);
-      assert.match(result.stderr, /npm run start:http/);
 
-      // The StreamableHTTP-specific file must exist.
-      const streamableHttpSource = await readFile(path.join(outputDir, "src", "streamable-http.ts"), "utf-8");
-      assert.match(streamableHttpSource, /StreamableHTTPServerTransport/);
-
-      // The shared tool-call handler (src/index.ts) must still carry the
-      // conformance fixes from section 28 — same handler, same patch,
-      // regardless of transport.
+      // The v2 emitter puts everything in src/index.ts — a stateless
+      // createMcpHandler over a node http server, no per-session transport.
       const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
-      assert.match(serverSource, /throw new McpError\(ErrorCode\.InvalidParams, `Unknown tool: \$\{toolName\}`\)/);
-      assert.match(serverSource, /isError: true/);
+      assert.match(serverSource, /createMcpHandler/);
+      assert.match(serverSource, /3987/, "port baked into the emitted server");
 
       const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
-      assert.ok(packageJson.scripts["start:http"], "expected a start:http script for the streamable-http transport");
+      assert.ok(packageJson.scripts["start"], "expected a start script");
+      assert.ok(packageJson.dependencies["@modelcontextprotocol/node"], "node adapter dep for the HTTP transport");
 
       await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
@@ -87,17 +68,14 @@ test(
   }
 );
 
-test(
-  "generate --transport web: generates a buildable server with conformance fixes applied",
-  { timeout: 120_000 },
-  async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-web-"));
+test("generate --transport web: rejected (web was v1-only, removed in the MCPFO-21 cutover)", { timeout: 30_000 }, async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-web-"));
+  try {
+    let caught: unknown;
     try {
-      const result = await execFileAsync("node", [
+      await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -108,31 +86,17 @@ test(
         "https://petstore3.swagger.io/api/v3",
         "--transport",
         "web",
-        "--port",
-        "3988",
-        "--license",
-        "none",
       ]);
-      assert.match(result.stderr, /\[web, port 3988\]/);
-      assert.match(result.stderr, /npm run start:web/);
-
-      const webServerSource = await readFile(path.join(outputDir, "src", "web-server.ts"), "utf-8");
-      assert.ok(webServerSource.length > 0);
-
-      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
-      assert.match(serverSource, /isError: true/);
-
-      const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
-      assert.ok(packageJson.scripts["start:web"], "expected a start:web script for the web transport");
-
-      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
-      const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
-      assert.doesNotMatch(buildResult.stderr, /error TS/);
-    } finally {
-      await rm(outputDir, { recursive: true, force: true });
+    } catch (err) {
+      caught = err;
     }
+    assert.ok(caught, "expected the CLI to reject --transport web");
+    const stderr = (caught as { stderr?: string }).stderr ?? "";
+    assert.match(stderr, /Unknown transport "web"/);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
   }
-);
+});
 
 test("generate --transport <unknown>: fails loudly before generating anything", { timeout: 30_000 }, async () => {
   const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-bad-"));
@@ -142,8 +106,6 @@ test("generate --transport <unknown>: fails loudly before generating anything", 
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -174,8 +136,6 @@ test("generate --transport streamable-http --port 0: rejects an invalid port", {
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",

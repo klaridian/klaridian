@@ -34,8 +34,6 @@ test(
         await execFileAsync("node", [
           CLI_ENTRYPOINT,
           "generate",
-          "--engine",
-          "v1",
           "--spec",
           PETSTORE_SPEC_PATH,
           "--out",
@@ -71,8 +69,6 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -106,8 +102,6 @@ test(
         await execFileAsync("node", [
           CLI_ENTRYPOINT,
           "generate",
-          "--engine",
-          "v1",
           "--spec",
           PETSTORE_SPEC_PATH,
           "--out",
@@ -139,8 +133,6 @@ test(
       const proc = spawn("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -184,12 +176,12 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
         outputDir,
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
         "--license",
         "none",
         "--json",
@@ -203,7 +195,6 @@ test(
       assert.equal(parsed.transport, "stdio");
       assert.equal(parsed.license, null); // --license none
       assert.deepEqual(parsed.plugins, []);
-      assert.equal(parsed.branding, null);
       assert.match(parsed.nextSteps, /npm install/);
       assert.ok(Array.isArray(parsed.warnings));
       assert.match(parsed.warnings[0], /no LICENSE file written/);
@@ -222,8 +213,6 @@ test(
       await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -245,29 +234,36 @@ test(
 );
 
 test(
-  "generate --json: --icon with an unrecognized theme surfaces as a warning in the JSON, not just stderr",
+  "generate --json: a base-url warning surfaces in the JSON warnings array, not just stderr",
   { timeout: 60_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-json-warn-"));
+    const specPath = path.join(outputDir, "relspec.json");
+    await mkdir(outputDir, { recursive: true });
+    await writeFile(
+      specPath,
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "rel", version: "1.0.0" },
+        servers: [{ url: "/api/v3" }],
+        paths: { "/ping": { get: { operationId: "ping", responses: { "200": { description: "ok" } } } } },
+      })
+    );
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
-        PETSTORE_SPEC_PATH,
+        specPath,
         "--out",
-        outputDir,
+        path.join(outputDir, "gen"),
         "--license",
         "none",
-        "--icon",
-        "https://example.com/icon.png|sepia",
         "--json",
       ]);
       const parsed = JSON.parse(result.stdout);
       assert.equal(parsed.success, true);
-      assert.ok(parsed.warnings.some((w: string) => w.includes('Ignoring unrecognized icon theme "sepia"')));
+      assert.ok(parsed.warnings.some((w: string) => w.includes("Base URL is not absolute")));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }
@@ -283,8 +279,6 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -293,10 +287,8 @@ test(
         "none",
         "--quiet",
       ]);
-      // Suppressed: klaridian's own "✅ Applied ..." progress lines.
+      // Suppressed: klaridian's own "✅ ..." progress lines.
       assert.doesNotMatch(result.stderr, /✅ Generated \d+ tool/);
-      assert.doesNotMatch(result.stderr, /✅ Applied MCP spec conformance fixes/);
-      assert.doesNotMatch(result.stderr, /✅ Applied security hardening/);
       // Kept: the license warning and the final "Next:" line — quiet
       // reduces noise, it doesn't hide the one line a human needs to act on
       // or a warning about something the user should know.
@@ -309,33 +301,27 @@ test(
 );
 
 test(
-  "generate --quiet: also suppresses openapi-mcp-generator's own hardcoded progress output (ARCHITECTURE.md section 33)",
+  "generate --quiet: stderr is exactly the license warning + the Next: line, nothing else",
   { timeout: 60_000 },
   async () => {
-    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-quiet-thirdparty-"));
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-quiet-lines-"));
     try {
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
         outputDir,
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
         "--license",
         "none",
         "--quiet",
       ]);
-      // These are openapi-mcp-generator's own hardcoded console.error lines
-      // (confirmed by reading its source, ARCHITECTURE.md section 33) —
-      // must be gone too under --quiet, not just klaridian's own lines.
-      assert.doesNotMatch(result.stderr, /Parsing OpenAPI spec/);
-      assert.doesNotMatch(result.stderr, /Generating server code/);
-      assert.doesNotMatch(result.stderr, /-> Created/);
-      // Only the license warning and the Next: line should remain — assert
-      // the total line count stays exactly at 2, not just that specific
-      // substrings are absent (guards against some other new noise source).
+      // Assert the total line count stays exactly at 2, not just that
+      // specific substrings are absent (guards against any new noise source,
+      // including third-party libraries the emitter calls).
       const nonEmptyLines = result.stderr.split("\n").filter((l) => l.trim().length > 0);
       assert.equal(nonEmptyLines.length, 2, `expected exactly 2 stderr lines under --quiet, got: ${JSON.stringify(nonEmptyLines)}`);
     } finally {
@@ -345,7 +331,7 @@ test(
 );
 
 test(
-  "generate --json: stderr is completely empty (openapi-mcp-generator's progress output is suppressed too)",
+  "generate --json: stderr is completely empty (no prose, no third-party noise)",
   { timeout: 60_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-json-silent-"));
@@ -353,8 +339,6 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -363,7 +347,7 @@ test(
         "none",
         "--json",
       ]);
-      assert.equal(result.stderr, "", "expected --json to produce completely empty stderr, third-party noise included");
+      assert.equal(result.stderr, "", "expected --json to produce completely empty stderr");
       // stdout must still be exactly one parseable JSON value.
       const parsed = JSON.parse(result.stdout);
       assert.equal(parsed.success, true);
@@ -374,7 +358,7 @@ test(
 );
 
 test(
-  "generate (no --quiet/--json): openapi-mcp-generator's own progress output is NOT suppressed (default behavior unchanged)",
+  "generate (no --quiet/--json): klaridian's own step lines ARE visible by default",
   { timeout: 60_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-ux-noquiet-"));
@@ -382,8 +366,6 @@ test(
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
-        "--engine",
-        "v1",
         "--spec",
         PETSTORE_SPEC_PATH,
         "--out",
@@ -391,12 +373,8 @@ test(
         "--license",
         "none",
       ]);
-      // Without --quiet/--json, the console-suppression workaround must NOT
-      // engage — openapi-mcp-generator's normal progress output should
-      // still be visible, confirming the suppression is opt-in (via
-      // --quiet/--json), not a silent behavior change for everyone.
-      assert.match(result.stderr, /Parsing OpenAPI spec/);
-      assert.match(result.stderr, /Generating server code/);
+      // Without --quiet/--json, the step-by-step progress lines are shown.
+      assert.match(result.stderr, /✅ Generated 19 tool\(s\)/);
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }

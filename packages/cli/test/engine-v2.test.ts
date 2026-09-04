@@ -1,9 +1,11 @@
 // packages/cli/test/engine-v2.test.ts
 //
-// End-to-end test of the CLI with --engine v2 (MCPFO-21 Task 3.1): the real
-// `klaridian generate --engine v2` binary path, install/build/spawn/drive.
-// Complements emit-e2e.test.ts (which tests the emitter module directly) by
-// proving the CLI wiring, curation reuse, and license step all work on v2.
+// End-to-end test of the CLI's generation path (MCPFO-21): the real
+// `klaridian generate` binary, install/build/spawn/drive. Since the MCPFO-21
+// cutover (ARCHITECTURE.md section 49) the v2 emitter is the only engine, so
+// there is no `--engine` flag anymore. Complements emit-e2e.test.ts (which
+// tests the emitter module directly) by proving the CLI wiring, curation
+// reuse, and license step all work end to end.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -40,7 +42,7 @@ function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
 }
 
 test(
-  "klaridian generate --engine v2: real CLI generates a v2 server that installs, builds and runs",
+  "klaridian generate: real CLI generates a v2 server that installs, builds and runs",
   { timeout: 300_000 },
   async () => {
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-engine-v2-"));
@@ -51,11 +53,10 @@ test(
         "--out", outDir,
         "--name", "engine-v2-test",
         "--base-url", "https://petstore3.swagger.io/api/v3",
-        "--engine", "v2",
         "--registry-name", "io.github.acme/engine-v2-test",
         "--license", "none",
       ]);
-      assert.match(gen.stderr, /engine v2/, "reports v2 engine");
+      assert.match(gen.stderr, /protocol 2025-11-25/, "reports the v2 emitter + negotiated protocol");
 
       // package.json must be the v2 dep set, not v1
       const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));
@@ -90,27 +91,27 @@ test(
   }
 );
 
-test("klaridian generate --engine bogus: fails loudly before generating", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-engine-bad-"));
+test("klaridian generate --engine: the flag was removed in the MCPFO-21 cutover and is now rejected", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-engine-gone-"));
   try {
     await assert.rejects(
       execFileAsync("node", [
         CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-        "--name", "x", "--base-url", "https://x/api", "--engine", "v9",
+        "--name", "x", "--base-url", "https://x/api", "--engine", "v1",
       ]),
-      /Unknown engine/
+      /unknown option '--engine'/i
     );
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
 });
 
-test("klaridian generate --engine v2 --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
+test("klaridian generate --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
   const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-docker-"));
   try {
     await execFileAsync("node", [
       CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-      "--name", "d", "--base-url", "https://x/api", "--engine", "v2",
+      "--name", "d", "--base-url", "https://x/api",
       "--transport", "streamable-http", "--port", "3000", "--docker", "--license", "none",
     ]);
     const df = await readFile(path.join(outDir, "Dockerfile"), "utf-8");
@@ -131,7 +132,7 @@ test("klaridian generate --docker with stdio transport fails loudly (MCPFO-12)",
     await assert.rejects(
       execFileAsync("node", [
         CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-        "--name", "d", "--base-url", "https://x/api", "--engine", "v2",
+        "--name", "d", "--base-url", "https://x/api",
         "--transport", "stdio", "--docker", "--license", "none",
       ]),
       /--docker requires --transport streamable-http/
@@ -141,7 +142,7 @@ test("klaridian generate --docker with stdio transport fails loudly (MCPFO-12)",
   }
 });
 
-test("klaridian generate --engine v2: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
+test("klaridian generate: relative spec server URL without --base-url warns (MCPFO-20)", async () => {
   const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-relbase-"));
   const specPath = path.join(outDir, "relspec.json");
   const spec = {
@@ -156,7 +157,7 @@ test("klaridian generate --engine v2: relative spec server URL without --base-ur
     // No --base-url; spec url is relative → should warn on stderr but still succeed.
     const gen = await execFileAsync("node", [
       CLI_ENTRYPOINT, "generate", "--spec", specPath, "--out", path.join(outDir, "gen"),
-      "--name", "rel", "--engine", "v2", "--license", "none",
+      "--name", "rel", "--license", "none",
     ]);
     assert.match(gen.stderr, /--base-url/, "warns and names the flag");
     assert.match(gen.stderr, /\/api\/v3/, "quotes the relative url");
@@ -164,7 +165,7 @@ test("klaridian generate --engine v2: relative spec server URL without --base-ur
     // With --base-url absolute → no warning.
     const gen2 = await execFileAsync("node", [
       CLI_ENTRYPOINT, "generate", "--spec", specPath, "--out", path.join(outDir, "gen2"),
-      "--name", "rel", "--engine", "v2", "--base-url", "https://api.example.com/v3", "--license", "none",
+      "--name", "rel", "--base-url", "https://api.example.com/v3", "--license", "none",
     ]);
     assert.doesNotMatch(gen2.stderr, /Base URL is not absolute/, "no warning with absolute base-url");
   } finally {

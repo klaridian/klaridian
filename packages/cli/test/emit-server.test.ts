@@ -55,3 +55,38 @@ test("streamable-http transport uses createMcpHandler + node adapter", () => {
   assert.doesNotMatch(index, /mcp-session-id/i, "no session-id machinery (stateless)");
   assert.doesNotMatch(index, /fetch-to-node/, "no fetch-to-node (the v1 crash source)");
 });
+
+// MCPFO-28 — wires MCPFO-29/30's code-mode generator code into emitServerProject.
+test("architecture: code-mode emits a single execute_code tool instead of per-operation tools", () => {
+  const files = emitServerProject({
+    serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://api.example.com",
+    architecture: "code-mode",
+  });
+  const index = files["src/index.ts"];
+  assert.match(index, /"execute_code"/, "registers execute_code");
+  assert.doesNotMatch(index, /registerTool\(\s*"getPetById"/, "does NOT register a per-operation tool");
+});
+
+test("architecture: code-mode emits src/client.ts and src/sandbox-runner.ts", () => {
+  const files = emitServerProject({
+    serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://api.example.com",
+    architecture: "code-mode",
+  });
+  assert.ok(files["src/client.ts"], "typed client emitted");
+  assert.match(files["src/client.ts"], /export async function getPetById/, "client has a function per operation");
+  assert.ok(files["src/sandbox-runner.ts"], "sandbox runner emitted");
+  assert.match(files["src/sandbox-runner.ts"], /spawn\("deno"/, "sandbox runner spawns deno");
+});
+
+test("architecture: code-mode requires an absolute base URL — throws loudly rather than emitting a broken sandbox", () => {
+  assert.throws(
+    () => emitServerProject({ serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "/relative", architecture: "code-mode" }),
+    /not a valid absolute URL/
+  );
+});
+
+test("architecture: tools (default/omitted) is unaffected — no client.ts/sandbox-runner.ts emitted", () => {
+  const files = emitServerProject({ serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://x/api" });
+  assert.equal(files["src/client.ts"], undefined);
+  assert.equal(files["src/sandbox-runner.ts"], undefined);
+});

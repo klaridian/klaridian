@@ -6,14 +6,23 @@
 // factory-per-request), so the v1 session-based streamable-http crash
 // (MCPFO-10) cannot occur here. Targets protocol 2025-11-25 (the current v2
 // SDK line) — NOT 2026-07-28, which the SDK does not yet negotiate (spike 021c).
+//
+// MCPFO-28: also emits SDK code mode output (ARCHITECTURE.md section 43) when
+// `architecture: "code-mode"` is requested — a single execute_code tool
+// (emit-sandbox.ts) backed by a typed client (emit-client.ts) instead of one
+// MCP tool per operation, unblocking MCPFO-29/30's generator code for real
+// use for the first time.
 
 import type { McpToolDefinition } from "openapi-mcp-generator";
 import { emitToolBlock } from "./emit-tool.js";
+import { emitClientModule } from "./emit-client.js";
+import { emitSandboxRunner, emitExecuteCodeToolBlock, extractApiHost } from "./emit-sandbox.js";
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
 import { emitDockerfile, emitDockerignore } from "./emit-dockerfile.js";
 import { emitAuthModule } from "../render/auth.js";
 
 export type Transport = "stdio" | "streamable-http";
+export type Architecture = "tools" | "code-mode";
 
 export interface EmitOptions {
   serverName: string;
@@ -21,6 +30,19 @@ export interface EmitOptions {
   baseUrl: string;
   transport?: Transport;
   port?: number;
+  /**
+   * MCPFO-28/ARCHITECTURE.md section 43: "tools" (default) emits one MCP
+   * tool per OpenAPI operation (the existing 1:1 path). "code-mode" emits a
+   * single execute_code tool backed by a typed client, run in a sandboxed
+   * Deno subprocess (MCPFO-29/30) — for large APIs where the industry has
+   * converged on code execution over per-endpoint tool proliferation.
+   * code-mode requires an absolute `baseUrl` (the sandbox's --allow-net
+   * scoping needs a concrete host) and does not currently support plugin
+   * wiring (`wiring`/`extraFiles`/`extraDependencies` below still apply to
+   * project-level additions, but there is no per-tool wrap call site for a
+   * plugin to hook — see MCPFO-32, tracked separately, not blocking this).
+   */
+  architecture?: Architecture;
   /** Optional plugin wiring: an import line + a wrap function name applied per tool. */
   wiring?: { importStatement: string; wrapFunctionName: string };
   /** Extra vendored files (path -> content), e.g. a plugin's instrumentation source. */
@@ -70,8 +92,12 @@ export function resolveBaseUrlWarning(
 
 function emitIndex(opts: EmitOptions): string {
   const transport: Transport = opts.transport ?? "stdio";
+  const architecture: Architecture = opts.architecture ?? "tools";
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;
-  const toolBlocks = opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
+  const toolBlocks =
+    architecture === "code-mode"
+      ? emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl))
+      : opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
 
   const baseImports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];
   if (opts.wiring) baseImports.push(opts.wiring.importStatement);
@@ -131,11 +157,18 @@ serveStdio(${factoryBody});
 
 export function emitServerProject(opts: EmitOptions): EmittedProject {
   const transport: Transport = opts.transport ?? "stdio";
+  const architecture: Architecture = opts.architecture ?? "tools";
   // MCPFO-22: auth only applies to network transports — a stdio server MUST
   // NOT implement it per spec (credentials come from the launching process's
   // environment instead).
   if (opts.auth && transport !== "streamable-http") {
     throw new Error("OAuth (opts.auth) is only supported for --transport streamable-http.");
+  }
+  // code-mode needs a concrete API host up front to scope the sandbox's
+  // --allow-net permission — fail loudly here (generation time) rather than
+  // emitting a project whose execute_code tool would throw at runtime.
+  if (architecture === "code-mode") {
+    extractApiHost(opts.baseUrl);
   }
   const files: EmittedProject = {
     "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName, Boolean(opts.auth)),
@@ -148,6 +181,13 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
       registryName: opts.registryName,
     }),
   };
+  if (architecture === "code-mode") {
+    // MCPFO-29/30: the typed client execute_code runs model code against,
+    // and the sandbox runner that spawns the Deno subprocess. Both vendored
+    // (not npm dependencies) per the project's vendored-source rule (section 7).
+    files["src/client.ts"] = emitClientModule(opts.tools);
+    files["src/sandbox-runner.ts"] = emitSandboxRunner();
+  }
   if (opts.auth) {
     files["src/auth.ts"] = emitAuthModule(opts.auth);
   }

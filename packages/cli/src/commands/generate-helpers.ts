@@ -111,6 +111,7 @@ export interface GenerateJsonResult {
   curatedFromTotal?: number | null;
   transport?: string;
   port?: number | null;
+  architecture?: string;
   license?: string | null;
   plugins?: string[];
   branding?: { icons: number; website: boolean; description: boolean } | null;

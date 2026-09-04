@@ -47,7 +47,7 @@ function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
 
 test(
   "generate --icon/--website/--server-description: real initialize response carries the branding metadata",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-branding-"));
     try {
@@ -77,7 +77,7 @@ test(
       ]);
       assert.match(genResult.stderr, /Applied branding metadata \(2 icon\(s\), website, description\)/);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 

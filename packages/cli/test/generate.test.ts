@@ -28,7 +28,7 @@ function sendJsonRpc(proc: ReturnType<typeof spawn>, msg: unknown) {
 
 test(
   "generate (no plugin): produces a working, uninstrumented server via openapi-mcp-generator",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-plain-"));
     try {
@@ -52,7 +52,7 @@ test(
       const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
       assert.doesNotMatch(serverSource, /wrapTool/, "no plugin requested -> no instrumentation wiring");
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       // openapi-mcp-generator's own build may print benign info to stderr
       // (e.g. TS version notices) — assert no actual compiler error markers
@@ -66,7 +66,7 @@ test(
 
 test(
   "generate --plugin otel: instruments the openapi-mcp-generator output, stdout stays clean JSON-RPC",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-otel-"));
     try {
@@ -105,7 +105,7 @@ test(
       const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
       assert.ok(packageJson.dependencies["@opentelemetry/sdk-node"]);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 
@@ -183,7 +183,7 @@ test(
 
 test(
   "generate --plugin otel --plugin posthog: composes both plugins, stdout stays clean JSON-RPC",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-multi-"));
     try {
@@ -228,7 +228,7 @@ test(
       assert.ok(packageJson.dependencies["@opentelemetry/sdk-node"]);
       assert.ok(packageJson.dependencies["posthog-node"]);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 
@@ -311,7 +311,7 @@ test(
 
 test(
   "generate --plugin amplitude --plugin mixpanel: two product-analytics plugins compose, stdout stays clean JSON-RPC",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-analytics-"));
     try {
@@ -357,7 +357,7 @@ test(
       assert.ok(packageJson.dependencies["@amplitude/analytics-node"]);
       assert.ok(packageJson.dependencies["mixpanel"]);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 

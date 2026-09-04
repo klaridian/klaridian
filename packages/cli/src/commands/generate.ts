@@ -26,7 +26,7 @@ import os from "node:os";
 import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions } from "../render/instrument.js";
-import { emitServerProject, resolveBaseUrlWarning } from "../emit/emit-server.js";
+import { emitServerProject, resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -280,7 +280,7 @@ export function registerGenerateCommand(program: Command): void {
           // NOT implement authorization per spec (they get credentials from
           // their launching process's environment instead) — the flag
           // combination is rejected outright rather than silently ignored.
-          let authConfig: { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] } | undefined;
+          let authConfig: OAuthConfig | undefined;
           if (opts.oauthIssuer) {
             if (transport !== "streamable-http") {
               fail(
@@ -530,7 +530,7 @@ export function registerGenerateCommand(program: Command): void {
             );
             return;
           }
-          let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
+          let wiring: PluginWiring | undefined;
           let extraFiles: Record<string, string> = {};
           let extraDependencies: Record<string, string> = {};
           if (plugins.length > 0) {

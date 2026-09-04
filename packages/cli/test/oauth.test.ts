@@ -80,7 +80,6 @@ test(
         "--out", outDir,
         "--name", "oauth-e2e-test",
         "--base-url", "https://petstore3.swagger.io/api/v3",
-        "--engine", "v2",
         "--transport", "streamable-http",
         "--port", String(port),
         "--oauth-issuer", ISSUER,
@@ -178,7 +177,7 @@ test("klaridian generate --oauth-issuer with stdio transport fails loudly (MCPFO
     await assert.rejects(
       execFileAsync("node", [
         CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-        "--name", "x", "--base-url", "https://x/api", "--engine", "v2",
+        "--name", "x", "--base-url", "https://x/api",
         "--transport", "stdio",
         "--oauth-issuer", ISSUER, "--oauth-jwks-uri", "https://idp.test/jwks.json", "--oauth-audience", AUDIENCE,
       ]),
@@ -195,7 +194,7 @@ test("klaridian generate --oauth-issuer without --oauth-audience fails loudly (M
     await assert.rejects(
       execFileAsync("node", [
         CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-        "--name", "x", "--base-url", "https://x/api", "--engine", "v2",
+        "--name", "x", "--base-url", "https://x/api",
         "--transport", "streamable-http", "--port", "3000",
         "--oauth-issuer", ISSUER, "--oauth-jwks-uri", "https://idp.test/jwks.json",
       ]),
@@ -212,7 +211,7 @@ test("klaridian generate --oauth-issuer rejects a non-HTTPS issuer (except local
     await assert.rejects(
       execFileAsync("node", [
         CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-        "--name", "x", "--base-url", "https://x/api", "--engine", "v2",
+        "--name", "x", "--base-url", "https://x/api",
         "--transport", "streamable-http", "--port", "3000",
         "--oauth-issuer", "http://insecure-idp.example.com",
         "--oauth-jwks-uri", "https://idp.test/jwks.json",

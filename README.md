@@ -18,9 +18,9 @@
 - **Product observability** — an event per tool call (`tool_name`, `duration_ms`, `success`) captured by whichever provider you pick: `posthog`, `amplitude`, or `mixpanel` plugins. Unlike OTel, there's no shared standard for product analytics ingestion, so this is three separate plugins rather than one — see [ARCHITECTURE.md section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why that's a structural difference, not an oversight.
 - **Tool curation** — choose which OpenAPI operations become tools at generation time (`--include-tags`/`--exclude-tags`/`--exclude-operation-ids`, or tag-independent `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` regex/HTTP-method filters for specs with no OpenAPI tags at all, or an interactive prompt), so you don't ship every operation in a large spec as a tool by default.
 
-You pick the plugins you want at generation time — e.g. `--plugin otel --plugin posthog`, or `--plugin otel --plugin amplitude --plugin mixpanel` (any combination composes automatically). The server that comes out the other end is already instrumented.
+You pick a plugin you want at generation time — e.g. `--plugin otel` or `--plugin posthog`. The server that comes out the other end is already instrumented. (Composing more than one plugin on the same server was a capability of the retired v1 pipeline and is not yet re-implemented on the current emitter — see [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).)
 
-OpenAPI parsing and MCP server code generation are handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator); klaridian's own code is the instrumentation and curation layer on top of that output.
+OpenAPI parsing / tool-data extraction is handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator)'s `getToolsFromOpenApi()`; klaridian's own code emits the MCP server project itself — a stateless [`@modelcontextprotocol/server`](https://www.npmjs.com/package/@modelcontextprotocol/server) (SDK v2, protocol 2025-11-25) project — plus the instrumentation and curation layers on top.
 
 ## Why
 
@@ -33,20 +33,19 @@ cd packages/cli
 npm install
 npm run build
 
-# Generate an MCP server from an OpenAPI spec, with OTel + PostHog instrumentation:
+# Generate an MCP server from an OpenAPI spec, with OTel instrumentation:
 node dist/src/index.js generate \
   --spec ../../examples/petstore/openapi.json \
   --out /tmp/my-generated-server \
   --name my-petstore-server \
   --base-url https://petstore3.swagger.io/api/v3 \
-  --plugin otel --plugin posthog \
+  --plugin otel \
   --plugin-config otel.serviceName=my-petstore-server
 
 # Then run the generated server:
 cd /tmp/my-generated-server
 npm install && npm run build
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces   # optional, has a default
-export POSTHOG_API_KEY=phc_your_project_key
 npm start
 ```
 
@@ -61,8 +60,9 @@ klaridian/
 ├── packages/
 │   └── cli/                # the klaridian CLI
 │       ├── src/
-│       │   ├── render/instrument.ts  # patches the generated server output to wire in a plugin
-│       │   ├── plugins/    # ObservabilityPlugin interface + plugins (otel, posthog)
+│       │   ├── emit/       # emits the stateless SDK-v2 MCP server project from tool data
+│       │   ├── render/instrument.ts  # collects a plugin's vendored files + npm deps for the emitter
+│       │   ├── plugins/    # ObservabilityPlugin interface + plugins (otel, posthog, amplitude, mixpanel)
 │       │   ├── curation/   # tool curation logic + interactive prompt
 │       │   └── commands/   # the `generate` CLI command
 │       └── test/           # end-to-end tests (real npm install + build + run)
@@ -77,23 +77,23 @@ klaridian/
 
 ## Status & roadmap
 
-Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry + PostHog instrumentation layer, and generation-time tool curation. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history, including the original hand-rolled OpenAPI mapper (superseded, kept for context). Validated against real-world specs, including a large, complex production API (100+ operations, heavy `allOf` usage, Bearer auth, binary responses) — see [ARCHITECTURE.md section 16](ARCHITECTURE.md#16-strategic-pivot-adopt-openapi-mcp-generator-as-the-generation-engine-instead-of-maintaining-our-own-aug-30-2026).
+Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry / PostHog instrumentation layer, and generation-time tool curation. The generator emits a stateless `@modelcontextprotocol/server` (SDK v2, protocol 2025-11-25) project directly from tool data — the legacy v1 pipeline (which delegated to `openapi-mcp-generator`'s code generator and textually patched its output) was removed in the MCPFO-21 cutover, [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history, including the original hand-rolled OpenAPI mapper and the v1 delegation model (both superseded, kept for context).
 
 ### What's always on
 
-- **MCP spec conformance** — every generated server is patched to fix two real MCP spec (2025-06-18) conformance bugs found in `openapi-mcp-generator`'s own output: unknown-tool calls now return a genuine JSON-RPC protocol error instead of a "successful" result, and tool execution failures set `isError: true`. See [ARCHITECTURE.md section 28](ARCHITECTURE.md#28-mcp-spec-conformance-audit--fixes-aug-30-2026) for the audit methodology and the still-open gaps at the time (rate limiting, output sanitization, tool annotations — since closed, see below).
-- **Security hardening** — every tool gets a `title` and MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`, derived from its HTTP method), a configurable per-tool rate limit (`KLARIDIAN_RATE_LIMIT_PER_MINUTE`, default 60/min, `0` disables), and output sanitization (size cap + an explicit untrusted-data framing note — defense-in-depth against prompt-injection-via-tool-output, not a full fix). See [ARCHITECTURE.md section 30](ARCHITECTURE.md#30-closing-the-remaining-audit-gaps-tool-annotationstitle-rate-limiting-output-sanitization-aug-30-2026).
+- **MCP spec conformance** — the SDK-v2 emitter produces spec-conformant tool error handling natively: an unknown-tool call is a genuine JSON-RPC protocol error (`-32602`), and a tool-execution failure sets `isError: true` on the result. (v1 needed a textual patch for both — [ARCHITECTURE.md section 28](ARCHITECTURE.md#28-mcp-spec-conformance-audit--fixes-aug-30-2026) — which is why the cutover shrank klaridian's fragile surface.)
+- **Marketplace tool annotations** — every tool gets a `title` and MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`, derived from its HTTP method), emitted natively by the generator. Per-tool rate limiting and output sanitization were v1-only features with no v2 equivalent yet — tracked as follow-up in [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
 - **Real `LICENSE` file by default** — every generated server ships with a `LICENSE` file and a `package.json.license` field (`--license mit` default, or `--license apache-2.0`; `--license none` opts out but prints a warning). MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-klaridian-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
 
 ### Plugins and transports
 
-- **Plugins:** `otel` (engineering observability, any OTLP backend) and three product-analytics plugins — `posthog`, `amplitude`, `mixpanel` — composable together on the same server in any combination. See [ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026) for how composition works, and [section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why product analytics needed three plugins where engineering observability only needed one.
-- **Transports:** `--transport stdio` (default), `--transport streamable-http`, or `--transport web` (with `--port`, default 3000). Non-stdio transports come straight from `openapi-mcp-generator`; conformance fixes and plugin instrumentation apply identically across all three. **Known limitation:** `streamable-http` crashes on the second HTTP request to a session due to an upstream `fetch-to-node` bug in `openapi-mcp-generator`'s own generated code (reproduced against a vanilla, unpatched project — not caused by klaridian). See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026).
-- **Branding (opt-in):** `--icon <src[|light|dark]>` (repeatable), `--website <url>`, `--server-description <text>` set the server's icons/websiteUrl/description (MCP spec 2025-11-25, purely cosmetic — no effect if omitted). See [ARCHITECTURE.md section 31](ARCHITECTURE.md#31-cosmetic-branding-metadata-icons-websiteurl-description-aug-30-2026).
+- **Plugins:** `otel` (engineering observability, any OTLP backend) and three product-analytics plugins — `posthog`, `amplitude`, `mixpanel`. One plugin per generated server on the current emitter; multi-plugin composition ([ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026)) was a v1 capability not yet re-implemented ([section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026)). See [section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why product analytics needed three plugins where engineering observability only needed one.
+- **Transports:** `--transport stdio` (default) or `--transport streamable-http` (with `--port`, default 3000). The emitted streamable-http server is stateless by construction (`createMcpHandler` per request), so the v1 second-request crash (MCPFO-10) is structurally impossible — validated with real sequential HTTP requests in `emit-e2e.test.ts`. (`--transport web` was a v1-only option and was removed in the cutover.) See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026) and [section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
+- **Server metadata:** `--server-description <text>` sets the description in the emitted `server.json`. Cosmetic icon/website metadata (`--icon`/`--website`, [ARCHITECTURE.md section 31](ARCHITECTURE.md#31-cosmetic-branding-metadata-icons-websiteurl-description-aug-30-2026)) was v1-only and is tracked for re-implementation in [section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
 
 ### CLI ergonomics
 
-`--force` overwrites a non-empty `--out` (refused by default); `--json` prints a single machine-readable result on stdout (success or failure, with a stable `stage` tag on error — built for scripts/agents); `--quiet` suppresses step-by-step progress while keeping warnings and the final summary; `--interactive` fails loudly instead of silently proceeding when stdin isn't a real terminal. Both `--quiet` and `--json` also suppress `openapi-mcp-generator`'s own progress output (worked around on klaridian's side — see [ARCHITECTURE.md section 33](ARCHITECTURE.md#33-closing-the-unquietable-third-party-noise-gap-suppressing-openapi-mcp-generators-own-console-output-under---quiet--json-aug-30-2026); a real upstream fix is tracked but not yet filed, [PLAN.md section 9](PLAN.md#9-upstream-contributions-to-openapi-mcp-generator-tracked-not-yet-filed-aug-30-2026)). See [ARCHITECTURE.md section 32](ARCHITECTURE.md#32-cli-ux-audit---force---json---quiet-non-tty-detection-for---interactive-aug-30-2026) for the audit these came from.
+`--force` overwrites a non-empty `--out` (refused by default); `--json` prints a single machine-readable result on stdout (success or failure, with a stable `stage` tag on error — built for scripts/agents); `--quiet` suppresses step-by-step progress while keeping warnings and the final summary; `--interactive` fails loudly instead of silently proceeding when stdin isn't a real terminal. The v2 emitter is quiet by construction — under `--json` stderr is empty, under `--quiet` it is just the final summary — so the section-33 third-party-noise workaround (needed only for v1's `generateMcpServer()`) is retired. See [ARCHITECTURE.md section 32](ARCHITECTURE.md#32-cli-ux-audit---force---json---quiet-non-tty-detection-for---interactive-aug-30-2026) for the audit these came from.
 
 ### Multi-language support
 
@@ -120,7 +120,7 @@ cd packages/cli
 npm test
 ```
 
-This runs real end-to-end tests: generating a project, patching in the OTel/PostHog plugins, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
+This runs real end-to-end tests: emitting a project, wiring in a plugin, `npm install`-ing it for real, building it with `tsc`, spawning it, and driving it over stdio JSON-RPC — not just unit tests on generated strings.
 
 ## Development environment
 

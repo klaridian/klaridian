@@ -1,16 +1,19 @@
 // packages/cli/src/commands/generate.ts
 //
-// Implements `klaridian generate` — ARCHITECTURE.md section 16/18 pivot:
-// delegates the actual OpenAPI -> MCP server generation to
-// openapi-mcp-generator (a mature, MIT-licensed library, validated against
-// a large real-world production API spec in section 16), then post-processes
-// the generated server with klaridian's own observability instrumentation layer
-// (instrument.ts). klaridian's own code no longer parses OpenAPI or renders
-// server source from scratch — that's the whole point of the pivot.
+// Implements `klaridian generate`. openapi-mcp-generator is used only for its
+// pure spec->tool-DATA extraction (getToolsFromOpenApi); the actual MCP server
+// project is emitted by klaridian's own emitter (emit/emit-server.ts) targeting
+// @modelcontextprotocol/server (SDK v2), stateless, protocol 2025-11-25 —
+// MCPFO-21 / ARCHITECTURE.md sections 38 and 49. The legacy v1 engine (which
+// delegated generation to openapi-mcp-generator's generateMcpServer() and then
+// textually patched its output for conformance/security/branding/instrumentation)
+// was removed in the MCPFO-21 cutover (section 49); v2 gives native isError/-32602
+// and wraps instrumentation at the registerTool boundary instead.
 //
 // Section 20: supports 0, 1, or multiple --plugin flags (the old v0
 // guardrail of "exactly 0 or 1 plugins" is lifted now that a second plugin
-// (posthog) actually exists to validate composition against).
+// (posthog) actually exists to validate composition against). Note: the v2
+// emit path currently supports at most one --plugin.
 //
 // Section 32 (ARCHITECTURE.md): --force/--json/--quiet + non-TTY detection
 // for --interactive, following a direct CLI-UX audit against clig.dev and
@@ -21,8 +24,8 @@ import type { Command } from "commander";
 import path from "node:path";
 import os from "node:os";
 import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
-import { generateMcpServer, getToolsFromOpenApi } from "openapi-mcp-generator";
-import { instrumentGeneratedServer, getPluginProjectAdditions, InstrumentationPatchError } from "../render/instrument.js";
+import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getPluginProjectAdditions } from "../render/instrument.js";
 import { emitServerProject, resolveBaseUrlWarning } from "../emit/emit-server.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
@@ -35,14 +38,9 @@ import { promptForCurationChoice } from "../curation/interactive.js";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
-import { applyConformanceFixes, ConformancePatchError } from "../render/conformance.js";
-import { applySecurityHardening, getSecurityHelpersFileContent, SecurityPatchError } from "../render/security.js";
-import { applyBranding, BrandingPatchError, type Icon } from "../render/branding.js";
 import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
-  inferIconMimeType,
-  withConsoleSuppressed,
   directoryExistsAndIsNonEmpty,
   type GenerateJsonResult,
 } from "./generate-helpers.js";
@@ -116,36 +114,31 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--transport <type>",
-      "Transport for the generated server: stdio (default), streamable-http, or web (ARCHITECTURE.md section 29 — stdio-only was a v0 guardrail, lifted now that openapi-mcp-generator supports the others natively)",
+      "Transport for the generated server: stdio (default) or streamable-http (ARCHITECTURE.md section 29 — stdio-only was a v0 guardrail, lifted in the emitter). The v2 emitter is stateless by construction, so streamable-http does not hit the v1 2nd-request crash (MCPFO-10).",
       "stdio"
     )
     .option(
       "--port <number>",
-      "Port for the generated server when --transport is streamable-http or web (default: 3000)",
+      "Port for the generated server when --transport is streamable-http (default: 3000)",
       (value: string) => parseInt(value, 10)
     )
     .option(
       "--architecture <id>",
-      "MCPFO-28/ARCHITECTURE.md section 43: tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess (MCPFO-29/30) — for large APIs where one-tool-per-operation is the wrong default. --engine v2 only; requires an absolute --base-url (or an absolute server URL in the spec) since the sandbox's network permission needs a concrete host.",
+      "MCPFO-28/ARCHITECTURE.md section 43: tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess (MCPFO-29/30) — for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec) since the sandbox's network permission needs a concrete host.",
       "tools"
     )
     .option(
-      "--engine <id>",
-      "Generation engine: v2 (default, klaridian's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38) or v1 (legacy, via openapi-mcp-generator, SDK v1, protocol 2025-06-18; its streamable-http transport crashes on the 2nd request — MCPFO-10). v2 is stateless so that crash cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
-      "v2"
-    )
-    .option(
       "--registry-name <name>",
-      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it (MCPFO-25). v2 engine only."
+      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it (MCPFO-25)."
     )
     .option(
       "--docker",
-      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server (MCPFO-12). Requires --transport streamable-http (a containerized stdio server leaks orphaned containers). v2 engine only.",
+      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server (MCPFO-12). Requires --transport streamable-http (a containerized stdio server leaks orphaned containers).",
       false
     )
     .option(
       "--oauth-issuer <url>",
-      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server (MCPFO-22). Requires --transport streamable-http and --engine v2. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
+      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server (MCPFO-22). Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
     )
     .option(
       "--oauth-jwks-uri <url>",
@@ -160,15 +153,8 @@ export function registerGenerateCommand(program: Command): void {
       "Comma-separated OAuth scopes required on every tool call (default: none beyond token validity)"
     )
     .option(
-      "--icon <src[|theme]>",
-      "Icon URL/data-URI for the server (MCP spec 2025-11-25, purely cosmetic). Repeatable for multiple sizes/themes. Optional |light or |dark suffix sets the theme, e.g. --icon https://x/icon-dark.svg|dark --icon https://x/icon-light.svg|light. MIME type is inferred from the file extension.",
-      (value: string, previous: string[]) => [...previous, value],
-      [] as string[]
-    )
-    .option("--website <url>", "Website URL for the server (MCP spec 2025-11-25, purely cosmetic)")
-    .option(
       "--server-description <text>",
-      "Human-readable description for the server's Implementation metadata (MCP spec 2025-11-25, purely cosmetic — distinct from individual tool descriptions)"
+      "Short human-readable description for the emitted server.json (distinct from individual tool descriptions)"
     )
     .option(
       "--force",
@@ -206,15 +192,12 @@ export function registerGenerateCommand(program: Command): void {
         transport: string;
         port?: number;
         architecture: string;
-        engine: string;
         registryName?: string;
         docker: boolean;
         oauthIssuer?: string;
         oauthJwksUri?: string;
         oauthAudience?: string;
         oauthRequiredScopes?: string;
-        icon: string[];
-        website?: string;
         serverDescription?: string;
         force: boolean;
         json: boolean;
@@ -263,7 +246,7 @@ export function registerGenerateCommand(program: Command): void {
           }
           const license = opts.license;
 
-          const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http", "web"] as const;
+          const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http"] as const;
           type Transport = (typeof SUPPORTED_TRANSPORTS)[number];
           if (!(SUPPORTED_TRANSPORTS as readonly string[]).includes(opts.transport)) {
             fail(`Unknown transport "${opts.transport}". Supported: ${SUPPORTED_TRANSPORTS.join(", ")}`, "validate-transport");
@@ -276,23 +259,12 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
 
-          const SUPPORTED_ENGINES = ["v1", "v2"] as const;
-          if (!(SUPPORTED_ENGINES as readonly string[]).includes(opts.engine)) {
-            fail(`Unknown engine "${opts.engine}". Supported: ${SUPPORTED_ENGINES.join(", ")}`, "validate-engine");
-            return;
-          }
-          const engine = opts.engine as (typeof SUPPORTED_ENGINES)[number];
-
           const SUPPORTED_ARCHITECTURES = ["tools", "code-mode"] as const;
           if (!(SUPPORTED_ARCHITECTURES as readonly string[]).includes(opts.architecture)) {
             fail(`Unknown architecture "${opts.architecture}". Supported: ${SUPPORTED_ARCHITECTURES.join(", ")}`, "validate-architecture");
             return;
           }
           const architecture = opts.architecture as (typeof SUPPORTED_ARCHITECTURES)[number];
-          if (architecture === "code-mode" && engine !== "v2") {
-            fail(`--architecture code-mode is only supported by --engine v2.`, "validate-architecture");
-            return;
-          }
 
           // MCPFO-12: --docker only makes sense for a network transport.
           if (opts.docker && transport !== "streamable-http") {
@@ -302,14 +274,6 @@ export function registerGenerateCommand(program: Command): void {
             );
             return;
           }
-          if (opts.docker && engine !== "v2") {
-            fail(`--docker is only supported by --engine v2.`, "validate-docker");
-            return;
-          }
-          if (engine === "v2" && transport === "web") {
-            fail(`--engine v2 does not support --transport web (v1-only). Use stdio or streamable-http.`, "validate-engine");
-            return;
-          }
 
           // MCPFO-22: OAuth resource-server validation. stdio servers MUST
           // NOT implement authorization per spec (they get credentials from
@@ -317,10 +281,6 @@ export function registerGenerateCommand(program: Command): void {
           // combination is rejected outright rather than silently ignored.
           let authConfig: { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] } | undefined;
           if (opts.oauthIssuer) {
-            if (engine !== "v2") {
-              fail(`--oauth-issuer is only supported by --engine v2.`, "validate-oauth");
-              return;
-            }
             if (transport !== "streamable-http") {
               fail(
                 `--oauth-issuer requires --transport streamable-http (stdio servers must not implement authorization per the MCP spec — they read credentials from their environment instead).`,
@@ -482,7 +442,7 @@ export function registerGenerateCommand(program: Command): void {
 
           // If the user chose to curate, pre-process the spec (setting
           // x-mcp: false on excluded operations, per curation.ts) and write
-          // it to a temp file — generateMcpServer() only accepts a file
+          // it to a temp file — getToolsFromOpenApi() only accepts a file
           // path, not a parsed document, so this is the integration seam.
           let generationSpecPath = specPath;
           if (hasCuration) {
@@ -509,253 +469,84 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
 
-          // --- Engine v2: klaridian's own emitter (MCPFO-21, ARCHITECTURE.md
-          // section 38). Emits a stateless @modelcontextprotocol/server (SDK v2)
-          // project directly from `tools` data — no generateMcpServer(), no
-          // textual conformance/security/instrument patches (v2 gives native
-          // isError/-32602, and instrumentation wraps at the registerTool
-          // boundary via the same plugin interface). Returns early.
-          if (engine === "v2") {
-            const serverName = opts.name ?? path.basename(outputDir);
-            const baseUrl = opts.baseUrl ?? "";
+          // klaridian's own emitter (MCPFO-21, ARCHITECTURE.md sections 38/49).
+          // Emits a stateless @modelcontextprotocol/server (SDK v2) project
+          // directly from `tools` DATA — no generateMcpServer(), no textual
+          // conformance/security/branding/instrument patches. The SDK gives
+          // native isError/-32602, and plugin instrumentation wraps at the
+          // registerTool boundary via the same ObservabilityPlugin interface.
+          const serverName = opts.name ?? path.basename(outputDir);
+          const baseUrl = opts.baseUrl ?? "";
 
-            // MCPFO-20: warn if neither --base-url nor the spec provides an
-            // absolute upstream host. tools[0].baseUrl is the resolved spec
-            // server URL (or the override, if given).
-            const specServerUrl = (tools[0] as { baseUrl?: string } | undefined)?.baseUrl;
-            const baseUrlWarning = resolveBaseUrlWarning(opts.baseUrl, specServerUrl);
-            if (baseUrlWarning) {
-              warnings.push(baseUrlWarning);
-              warn(baseUrlWarning);
-            }
-            // code-mode's sandbox needs a concrete, absolute API host at
-            // generation time (--allow-net scoping) — unlike the "tools"
-            // architecture, a missing absolute base URL is fatal here, not
-            // just a warning (there is no KLARIDIAN_BASE_URL-at-runtime
-            // fallback for a sandbox permission baked in at generation time).
-            if (architecture === "code-mode" && baseUrlWarning) {
-              fail(
-                `--architecture code-mode requires an absolute --base-url (the sandbox's network permission must be scoped to a concrete host at generation time): ${baseUrlWarning}`,
-                "validate-architecture"
-              );
-              return;
-            }
-            let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
-            let extraFiles: Record<string, string> = {};
-            let extraDependencies: Record<string, string> = {};
-            if (plugins.length > 0) {
-              if (plugins.length > 1) {
-                fail(`--engine v2 currently supports at most one --plugin (got ${plugins.length}).`, "emit-v2");
-                return;
-              }
-              const plugin = plugins[0];
-              wiring = plugin.getServerWiring();
-              const additions = getPluginProjectAdditions(plugins, pluginConfigs);
-              extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
-              extraDependencies = additions.dependencies;
-            }
-
-            const project = emitServerProject({
-              serverName,
-              tools,
-              baseUrl,
-              architecture,
-              transport: transport === "streamable-http" ? "streamable-http" : "stdio",
-              port: transport === "streamable-http" ? port : undefined,
-              wiring,
-              extraFiles,
-              extraDependencies,
-              description: opts.serverDescription,
-              registryName: opts.registryName,
-              docker: opts.docker,
-              auth: authConfig,
-            });
-
-            await mkdir(outputDir, { recursive: true });
-            for (const [rel, content] of Object.entries(project)) {
-              const full = path.join(outputDir, rel);
-              await mkdir(path.dirname(full), { recursive: true });
-              await writeFile(full, content, "utf-8");
-            }
-
-            // License (same policy as v1: default MIT, --license none warns).
-            if (license !== "none") {
-              const author = opts.author?.trim() || (await resolveGitAuthorName()) || "the project author";
-              const licenseText = getLicenseText(license, author, new Date().getFullYear());
-              if (licenseText) await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
-              const pkgPath = path.join(outputDir, "package.json");
-              const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
-              pkg.license = getPackageJsonLicenseField(license);
-              await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-            }
-
-            const transportSuffix = transport === "streamable-http" ? ` [streamable-http, port ${port}]` : "";
-            const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
-            const architectureSuffix = architecture === "code-mode" ? " [code-mode: execute_code + typed client, Deno-sandboxed]" : "";
-            const toolCountLabel = architecture === "code-mode" ? `1 tool (execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
-            step(`✅ Generated ${toolCountLabel} in ${outputDir}${transportSuffix} (engine v2: @modelcontextprotocol/server, stateless, protocol 2025-11-25)${architectureSuffix}${pluginSuffix}`);
-
-            const startScript = transport === "streamable-http" ? "npm start" : "npm start";
-            const nextSteps =
-              architecture === "code-mode"
-                ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && ${startScript}`
-                : `cd ${opts.out} && npm install && npm run build && ${startScript}`;
-            if (jsonMode) {
-              const result: GenerateJsonResult = {
-                success: true,
-                outputDir,
-                toolCount: tools.length,
-                curatedFromTotal: hasCuration ? operations.length : null,
-                transport,
-                port: transport === "streamable-http" ? port : null,
-                architecture,
-                license: license !== "none" ? getPackageJsonLicenseField(license) : null,
-                plugins: plugins.map((p) => p.id),
-                branding: null,
-                nextSteps,
-                warnings,
-              };
-              process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-            } else {
-              console.error(`   Next: ${nextSteps}`);
-            }
+          // MCPFO-20: warn if neither --base-url nor the spec provides an
+          // absolute upstream host. tools[0].baseUrl is the resolved spec
+          // server URL (or the override, if given).
+          const specServerUrl = (tools[0] as { baseUrl?: string } | undefined)?.baseUrl;
+          const baseUrlWarning = resolveBaseUrlWarning(opts.baseUrl, specServerUrl);
+          if (baseUrlWarning) {
+            warnings.push(baseUrlWarning);
+            warn(baseUrlWarning);
+          }
+          // code-mode's sandbox needs a concrete, absolute API host at
+          // generation time (--allow-net scoping) — unlike the "tools"
+          // architecture, a missing absolute base URL is fatal here, not
+          // just a warning (there is no KLARIDIAN_BASE_URL-at-runtime
+          // fallback for a sandbox permission baked in at generation time).
+          if (architecture === "code-mode" && baseUrlWarning) {
+            fail(
+              `--architecture code-mode requires an absolute --base-url (the sandbox's network permission must be scoped to a concrete host at generation time): ${baseUrlWarning}`,
+              "validate-architecture"
+            );
             return;
           }
-
-          const runGeneration = () =>
-            generateMcpServer({
-              input: generationSpecPath,
-              output: outputDir,
-              serverName: opts.name,
-              baseUrl: opts.baseUrl,
-              transport,
-              port: transport !== "stdio" ? port : undefined,
-              force: true,
-            });
-          await (quietMode ? withConsoleSuppressed(runGeneration) : runGeneration());
-
-          const curationSuffix = hasCuration ? ` (curated from ${operations.length} total)` : "";
-          const transportSuffix = transport !== "stdio" ? ` [${transport}, port ${port}]` : "";
-          step(`✅ Generated ${tools.length} tool(s)${curationSuffix} in ${outputDir}${transportSuffix} (via openapi-mcp-generator)`);
-
-          // Apply MCP spec conformance fixes (ARCHITECTURE.md section 28) —
-          // ALWAYS, regardless of --plugin. Unlike plugin instrumentation
-          // (opt-in), these are correctness fixes for spec-required
-          // behavior openapi-mcp-generator's output gets wrong (unknown
-          // tools returning a "successful" result instead of a JSON-RPC
-          // protocol error; execution failures never setting
-          // `isError: true`). Applied before the plugin instrumentation
-          // step below, so instrument.ts's textual patch operates on the
-          // already-conformant source.
-          {
-            const serverFilePath = path.join(outputDir, "src", "index.ts");
-            const serverSource = await readFile(serverFilePath, "utf-8");
-            let conformant: string;
-            try {
-              conformant = applyConformanceFixes(serverSource);
-            } catch (err) {
-              if (err instanceof ConformancePatchError) {
-                fail(
-                  `${err.message}\n   The server was generated successfully but is NOT spec-conformant for tool errors — see ARCHITECTURE.md section 28.`,
-                  "apply-conformance"
-                );
-                return;
-              }
-              throw err;
+          let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
+          let extraFiles: Record<string, string> = {};
+          let extraDependencies: Record<string, string> = {};
+          if (plugins.length > 0) {
+            if (plugins.length > 1) {
+              fail(`The emitter currently supports at most one --plugin (got ${plugins.length}).`, "emit");
+              return;
             }
-            await writeFile(serverFilePath, conformant, "utf-8");
-            step(`✅ Applied MCP spec conformance fixes (unknown-tool protocol errors, isError on tool failures)`);
+            const plugin = plugins[0];
+            wiring = plugin.getServerWiring();
+            const additions = getPluginProjectAdditions(plugins, pluginConfigs);
+            extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
+            extraDependencies = additions.dependencies;
           }
 
-          // Apply security hardening (ARCHITECTURE.md section 30) — ALWAYS,
-          // same discipline as the conformance fixes above: tool
-          // annotations/title, rate limiting, and output sanitization are
-          // spec-recommended/required, not opt-in plugin features. Applied
-          // after conformance so both patches compose against the already-
-          // conformant source (they touch disjoint call sites, but ordering
-          // is kept deterministic rather than incidental).
-          {
-            const serverFilePath = path.join(outputDir, "src", "index.ts");
-            const serverSource = await readFile(serverFilePath, "utf-8");
-            let hardened: string;
-            try {
-              hardened = applySecurityHardening(serverSource);
-            } catch (err) {
-              if (err instanceof SecurityPatchError) {
-                fail(
-                  `${err.message}\n   The server was generated successfully but is NOT security-hardened (annotations/rate-limiting/output sanitization) — see ARCHITECTURE.md section 30.`,
-                  "apply-security"
-                );
-                return;
-              }
-              throw err;
-            }
-            await writeFile(serverFilePath, hardened, "utf-8");
-            await writeFile(path.join(outputDir, "src", "security-helpers.ts"), getSecurityHelpersFileContent(), "utf-8");
-            step(`✅ Applied security hardening (tool annotations/title, rate limiting, output sanitization)`);
-          }
+          const project = emitServerProject({
+            serverName,
+            tools,
+            baseUrl,
+            architecture,
+            transport: transport === "streamable-http" ? "streamable-http" : "stdio",
+            port: transport === "streamable-http" ? port : undefined,
+            wiring,
+            extraFiles,
+            extraDependencies,
+            description: opts.serverDescription,
+            registryName: opts.registryName,
+            docker: opts.docker,
+            auth: authConfig,
+          });
 
-          // Apply branding metadata (ARCHITECTURE.md section 31) — OPT-IN,
-          // unlike conformance/security above: only touches source when the
-          // user actually passed --icon/--website/--server-description,
-          // since there's no "wrong until fixed" default here, just an
-          // optional cosmetic addition.
-          const brandingRequested = opts.icon.length > 0 || Boolean(opts.website) || Boolean(opts.serverDescription);
-          if (brandingRequested) {
-            const icons: Icon[] = opts.icon.map((raw) => {
-              const [src, theme] = raw.split("|");
-              const icon: Icon = { src };
-              const mimeType = inferIconMimeType(src);
-              if (mimeType) icon.mimeType = mimeType;
-              if (theme === "light" || theme === "dark") icon.theme = theme;
-              else if (theme) {
-                warn(`⚠️  Ignoring unrecognized icon theme "${theme}" for "${src}" — expected "light" or "dark".`);
-              }
-              return icon;
-            });
-
-            const serverFilePath = path.join(outputDir, "src", "index.ts");
-            const serverSource = await readFile(serverFilePath, "utf-8");
-            let branded: string;
-            try {
-              branded = applyBranding(serverSource, {
-                icons: icons.length > 0 ? icons : undefined,
-                websiteUrl: opts.website,
-                description: opts.serverDescription,
-              });
-            } catch (err) {
-              if (err instanceof BrandingPatchError) {
-                fail(
-                  `${err.message}\n   The server was generated successfully but WITHOUT the requested branding metadata — see ARCHITECTURE.md section 31.`,
-                  "apply-branding"
-                );
-                return;
-              }
-              throw err;
-            }
-            await writeFile(serverFilePath, branded, "utf-8");
-            step(
-              `✅ Applied branding metadata (${[icons.length > 0 ? `${icons.length} icon(s)` : null, opts.website ? "website" : null, opts.serverDescription ? "description" : null].filter(Boolean).join(", ")})`
-            );
+          await mkdir(outputDir, { recursive: true });
+          for (const [rel, content] of Object.entries(project)) {
+            const full = path.join(outputDir, rel);
+            await mkdir(path.dirname(full), { recursive: true });
+            await writeFile(full, content, "utf-8");
           }
 
           // Write LICENSE + package.json's `license` field (ARCHITECTURE.md
-          // section 27). Done unconditionally (default "mit") rather than
-          // opt-in, because the absence of a license is itself the gap being
-          // closed — an MCP server silently generated with no license at all
-          // is a worse default than "assume MIT unless told otherwise",
-          // consistent with the "fail loudly, don't guess" principle applied
-          // here as "don't silently omit," not just "don't silently break."
+          // section 27). Done unconditionally (default "mit"); --license none warns.
           if (license !== "none") {
             const author = opts.author?.trim() || (await resolveGitAuthorName()) || "the project author";
             const licenseText = getLicenseText(license, author, new Date().getFullYear());
-            if (licenseText) {
-              await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
-            }
-            const packageJsonPath = path.join(outputDir, "package.json");
-            const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
-            packageJson.license = getPackageJsonLicenseField(license);
-            await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), "utf-8");
+            if (licenseText) await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
+            const pkgPath = path.join(outputDir, "package.json");
+            const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+            pkg.license = getPackageJsonLicenseField(license);
+            await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
             step(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
           } else {
             warn(
@@ -763,53 +554,17 @@ export function registerGenerateCommand(program: Command): void {
             );
           }
 
-          if (plugins.length > 0) {
-            const serverFilePath = path.join(outputDir, "src", "index.ts");
-            const serverSource = await readFile(serverFilePath, "utf-8");
+          const curationSuffix = hasCuration ? ` (curated from ${operations.length} total)` : "";
+          const transportSuffix = transport === "streamable-http" ? ` [streamable-http, port ${port}]` : "";
+          const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
+          const architectureSuffix = architecture === "code-mode" ? " [code-mode: execute_code + typed client, Deno-sandboxed]" : "";
+          const toolCountLabel = architecture === "code-mode" ? `1 tool (execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
+          step(`✅ Generated ${toolCountLabel}${curationSuffix} in ${outputDir}${transportSuffix} (@modelcontextprotocol/server, stateless, protocol 2025-11-25)${architectureSuffix}${pluginSuffix}`);
 
-            let instrumented: string;
-            try {
-              instrumented = instrumentGeneratedServer(serverSource, plugins);
-            } catch (err) {
-              if (err instanceof InstrumentationPatchError) {
-                fail(
-                  `${err.message}\n   The server was generated successfully but NOT instrumented — remove --plugin to use it as-is, or file an issue.`,
-                  "apply-instrumentation"
-                );
-                return;
-              }
-              throw err;
-            }
-            await writeFile(serverFilePath, instrumented, "utf-8");
-
-            let files: { path: string; content: string }[];
-            let dependencies: Record<string, string>;
-            try {
-              ({ files, dependencies } = getPluginProjectAdditions(plugins, pluginConfigs));
-            } catch (err) {
-              if (err instanceof InstrumentationPatchError) {
-                fail(err.message, "apply-instrumentation");
-                return;
-              }
-              throw err;
-            }
-            for (const file of files) {
-              const filePath = path.join(outputDir, file.path);
-              await mkdir(path.dirname(filePath), { recursive: true });
-              await writeFile(filePath, file.content, "utf-8");
-            }
-
-            const packageJsonPath = path.join(outputDir, "package.json");
-            const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
-            packageJson.dependencies = { ...packageJson.dependencies, ...dependencies };
-            await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), "utf-8");
-
-            step(`✅ Instrumented with: ${plugins.map((p) => p.id).join(", ")}`);
-          }
-
-          const startScript = transport === "stdio" ? "npm start" : transport === "web" ? "npm run start:web" : "npm run start:http";
-          const nextSteps = `cd ${opts.out} && npm install && npm run build && ${startScript}`;
-
+          const nextSteps =
+            architecture === "code-mode"
+              ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && npm start`
+              : `cd ${opts.out} && npm install && npm run build && npm start`;
           if (jsonMode) {
             const result: GenerateJsonResult = {
               success: true,
@@ -817,12 +572,10 @@ export function registerGenerateCommand(program: Command): void {
               toolCount: tools.length,
               curatedFromTotal: hasCuration ? operations.length : null,
               transport,
-              port: transport !== "stdio" ? port : null,
+              port: transport === "streamable-http" ? port : null,
+              architecture,
               license: license !== "none" ? getPackageJsonLicenseField(license) : null,
               plugins: plugins.map((p) => p.id),
-              branding: brandingRequested
-                ? { icons: opts.icon.length, website: Boolean(opts.website), description: Boolean(opts.serverDescription) }
-                : null,
               nextSteps,
               warnings,
             };

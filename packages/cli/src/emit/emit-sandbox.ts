@@ -146,8 +146,19 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
  * Emits the `execute_code` MCP tool registration block, matching the same
  * `server.registerTool(...)` shape emit-tool.ts already uses for 1:1 tools
  * — SDK code mode replaces N per-operation tool blocks with exactly this one.
+ *
+ * `wrap`, when provided (MCPFO-32), applies a plugin's tool-handler wrap
+ * function exactly the way emit-tool.ts's `emitToolBlock` already does for
+ * the "tools" architecture — see this file's header comment and
+ * ARCHITECTURE.md section 48 for the honest scope of what this instruments
+ * (execute_code invocation-level: was it called, how long, did it error —
+ * NOT per-individual-API-call granularity inside the sandboxed script,
+ * which runs in an isolated Deno subprocess with no access to the parent
+ * process's OTel/PostHog SDK instances).
  */
-export function emitExecuteCodeToolBlock(apiHost: string): string {
+export function emitExecuteCodeToolBlock(apiHost: string, wrap?: { fn: string }): string {
+  const handlerOpen = wrap ? `${wrap.fn}("execute_code", async (args) => {` : `async (args) => {`;
+  const handlerClose = wrap ? `    })` : `    }`;
   return `  server.registerTool(
     "execute_code",
     {
@@ -159,11 +170,11 @@ export function emitExecuteCodeToolBlock(apiHost: string): string {
       inputSchema: z.object({ code: z.string().describe("TypeScript module body. Import functions from \\"./client.js\\" and console.log(...) the result.") }),
       annotations: { title: "Execute Code", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async (args) => {
+    ${handlerOpen}
       const { runInSandbox } = await import("./sandbox-runner.js");
       const result = await runInSandbox((args as { code: string }).code, ${JSON.stringify(apiHost)});
       const text = result.stdout + (result.stderr ? \`\\nstderr:\\n\${result.stderr}\` : "");
       return { content: [{ type: "text" as const, text: text || "(no output)" }], isError: !result.ok };
-    },
+${handlerClose},
   );`;
 }

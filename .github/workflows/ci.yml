@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: "Build + test (real E2E: npm install/build/run a generated server)"
         run: npm test
 

@@ -47,7 +47,7 @@ function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
 
 test(
   "generate: tool annotations/title derived from HTTP method, and output is sanitized",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-annotations-"));
     try {
@@ -78,7 +78,7 @@ test(
       assert.match(helpersSource, /export function checkRateLimit/);
       assert.match(helpersSource, /export function sanitizeToolOutput/);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 
@@ -130,7 +130,7 @@ test(
 
 test(
   "generate: rate limiting rejects calls beyond KLARIDIAN_RATE_LIMIT_PER_MINUTE with isError: true",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-ratelimit-"));
     try {
@@ -150,7 +150,7 @@ test(
         "--license",
         "none",
       ]);
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
 
       const serverProcess = spawn("node", ["build/index.js"], {
@@ -201,7 +201,7 @@ test(
 
 test(
   "generate: KLARIDIAN_RATE_LIMIT_PER_MINUTE=0 disables rate limiting entirely",
-  { timeout: 300_000 },
+  { timeout: 120_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-security-ratelimit-disabled-"));
     try {
@@ -221,7 +221,7 @@ test(
         "--license",
         "none",
       ]);
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 60_000 });
       await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
 
       const serverProcess = spawn("node", ["build/index.js"], {

@@ -5,6 +5,10 @@
 // rather than also hosting general-purpose utilities. None of these close
 // over command state — each is independently testable/reusable.
 
+import path from "node:path";
+import os from "node:os";
+import { mkdtemp, writeFile } from "node:fs/promises";
+
 /** Parses `--plugin-config otel.serviceName=foo` style flags into a nested map. */
 export function parsePluginConfigFlags(flags: string[]): Record<string, Record<string, string>> {
   const result: Record<string, Record<string, string>> = {};
@@ -79,4 +83,21 @@ export async function directoryExistsAndIsNonEmpty(dir: string): Promise<{ exist
   }
   const entries = await readdir(dir);
   return { exists: true, isDirectory: true, nonEmpty: entries.length > 0 };
+}
+
+/**
+ * Writes a parsed spec document to a fresh temp file as JSON and returns its
+ * path — the shared integration seam both the Swagger 2.0 pre-conversion
+ * step and tool curation use to hand a modified in-memory document back to
+ * getToolsFromOpenApi()/listOperations(), which only accept a file path, not
+ * a parsed document (MCPFO-27, ARCHITECTURE.md section 24). The caller is
+ * responsible for tracking the returned temp dir (pushed onto its own
+ * cleanup list) and removing it once generation finishes — this helper only
+ * creates it, it doesn't own its lifecycle.
+ */
+export async function writeTempSpec(doc: unknown, dirPrefix: string): Promise<{ dir: string; specPath: string }> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), dirPrefix));
+  const specPath = path.join(dir, "spec.json");
+  await writeFile(specPath, JSON.stringify(doc), "utf-8");
+  return { dir, specPath };
 }

@@ -229,6 +229,32 @@ Curated run: `klaridian generate --include-paths /v1/customers,/v1/payment_inten
 
 **Execution complete (Sep 3, 2026, commit 2865fe0):** GitHub repo renamed `ricardocvasconcelos/mcpforge` → `ricardocvasconcelos/klaridian` (old URL auto-redirects); `package.json` workspace name, `packages/cli` package (`@klaridian/cli`) and CLI binary (`klaridian`); Python middleware package (`klaridian-posthog-middleware` / module `klaridian_posthog_middleware`); all `MCPFORGE_*` env vars renamed to `KLARIDIAN_*`; every text reference across README/ARCHITECTURE/CLAUDE/CONTRIBUTING/SECURITY/devcontainer/docs/tests/source updated. Validated end to end before push (clean build, full 99-test CLI suite, 3-test Python suite, both green under the pre-push hook). MCPFO-13 closed in Plane. Still open, separately: registering the actual `klaridian.com`/`.dev` domain, and publishing the renamed packages to npm/PyPI.
 
+## 14. Roadmap review against the market (Sep 4, 2026)
+
+A deliberate strategy step back — read the full current project state (repo + all ARCHITECTURE/PLAN sections) and cross-referenced it against two fresh source-cited market scans commissioned for this review (`docs/research/2026-09-03-competitive-landscape.md` and `docs/research/2026-09-03-mcp-ecosystem-direction.md`). Both were verified against primary sources before acting on them; one material error was caught and is recorded below so it doesn't propagate.
+
+**Factual correction to the research (verified, not taken on the subagent's word):** the ecosystem-direction report claimed `@modelcontextprotocol/server` 2.0.0 ships full `2026-07-28` conformance. This is **false** — confirmed directly against the npm registry (`latest` is still `2.0.0`, published 2026-07-27, no newer stable) and against this repo's own spike 021c (ARCHITECTURE.md section 38), which drove the real v2 server over HTTP and proved it negotiates **down to `2025-11-25`** (`server/discover` → `-32601`). The honest post-migration claim stays "stateless, SDK-v2, protocol `2025-11-25`, HTTP-safe", exactly as section 38 recorded. The `canary-sdk-era.test.ts` pin is the correct defense; a future SDK bump lands `2026-07-28` for free with no generator change (§37 Decision 1).
+
+**The four market signals that drove the reprioritization:**
+
+1. **Code-mode / search+execute has won the design argument for large APIs.** Stainless *deleted* per-endpoint tool schemes entirely (2 tools: docs-search + execute-in-Deno-sandbox); Cloudflare Code Mode collapses its whole API to 2 tools (99.9% token cut); Anthropic ships Tool Search + Programmatic Tool Calling; OpenAI ships `defer_loading`; the spec roadmap names progressive discovery. This corroborates, from the market side, what this project's own three-vendor dogfooding already found independently (ARCHITECTURE.md section 35: Stripe/Twilio/Slack all collapse 1:1 surfaces into meta-tools). Critically, **no tool today emits a standalone search+execute MCP server from an OpenAPI spec** — a real, unclaimed gap that sits exactly in klaridian's category.
+
+2. **Hosted-MCP economics are visibly failing.** Smithery killed free hosting (Mar 2026); Stainless deprecated hosted servers. This *validates* klaridian's standalone-artifact model (Phase 0) and *warns against* a naive Phase 1 hosted dashboard. Separately, **AgentCat (ex-MCPcat, funded)** already occupies the generic "MCP-server analytics" slot Phase 1 was implicitly aiming at.
+
+3. **The PostHog product-observability plugin is no longer a differentiator.** PostHog shipped first-party `@posthog/mcp` (v0.13.0, published 2026-09-03, SDK v1+v2-aware). The "PostHog middleware for MCP" value klaridian shipped now exists first-party — klaridian's plugin must become a *thin generation-time wiring* of the first-party SDK, not a capture layer klaridian maintains.
+
+4. **The distribution window is open but closing (~6–12 months).** The incumbent OSS generator (harsha-iiiv/openapi-mcp-generator, v4.0.1) is still on SDK v1 with no observability, no registry emission, no interactive curation — the exact gaps klaridian fills today. That lead is real but closable by one motivated maintainer, so npm publish + domain + Registry submission stop being "low" and become time-sensitive.
+
+**Backlog changes applied from this review (all in Plane, project MCPFO):**
+- **MCPFO-26 (code-mode/search+execute) promoted `medium` → `urgent`, moved to Todo** — repositioned as the primary differentiation bet, not a post-v1 nice-to-have. Still needs a dedicated design session first (new server *architecture* + sandboxing story, not a filter) before any build.
+- **MCPFO-27 created (`high`, Todo): Swagger 2.0 input support via `swagger2openapi` pre-conversion** — the fix validated end-to-end in ARCHITECTURE.md section 36 (0/174 empty schemas on the real Slack spec, zero pipeline changes) but never implemented or tracked until now.
+- **MCPFO-14 (npm publish) and MCPFO-15 (launch channel) promoted `low` → `high`** — distribution is now time-sensitive against the closing incumbent-gap window.
+- **MCPFO-17 (deepen product observability) and MCPFO-18 (generator-agnostic `instrument` command) demoted to `low`** — both undercut by PostHog's first-party instrumentation and gateway-native tracing; the defensible slice is generation-time wiring of an owned artifact, not a capture layer or third-party retrofit.
+- **MCPFO-19 (hosted fleet layer) stays gated, angle sharpened** — annotated with AgentCat + the failing hosting economics; the only defensible framing is a correlation/control plane over a *fleet of klaridian-generated servers* (config-as-code, which no generic analytics tool can see), never a generic hosted dashboard.
+- **MCPFO-22 (OAuth 2.1 resource-server) confirmed already Done** (implemented commit `f94c7f7`, ARCHITECTURE.md section 39) — no action, recorded here to close the loop since an earlier session note had it as possibly still open.
+
+**Unchanged and reaffirmed by this review:** the standalone-generator model (protocol from the official SDK, tool surface generated — §37 Decision 1), the vendored-instrumentation-source rule (§7, §37 Decision 2), and the trust/auditability positioning for the API-owner target user. Nothing in the market scan contradicts these; the code-mode gap and the distribution timing are the substantive changes.
+
 
 
 

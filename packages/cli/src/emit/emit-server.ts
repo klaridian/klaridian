@@ -44,7 +44,7 @@ export interface EmitOptions {
    */
   architecture?: Architecture;
   /** Optional plugin wiring: an import line + a wrap function name applied per tool. */
-  wiring?: { importStatement: string; wrapFunctionName: string };
+  wiring?: PluginWiring;
   /** Extra vendored files (path -> content), e.g. a plugin's instrumentation source. */
   extraFiles?: Record<string, string>;
   /** Extra npm dependencies for the generated project (e.g. a plugin's SDKs). */
@@ -57,10 +57,16 @@ export interface EmitOptions {
   /** Emit a Dockerfile + .dockerignore (MCPFO-12). streamable-http only. */
   docker?: boolean;
   /** OAuth 2.1 Resource Server config (MCPFO-22). streamable-http only. */
-  auth?: { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] };
+  auth?: OAuthConfig;
 }
 
 export type EmittedProject = Record<string, string>;
+
+/** Import statement + wrap function name a plugin exposes for per-tool instrumentation (ObservabilityPlugin.getServerWiring()'s return shape). */
+export type PluginWiring = { importStatement: string; wrapFunctionName: string };
+
+/** OAuth 2.1 Resource Server config resolved from --oauth-* flags (MCPFO-22). */
+export type OAuthConfig = { issuer: string; jwksUri: string; audience: string; requiredScopes?: string[] };
 
 /**
  * MCPFO-20 — returns a human-readable warning if the generated server would have

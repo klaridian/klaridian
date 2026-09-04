@@ -90,3 +90,15 @@ test("architecture: tools (default/omitted) is unaffected — no client.ts/sandb
   assert.equal(files["src/client.ts"], undefined);
   assert.equal(files["src/sandbox-runner.ts"], undefined);
 });
+
+// MCPFO-32 — plugin wiring applies to execute_code's own invocation.
+test("architecture: code-mode + plugin wiring wraps the execute_code handler", () => {
+  const files = emitServerProject({
+    serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://api.example.com",
+    architecture: "code-mode",
+    wiring: { importStatement: `import { wrapTool } from "./instrumentation/otel.js";`, wrapFunctionName: "wrapTool" },
+  });
+  const index = files["src/index.ts"];
+  assert.match(index, /import \{ wrapTool \} from "\.\/instrumentation\/otel\.js";/);
+  assert.match(index, /wrapTool\("execute_code", async \(args\) => \{/);
+});

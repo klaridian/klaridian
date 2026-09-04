@@ -413,17 +413,6 @@ export function registerGenerateCommand(program: Command): void {
             plugins.push(plugin);
             pluginConfigs.set(plugin.id, resolvePluginConfig(plugin, allConfig[plugin.id] ?? {}));
           }
-          // MCPFO-32 (not yet built): code-mode's single execute_code call
-          // site has no per-tool wrap point for a plugin to hook into yet —
-          // reject the combination loudly instead of silently generating an
-          // uninstrumented server despite --plugin being passed.
-          if (architecture === "code-mode" && plugins.length > 0) {
-            fail(
-              `--architecture code-mode does not yet support --plugin (MCPFO-32, not implemented) — the collapsed execute_code call site has no per-operation instrumentation point yet. Remove --plugin, or use --architecture tools.`,
-              "validate-architecture"
-            );
-            return;
-          }
 
           // --interactive + non-TTY detection (ARCHITECTURE.md section 32):
           // found during a direct CLI-UX audit that `echo "" | klaridian

@@ -304,3 +304,91 @@ test(
     }
   }
 );
+
+// MCPFO-32 — a plugin (otel) wired into code-mode wraps execute_code's own
+// invocation. Real end-to-end proof that: (1) the plugin's vendored
+// instrumentation file (which starts an OTel NodeSDK) doesn't corrupt the
+// stdio JSON-RPC transport (the exact class of bug spikes/001-otel-mechanic
+// found and fixed for the "tools" architecture — this proves the same
+// invariant holds for code-mode); (2) execute_code still actually works
+// (calls the real API through the real sandbox) with the plugin attached.
+test(
+  "code-mode generated server: a plugin (otel) wired in wraps execute_code without corrupting the stdio transport",
+  { timeout: 300_000 },
+  async () => {
+    if (!(await isDenoAvailable())) {
+      console.log("SKIP: deno not on PATH (install with `brew install deno`)");
+      return;
+    }
+    const mock = await startMockApi();
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
+    try {
+      const { otelPlugin } = await import("../src/plugins/otel/otel.plugin.js");
+      const { getPluginProjectAdditions } = await import("../src/render/instrument.js");
+      const { resolvePluginConfig } = await import("../src/plugins/plugin.interface.js");
+
+      const config = resolvePluginConfig(otelPlugin, {
+        otlpEndpoint: "http://127.0.0.1:1/v1/traces", // deliberately unreachable — proves the server doesn't crash or block waiting on a real collector
+        serviceName: "petstore-codemode-e2e",
+      });
+      const configs = new Map([[otelPlugin.id, config]]);
+      const additions = getPluginProjectAdditions([otelPlugin], configs);
+      const wiring = otelPlugin.getServerWiring();
+
+      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const files = emitServerProject({
+        serverName: "petstore-codemode-e2e",
+        tools,
+        baseUrl: mock.baseUrl,
+        architecture: "code-mode",
+        transport: "stdio",
+        wiring,
+        extraFiles: Object.fromEntries(additions.files.map((f) => [f.path, f.content])),
+        extraDependencies: additions.dependencies,
+      });
+      // Sanity-check the static wiring before paying for a real E2E run.
+      assert.match(files["src/index.ts"], /wrapTool\("execute_code", async \(args\) => \{/);
+      assert.ok(files["src/instrumentation/otel.ts"], "vendored otel.ts included in output");
+
+      for (const [rel, content] of Object.entries(files)) {
+        const full = path.join(outDir, rel);
+        await mkdir(path.dirname(full), { recursive: true });
+        await writeFile(full, content, "utf-8");
+      }
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outDir, timeout: 180_000 });
+      await execFileAsync("npm", ["run", "build"], { cwd: outDir, timeout: 120_000 });
+
+      const proc = spawn("node", ["dist/index.js"], {
+        cwd: outDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, KLARIDIAN_BASE_URL: mock.baseUrl },
+      });
+      try {
+        sendJsonRpc(proc, { jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });
+        const initResp = await readOneJsonRpcLine(proc);
+        assert.ok(initResp.result, "initialize still works with otel instrumentation attached");
+
+        const modelCode = `
+import { getPetById } from "./client.js";
+const result = await getPetById({ petId: 99 });
+console.log(JSON.stringify(result));
+`;
+        sendJsonRpc(proc, {
+          jsonrpc: "2.0", id: 2, method: "tools/call",
+          params: { name: "execute_code", arguments: { code: modelCode } },
+        });
+        const callResp = await readOneJsonRpcLine(proc, 30000);
+        assert.ok(callResp.result, `execute_code should still work with the plugin attached, got: ${JSON.stringify(callResp)}`);
+        assert.equal(callResp.result.isError, false);
+        const parsed = JSON.parse(callResp.result.content[0].text.trim());
+        assert.equal(parsed.data.id, 99, "execute_code still really calls the real API with the plugin wrapping it");
+      } finally {
+        proc.kill("SIGKILL");
+      }
+    } finally {
+      await mock.close();
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }
+);

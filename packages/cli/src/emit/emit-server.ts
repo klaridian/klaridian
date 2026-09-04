@@ -38,10 +38,9 @@ export interface EmitOptions {
    * Deno subprocess (MCPFO-29/30) — for large APIs where the industry has
    * converged on code execution over per-endpoint tool proliferation.
    * code-mode requires an absolute `baseUrl` (the sandbox's --allow-net
-   * scoping needs a concrete host) and does not currently support plugin
-   * wiring (`wiring`/`extraFiles`/`extraDependencies` below still apply to
-   * project-level additions, but there is no per-tool wrap call site for a
-   * plugin to hook — see MCPFO-32, tracked separately, not blocking this).
+   * scoping needs a concrete host). Plugin wiring (MCPFO-32) applies to
+   * execute_code's own invocation only — see ARCHITECTURE.md section 48 for
+   * the honest scope of what that observes vs. doesn't.
    */
   architecture?: Architecture;
   /** Optional plugin wiring: an import line + a wrap function name applied per tool. */
@@ -97,7 +96,7 @@ function emitIndex(opts: EmitOptions): string {
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;
   const toolBlocks =
     architecture === "code-mode"
-      ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl)), emitSearchDocsToolBlock()].join("\n\n")
+      ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl), wrap), emitSearchDocsToolBlock()].join("\n\n")
       : opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
 
   const baseImports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];

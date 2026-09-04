@@ -71,3 +71,16 @@ test("emitExecuteCodeToolBlock registers a single execute_code tool naming the s
   assert.match(block, /runInSandbox/);
   assert.match(block, /openWorldHint: true/);
 });
+
+// MCPFO-32 — plugin wrapping of the execute_code call site.
+test("emitExecuteCodeToolBlock without a wrap emits a plain async handler", () => {
+  const block = emitExecuteCodeToolBlock("api.example.com");
+  assert.match(block, /async \(args\) => \{/);
+  assert.doesNotMatch(block, /wrapTool\(/);
+});
+
+test("emitExecuteCodeToolBlock with a wrap applies it to the execute_code handler, same shape as emit-tool.ts", () => {
+  const block = emitExecuteCodeToolBlock("api.example.com", { fn: "wrapTool" });
+  assert.match(block, /wrapTool\("execute_code", async \(args\) => \{/);
+  assert.match(block, /\}\)\)?,\s*\n\s*\);/s);
+});

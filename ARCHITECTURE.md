@@ -953,5 +953,32 @@ Following a repo audit, checked whether ARCHITECTURE.md's append-only narrative 
 
 **Decision:** no further structural change needed beyond this. Considered and rejected: migrating away from the append-only ARCHITECTURE.md log entirely in favor of pitfalls-only — rejected because the *reasoning* behind a decision (what was tried, why it was wrong, what the alternatives were) is exactly what a numbered append-only log preserves and a bullet list can't; the two serve different purposes and both are needed.
 
+## 43. Code-mode / search+execute design decision: SDK code mode with a Deno subprocess sandbox (Sep 4, 2026)
 
+MCPFO-26 explicitly required a dedicated design session before any build — this section is that session's output. Question: what should klaridian's code-mode/search+execute output actually look like, given that no tool today generates a standalone one from an OpenAPI spec (PLAN.md section 14, market signal 1)?
 
+**Evidence reviewed:** Stainless published head-to-head evals (Mar 2026, Claude Opus 4.6, 31 real test cases against the Increase banking API — github.com/stainless-api/mcp-evals-harness) comparing four architectures:
+
+| Architecture | Completeness | Efficiency | Factuality | Avg duration |
+|---|---|---|---|---|
+| **SDK code mode (Stainless)** | 98% | 95% | 53% | 48.5s |
+| Anthropic Code Mode (`tool_search` + programmatic tool calling betas) | 94% | 82% | 46% | 68.7s |
+| Cloudflare Code Mode (V8 isolates / Worker Loader) | 90% | 95% | 43% | 55.9s |
+| "Dynamic" meta-tools (`list_api_endpoints`/`get_api_endpoint_schema`/`invoke_api_endpoint`) | 70% | 86% | 33% | 65.1s |
+
+SDK code mode won on every axis, and the gap wasn't cosmetic: on transaction-aggregation tasks, Cloudflare and Dynamic returned **confidently wrong totals** (e.g. reporting $98,306.02 when the correct answer was $140,580.12, with no signal the result was incomplete) while SDK code mode got 100% completeness across all 19 transaction-heavy cases. A typed SDK with API-specific error messages, doc strings, and compile-time type checking gives the model much higher-fidelity feedback to converge on correct code than an untyped `execute(code)` string.
+
+**Why the other two architectures don't fit klaridian's model even ignoring the eval gap:**
+- **Cloudflare Code Mode** requires Cloudflare's own infrastructure (Dynamic Workers / V8 isolates via `workerd`) — not something a standalone local generator can emit; it's a hosted-platform feature, not a code-generation pattern.
+- **Anthropic Code Mode** depends on client-side Claude API betas (`tool_search`, programmatic tool calling) that the *client*, not the *server*, must opt into — outside a generated MCP server's control entirely.
+- **SDK code mode is the only one of the three that is purely a code-generation artifact** — a typed client + a sandboxed subprocess, both fully owned and vendored by the generated output. This is the only shape compatible with Decision 1 (standalone generator, no hosted dependency) and Decision 2 (vendored-source-in-output, section 7).
+
+**Decision: klaridian will generate SDK code mode servers, following Stainless's proven shape, with Deno as the sandbox runtime.**
+
+Concrete architecture:
+1. **Typed client generation** — reuse `openapi-mcp-generator`'s existing type-generation path (it already produces per-operation typed functions today for the 1:1 tool mode) rather than hand-rolling a second OpenAPI→TS mapper; the code-mode output's typed client is the same generated types, restructured as an importable module instead of one MCP tool per function.
+2. **Two MCP tools exposed**, matching the Stainless/industry-converged shape: `execute_code` (runs model-written TypeScript against the generated client) and `search_docs` (returns per-operation documentation generated from the OpenAPI spec's descriptions/examples, so the model can look up how to call something before writing code — this is what let Stainless's model self-correct in 4 turns instead of guessing).
+3. **Sandbox: a Deno subprocess, not `isolated-vm`.** Chosen over embedding V8 directly in Node (`isolated-vm`) because: (a) it's the exact mechanism the eval-winning Stainless architecture uses (their own docs: `npm install deno`, run generated code as a subprocess with explicit `--allow-*` flags); (b) Deno's permission model (`--allow-net=<api-host-only>`, no `--allow-read`/`--allow-write`/`--allow-env` by default) gives real OS-process-level isolation out of the box, not something klaridian has to build and audit itself; (c) `isolated-vm` sandboxes JS execution but not network/fs access the same way — the model-written code still runs in the same Node process address space, and would need klaridian to hand-build the equivalent of Deno's permission boundary. Trade-off accepted: Deno becomes a new external runtime dependency of every code-mode-generated server (not vendored source, can't be — it's a separate binary), which is a real deviation from the vendored-source rule (section 7) for the sandbox *runtime* itself, though the code that runs inside it (the generated client + the instrumentation/curation logic) stays vendored as usual. This is the same trade-off Stainless already made and shipped; documented here so it isn't relitigated as an oversight later.
+4. **Orthogonal to existing curation (MCPFO-8/9), not superseding it** — curation (tag/path/method filtering) still decides which operations exist in the generated typed client; code-mode changes how the model *calls* whatever operations survive curation, not which ones survive. Both flags remain independently useful: curation for API owners who want a smaller trusted surface at all, code-mode for whoever's left needing an efficient way to call a large surface.
+
+**Explicitly not decided here (follow-up scope, tracked as sub-tasks under MCPFO-26 in Plane):** the CLI flag shape (`--architecture code-mode` vs. a separate `klaridian generate-sdk` subcommand?), whether code-mode and 1:1-tool-per-operation are mutually exclusive per generation or can coexist in one output, how `search_docs` content gets built from OpenAPI descriptions that are often sparse/missing (a real, unsolved data-quality problem visible in the Increase eval writeup), and how the observability plugins (`otel`/`posthog`) wire into a single `execute_code` call site instead of one call site per tool. Each needs its own scoped implementation task before code is written.

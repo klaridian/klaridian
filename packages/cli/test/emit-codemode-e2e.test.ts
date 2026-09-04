@@ -113,8 +113,9 @@ test(
 
         sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
         const listResp = await readOneJsonRpcLine(proc);
-        assert.equal(listResp.result.tools.length, 1, "exactly one tool registered (execute_code), not one per operation");
-        assert.equal(listResp.result.tools[0].name, "execute_code");
+        assert.equal(listResp.result.tools.length, 2, "exactly two tools registered (execute_code + search_docs), not one per operation");
+        const toolNames = listResp.result.tools.map((t: { name: string }) => t.name).sort();
+        assert.deepEqual(toolNames, ["execute_code", "search_docs"]);
       } finally {
         proc.kill("SIGKILL");
       }
@@ -179,6 +180,67 @@ console.log(JSON.stringify(result));
         const parsed = JSON.parse(text.trim());
         assert.equal(parsed.status, 200);
         assert.equal(parsed.data.id, 42, "the sandboxed code really called the real API and got the real petId back");
+      } finally {
+        proc.kill("SIGKILL");
+      }
+    } finally {
+      await mock.close();
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "code-mode generated server: search_docs really finds the getPetById function and its docs over JSON-RPC",
+  { timeout: 300_000 },
+  async () => {
+    const mock = await startMockApi();
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
+    try {
+      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const files = emitServerProject({
+        serverName: "petstore-codemode-e2e",
+        tools,
+        baseUrl: mock.baseUrl,
+        architecture: "code-mode",
+        transport: "stdio",
+      });
+      for (const [rel, content] of Object.entries(files)) {
+        const full = path.join(outDir, rel);
+        await mkdir(path.dirname(full), { recursive: true });
+        await writeFile(full, content, "utf-8");
+      }
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outDir, timeout: 180_000 });
+      await execFileAsync("npm", ["run", "build"], { cwd: outDir, timeout: 120_000 });
+
+      const proc = spawn("node", ["dist/index.js"], { cwd: outDir, stdio: ["pipe", "pipe", "pipe"] });
+      try {
+        sendJsonRpc(proc, { jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });
+        await readOneJsonRpcLine(proc);
+
+        sendJsonRpc(proc, {
+          jsonrpc: "2.0", id: 2, method: "tools/call",
+          params: { name: "search_docs", arguments: { query: "getPetById" } },
+        });
+        const callResp = await readOneJsonRpcLine(proc);
+        assert.ok(callResp.result, `search_docs should return a result, got: ${JSON.stringify(callResp)}`);
+        assert.equal(callResp.result.isError, false);
+        const text = callResp.result.content[0].text;
+        assert.match(text, /getPetById/, "search_docs found the matching function by name");
+        assert.match(text, /GET \/pet\/\{petId\}/, "search_docs surfaces the real method/path");
+
+        // An empty query should list every operation, not error or return nothing.
+        sendJsonRpc(proc, {
+          jsonrpc: "2.0", id: 3, method: "tools/call",
+          params: { name: "search_docs", arguments: {} },
+        });
+        const allResp = await readOneJsonRpcLine(proc);
+        assert.equal(allResp.result.isError, false);
+        const allText = allResp.result.content[0].text;
+        for (const opName of ["getPetById", "addPet", "deletePet"]) {
+          assert.match(allText, new RegExp(opName), `empty-query search_docs lists ${opName} among all operations`);
+        }
       } finally {
         proc.kill("SIGKILL");
       }

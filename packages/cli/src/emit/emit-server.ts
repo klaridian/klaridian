@@ -15,8 +15,9 @@
 
 import type { McpToolDefinition } from "openapi-mcp-generator";
 import { emitToolBlock } from "./emit-tool.js";
-import { emitClientModule } from "./emit-client.js";
+import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames } from "./emit-client.js";
 import { emitSandboxRunner, emitExecuteCodeToolBlock, extractApiHost } from "./emit-sandbox.js";
+import { buildOperationDocs, emitDocsDataModule, emitSearchDocsToolBlock } from "./emit-docs.js";
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
 import { emitDockerfile, emitDockerignore } from "./emit-dockerfile.js";
 import { emitAuthModule } from "../render/auth.js";
@@ -96,7 +97,7 @@ function emitIndex(opts: EmitOptions): string {
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;
   const toolBlocks =
     architecture === "code-mode"
-      ? emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl))
+      ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl)), emitSearchDocsToolBlock()].join("\n\n")
       : opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
 
   const baseImports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];
@@ -187,6 +188,12 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
     // (not npm dependencies) per the project's vendored-source rule (section 7).
     files["src/client.ts"] = emitClientModule(opts.tools);
     files["src/sandbox-runner.ts"] = emitSandboxRunner();
+    // MCPFO-31: search_docs's static data, computed once at generation time
+    // from the exact same function names emit-client.ts generated for
+    // these tools (same sanitize/dedupe logic, same order) — so search_docs
+    // always points at real, importable function names.
+    const functionNames = dedupeFunctionNames(opts.tools.map((t) => sanitizeFunctionName(t.operationId || t.name)));
+    files["src/docs-data.ts"] = emitDocsDataModule(buildOperationDocs(opts.tools, functionNames));
   }
   if (opts.auth) {
     files["src/auth.ts"] = emitAuthModule(opts.auth);

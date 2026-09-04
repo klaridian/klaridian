@@ -39,7 +39,7 @@ function generateInstrumentationFile(config: ResolvedPluginConfig): string {
 // ARCHITECTURE.md section 26) — never writes to stdout unless a caller
 // explicitly raises the log level, which this file does not do. Safe
 // alongside stdio MCP transport for the same reason the OTel/PostHog
-// plugins are (see spike/FINDINGS.md for why that distinction matters).
+// plugins are (see spikes/001-otel-mechanic/FINDINGS.md for why that distinction matters).
 
 import { init, track, flush } from "@amplitude/analytics-node";
 
@@ -60,7 +60,7 @@ init(API_KEY, { serverZone: SERVER_ZONE });
 // Flush on exit — the SDK batches events internally (flushQueueSize/
 // flushIntervalMillis), so an unflushed batch is lost on process exit
 // otherwise (same class of bug as OTel's BatchSpanProcessor finding in
-// spike/FINDINGS.md, different SDK).
+// spikes/001-otel-mechanic/FINDINGS.md, different SDK).
 process.on("SIGINT", () => flush().promise.finally(() => process.exit(0)));
 process.on("SIGTERM", () => flush().promise.finally(() => process.exit(0)));
 

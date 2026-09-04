@@ -13,7 +13,7 @@
 // over-build" principle as the OTel plugin's OTLP-exporter-only choice).
 //
 // stdio-safety note (unlike the OTel plugin, this one has NO equivalent of
-// spike/FINDINGS.md's ConsoleSpanExporter finding to encode): posthog-node
+// spikes/001-otel-mechanic/FINDINGS.md's ConsoleSpanExporter finding to encode): posthog-node
 // only ever writes to console.error/console.warn internally (verified by
 // inspecting its published dist/ directly), which go to stderr in Node —
 // never stdout. So there's no exporter-choice landmine here the way there
@@ -44,7 +44,7 @@ function generateInstrumentationFile(config: ResolvedPluginConfig): string {
 // events internally and only ever logs to console.error/console.warn
 // (stderr) on its own — never stdout, so this is safe alongside stdio MCP
 // transport the same way the OTel plugin's OTLPTraceExporter is (see
-// spike/FINDINGS.md for why that distinction matters at all).
+// spikes/001-otel-mechanic/FINDINGS.md for why that distinction matters at all).
 
 import { PostHog } from "posthog-node";
 
@@ -64,7 +64,7 @@ const posthog = new PostHog(API_KEY, { host: API_HOST });
 
 // Flush on exit — posthog-node batches events internally, so an unflushed
 // batch is lost on process exit otherwise (same class of bug as OTel's
-// BatchSpanProcessor finding in spike/FINDINGS.md, different SDK).
+// BatchSpanProcessor finding in spikes/001-otel-mechanic/FINDINGS.md, different SDK).
 process.on("SIGINT", () => posthog.shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => posthog.shutdown().finally(() => process.exit(0)));
 

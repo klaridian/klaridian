@@ -15,12 +15,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 const SWAGGER2_SPEC_PATH = path.resolve(__dirname, "../../../../examples/swagger2-fixture/swagger.json");
 
 test(

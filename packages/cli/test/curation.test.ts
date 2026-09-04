@@ -10,8 +10,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { OpenAPIV3 } from "openapi-types";
@@ -22,10 +20,9 @@ import {
   CurationValidationError,
   type OperationSummary,
 } from "../src/curation/curation.js";
+import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
 
 const SAMPLE_OPERATIONS: OperationSummary[] = [

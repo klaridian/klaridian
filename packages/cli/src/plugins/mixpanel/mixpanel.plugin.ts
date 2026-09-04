@@ -28,7 +28,7 @@ function generateInstrumentationFile(_config: ResolvedPluginConfig): string {
 // directly — see ARCHITECTURE.md section 26) — it only reports errors via
 // callback, never writes to stdout on its own. Safe alongside stdio MCP
 // transport for the same reason the OTel/PostHog/Amplitude plugins are
-// (see spike/FINDINGS.md for why that distinction matters).
+// (see spikes/001-otel-mechanic/FINDINGS.md for why that distinction matters).
 
 import Mixpanel from "mixpanel";
 

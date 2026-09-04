@@ -22,8 +22,7 @@
 
 import type { Command } from "commander";
 import path from "node:path";
-import os from "node:os";
-import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions } from "../render/instrument.js";
 import { emitServerProject, resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
@@ -43,6 +42,7 @@ import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
   directoryExistsAndIsNonEmpty,
+  writeTempSpec,
   type GenerateJsonResult,
 } from "./generate-helpers.js";
 
@@ -416,9 +416,9 @@ export function registerGenerateCommand(program: Command): void {
               }
               throw err;
             }
-            tempSpecDirs.push(await mkdtemp(path.join(os.tmpdir(), "klaridian-converted-spec-")));
-            specPath = path.join(tempSpecDirs[tempSpecDirs.length - 1], "spec.json");
-            await writeFile(specPath, JSON.stringify(converted), "utf-8");
+            const { dir, specPath: convertedSpecPath } = await writeTempSpec(converted, "klaridian-converted-spec-");
+            tempSpecDirs.push(dir);
+            specPath = convertedSpecPath;
           }
 
           // Tool curation (ARCHITECTURE.md section 24): list operations
@@ -479,9 +479,9 @@ export function registerGenerateCommand(program: Command): void {
           if (hasCuration) {
             const doc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
             const curated = applyCurationToSpec(doc, curationChoice);
-            tempSpecDirs.push(await mkdtemp(path.join(os.tmpdir(), "klaridian-curated-spec-")));
-            generationSpecPath = path.join(tempSpecDirs[tempSpecDirs.length - 1], "spec.json");
-            await writeFile(generationSpecPath, JSON.stringify(curated), "utf-8");
+            const { dir, specPath: curatedSpecPath } = await writeTempSpec(curated, "klaridian-curated-spec-");
+            tempSpecDirs.push(dir);
+            generationSpecPath = curatedSpecPath;
           }
 
           // Quick pre-check with the same library's own tool extraction, so

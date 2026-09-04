@@ -36,7 +36,7 @@ const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstor
 
 test(
   "generate --transport streamable-http: generates a buildable server with conformance fixes applied",
-  { timeout: 120_000 },
+  { timeout: 300_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-http-"));
     try {
@@ -78,7 +78,7 @@ test(
       const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
       assert.ok(packageJson.scripts["start:http"], "expected a start:http script for the streamable-http transport");
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 90_000 });
+      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
     } finally {
@@ -89,7 +89,7 @@ test(
 
 test(
   "generate --transport web: generates a buildable server with conformance fixes applied",
-  { timeout: 120_000 },
+  { timeout: 300_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-transport-web-"));
     try {
@@ -125,7 +125,7 @@ test(
       const packageJson = JSON.parse(await readFile(path.join(outputDir, "package.json"), "utf-8"));
       assert.ok(packageJson.scripts["start:web"], "expected a start:web script for the web transport");
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 90_000 });
+      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
     } finally {

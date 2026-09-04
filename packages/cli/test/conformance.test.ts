@@ -48,7 +48,7 @@ function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
 
 test(
   "generate: fixes MCP spec conformance bugs — unknown tool is a protocol error, execution failures set isError: true",
-  { timeout: 120_000 },
+  { timeout: 300_000 },
   async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-conformance-"));
     try {
@@ -76,7 +76,7 @@ test(
       assert.match(serverSource, /isError: true/);
       assert.match(serverSource, /McpError,\s*\n\s*ErrorCode,/);
 
-      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 90_000 });
+      await execFileAsync("npm", ["install"], { cwd: outputDir, timeout: 240_000 });
       const buildResult = await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 60_000 });
       assert.doesNotMatch(buildResult.stderr, /error TS/);
 

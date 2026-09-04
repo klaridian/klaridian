@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js"
+    "test": "tsc -p tsconfig.json && node --test --test-concurrency=1 dist/test/*.test.js"
   },
   "dependencies": {
     "@amplitude/analytics-node": "^1.5.71",

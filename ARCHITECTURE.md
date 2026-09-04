@@ -943,5 +943,15 @@ A general repo-hygiene audit (git state, monorepo structure, unused files, dev c
 
 **Lesson for future timeout-shaped flakiness in this repo:** don't assume a timeout failure means "raise the timeout" or "reduce concurrency" — reproduce the exact failing command standalone first (as done here) before treating the symptom. A silently-hanging network call disguised as a timeout wastes far more debugging time than it should.
 
+## 42. `CLAUDE.md` → `AGENTS.md` + symlink, and a "Common pitfalls" section added (Sep 4, 2026)
+
+Following a repo audit, checked whether ARCHITECTURE.md's append-only narrative log (this file) was still the right home for operational lessons-learned, or whether 2026 agentic-development practice had moved to something better for a solo, AI-driven open-source project. Findings from research (multiple independent 2026 sources on AGENTS.md/CLAUDE.md conventions):
+
+- **AGENTS.md has become the emerging cross-tool standard** (Linux Foundation-maintained, natively read by Cursor/Copilot/Gemini CLI and others); Claude Code is the notable holdout, still reading `CLAUDE.md` specifically, with a symlink as the documented workaround. Since this repo may eventually see contributors on other tools (see CONTRIBUTING.md), moved the real file to `AGENTS.md` and made `CLAUDE.md` a symlink to it — one file, no drift between two near-identical copies.
+- **A short, curated "Common pitfalls" / "Lessons learned" section in the always-loaded agent file is validated practice** (seen directly in `vercel/vercel`'s AGENTS.md "Common Pitfalls" and `vercel-labs/open-agents`'s "Lessons Learned") — distinct from, and complementary to, this file's role as the full narrative log. The narrative log (this file) stays exactly as it is: append-only, one section per real decision/finding, never rewritten. But an agent doesn't reliably rediscover a pitfall buried in section 18 or 41 unless it goes looking — a short imperative-voice list in the file that's *always* loaded (`AGENTS.md`/`CLAUDE.md`) is what actually prevents repeat mistakes. Each pitfall in that list links back here for the full story.
+- **Kept this file's role unchanged** — it remains the source of truth for *why*, including dead ends. The new pitfalls section in `AGENTS.md` is a distilled index into it, not a replacement.
+
+**Decision:** no further structural change needed beyond this. Considered and rejected: migrating away from the append-only ARCHITECTURE.md log entirely in favor of pitfalls-only — rejected because the *reasoning* behind a decision (what was tried, why it was wrong, what the alternatives were) is exactly what a numbered append-only log preserves and a bullet list can't; the two serve different purposes and both are needed.
+
 
 

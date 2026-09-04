@@ -255,6 +255,16 @@ A deliberate strategy step back — read the full current project state (repo + 
 
 **Unchanged and reaffirmed by this review:** the standalone-generator model (protocol from the official SDK, tool surface generated — §37 Decision 1), the vendored-instrumentation-source rule (§7, §37 Decision 2), and the trust/auditability positioning for the API-owner target user. Nothing in the market scan contradicts these; the code-mode gap and the distribution timing are the substantive changes.
 
+## 15. Parking lot: LLM-assisted `search_docs` synthesis for sparse OpenAPI specs (Sep 4, 2026)
+
+MCPFO-31 (code-mode's `search_docs` tool, ARCHITECTURE.md section 47) implemented a purely structural fallback (method/path/params/schema, no LLM) for operations whose OpenAPI spec provides no real description — per direct instruction, deliberately not the LLM-synthesis alternative. Recording the parked option here since it's a business/cost decision, not just a technical one (PLAN.md's own remit per AGENTS.md):
+
+- **What it would be:** at generation time, for operations with no/sparse spec description, call an LLM to write a plausible one from the operation's shape (method, path, params, schema, tags) instead of the current terse structural listing.
+- **Why it's not built:** consistent with section 10/ARCHITECTURE.md section 24's prior explicit rejection of LLM involvement at generation time for curation — same reasoning likely applies here (adds an API-key dependency to `klaridian generate` itself, which has otherwise been carefully free of that; adds real per-generation cost; adds a class of subtly-wrong-but-plausible-sounding output that's harder to spot than an honest "no description" gap).
+- **What would need deciding if revisited:** whether it's opt-in (a flag) or default; how synthesized text is visually distinguished from spec-authored text so a user/model can tell what klaridian invented vs. what the API owner actually wrote; whether cost is amortized via caching (same spec + same operation → same synthesized doc, computed once) or paid every generation; which model/provider, and whether that becomes a second provider dependency alongside whatever `posthog-node`/`@opentelemetry` already pull in.
+- **Not currently blocking anything** — the structural fallback is a real, working default; this is an enhancement, not a gap in shipped functionality.
+
+
 
 
 

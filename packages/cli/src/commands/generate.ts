@@ -125,6 +125,11 @@ export function registerGenerateCommand(program: Command): void {
       (value: string) => parseInt(value, 10)
     )
     .option(
+      "--architecture <id>",
+      "MCPFO-28/ARCHITECTURE.md section 43: tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess (MCPFO-29/30) — for large APIs where one-tool-per-operation is the wrong default. --engine v2 only; requires an absolute --base-url (or an absolute server URL in the spec) since the sandbox's network permission needs a concrete host.",
+      "tools"
+    )
+    .option(
       "--engine <id>",
       "Generation engine: v2 (default, klaridian's own emitter, @modelcontextprotocol/server SDK v2, stateless, protocol 2025-11-25 — MCPFO-21/ARCHITECTURE.md section 38) or v1 (legacy, via openapi-mcp-generator, SDK v1, protocol 2025-06-18; its streamable-http transport crashes on the 2nd request — MCPFO-10). v2 is stateless so that crash cannot occur; it is NOT yet 2026-07-28-conformant (the SDK does not negotiate that era).",
       "v2"
@@ -200,6 +205,7 @@ export function registerGenerateCommand(program: Command): void {
         author?: string;
         transport: string;
         port?: number;
+        architecture: string;
         engine: string;
         registryName?: string;
         docker: boolean;
@@ -276,6 +282,17 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
           const engine = opts.engine as (typeof SUPPORTED_ENGINES)[number];
+
+          const SUPPORTED_ARCHITECTURES = ["tools", "code-mode"] as const;
+          if (!(SUPPORTED_ARCHITECTURES as readonly string[]).includes(opts.architecture)) {
+            fail(`Unknown architecture "${opts.architecture}". Supported: ${SUPPORTED_ARCHITECTURES.join(", ")}`, "validate-architecture");
+            return;
+          }
+          const architecture = opts.architecture as (typeof SUPPORTED_ARCHITECTURES)[number];
+          if (architecture === "code-mode" && engine !== "v2") {
+            fail(`--architecture code-mode is only supported by --engine v2.`, "validate-architecture");
+            return;
+          }
 
           // MCPFO-12: --docker only makes sense for a network transport.
           if (opts.docker && transport !== "streamable-http") {
@@ -396,6 +413,17 @@ export function registerGenerateCommand(program: Command): void {
             plugins.push(plugin);
             pluginConfigs.set(plugin.id, resolvePluginConfig(plugin, allConfig[plugin.id] ?? {}));
           }
+          // MCPFO-32 (not yet built): code-mode's single execute_code call
+          // site has no per-tool wrap point for a plugin to hook into yet —
+          // reject the combination loudly instead of silently generating an
+          // uninstrumented server despite --plugin being passed.
+          if (architecture === "code-mode" && plugins.length > 0) {
+            fail(
+              `--architecture code-mode does not yet support --plugin (MCPFO-32, not implemented) — the collapsed execute_code call site has no per-operation instrumentation point yet. Remove --plugin, or use --architecture tools.`,
+              "validate-architecture"
+            );
+            return;
+          }
 
           // --interactive + non-TTY detection (ARCHITECTURE.md section 32):
           // found during a direct CLI-UX audit that `echo "" | klaridian
@@ -511,6 +539,18 @@ export function registerGenerateCommand(program: Command): void {
               warnings.push(baseUrlWarning);
               warn(baseUrlWarning);
             }
+            // code-mode's sandbox needs a concrete, absolute API host at
+            // generation time (--allow-net scoping) — unlike the "tools"
+            // architecture, a missing absolute base URL is fatal here, not
+            // just a warning (there is no KLARIDIAN_BASE_URL-at-runtime
+            // fallback for a sandbox permission baked in at generation time).
+            if (architecture === "code-mode" && baseUrlWarning) {
+              fail(
+                `--architecture code-mode requires an absolute --base-url (the sandbox's network permission must be scoped to a concrete host at generation time): ${baseUrlWarning}`,
+                "validate-architecture"
+              );
+              return;
+            }
             let wiring: { importStatement: string; wrapFunctionName: string } | undefined;
             let extraFiles: Record<string, string> = {};
             let extraDependencies: Record<string, string> = {};
@@ -530,6 +570,7 @@ export function registerGenerateCommand(program: Command): void {
               serverName,
               tools,
               baseUrl,
+              architecture,
               transport: transport === "streamable-http" ? "streamable-http" : "stdio",
               port: transport === "streamable-http" ? port : undefined,
               wiring,
@@ -561,10 +602,15 @@ export function registerGenerateCommand(program: Command): void {
 
             const transportSuffix = transport === "streamable-http" ? ` [streamable-http, port ${port}]` : "";
             const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
-            step(`✅ Generated ${tools.length} tool(s) in ${outputDir}${transportSuffix} (engine v2: @modelcontextprotocol/server, stateless, protocol 2025-11-25)${pluginSuffix}`);
+            const architectureSuffix = architecture === "code-mode" ? " [code-mode: execute_code + typed client, Deno-sandboxed]" : "";
+            const toolCountLabel = architecture === "code-mode" ? `1 tool (execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
+            step(`✅ Generated ${toolCountLabel} in ${outputDir}${transportSuffix} (engine v2: @modelcontextprotocol/server, stateless, protocol 2025-11-25)${architectureSuffix}${pluginSuffix}`);
 
             const startScript = transport === "streamable-http" ? "npm start" : "npm start";
-            const nextSteps = `cd ${opts.out} && npm install && npm run build && ${startScript}`;
+            const nextSteps =
+              architecture === "code-mode"
+                ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && ${startScript}`
+                : `cd ${opts.out} && npm install && npm run build && ${startScript}`;
             if (jsonMode) {
               const result: GenerateJsonResult = {
                 success: true,
@@ -573,6 +619,7 @@ export function registerGenerateCommand(program: Command): void {
                 curatedFromTotal: hasCuration ? operations.length : null,
                 transport,
                 port: transport === "streamable-http" ? port : null,
+                architecture,
                 license: license !== "none" ? getPackageJsonLicenseField(license) : null,
                 plugins: plugins.map((p) => p.id),
                 branding: null,

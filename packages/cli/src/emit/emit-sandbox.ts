@@ -154,10 +154,9 @@ export function emitExecuteCodeToolBlock(apiHost: string): string {
       title: "Execute Code",
       description:
         "Runs TypeScript code against the generated, typed API client (import from \\"./client.js\\"). " +
-        "Use search_docs first to see available functions and their input types. " +
         "Code runs in an isolated sandbox with network access restricted to the API host only " +
         "(${apiHost}) and no filesystem write access. console.log(...) output is returned as the result.",
-      inputSchema: { code: z.string().describe("TypeScript module body. Import functions from \\"./client.js\\" and console.log(...) the result.") },
+      inputSchema: z.object({ code: z.string().describe("TypeScript module body. Import functions from \\"./client.js\\" and console.log(...) the result.") }),
       annotations: { title: "Execute Code", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async (args) => {

@@ -1,15 +1,4 @@
 {
   "title": "Documentation",
-  "pages": [
-    "index",
-    "curation",
-    "code-mode",
-    "transports",
-    "licensing",
-    "docker",
-    "oauth",
-    "mcp-registry",
-    "cli-reference",
-    "plugins"
-  ]
+  "pages": ["index", "how-to", "reference"]
 }

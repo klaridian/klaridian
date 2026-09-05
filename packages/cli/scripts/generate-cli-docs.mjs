@@ -30,7 +30,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_PATH = path.resolve(
   __dirname,
-  "../../site/content/docs/cli-reference.mdx"
+  "../../site/content/docs/reference/cli-reference.mdx"
 );
 
 function flagName(flags) {

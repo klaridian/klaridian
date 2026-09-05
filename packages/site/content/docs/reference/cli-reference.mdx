@@ -26,35 +26,35 @@ description: Every flag for klaridian generate, generated from the real CLI.
 | `--base-url <url>` | Override the API base URL (required if the spec's servers[] is relative/missing) |
 | `--server-description <text>` | Short human-readable description for the emitted server.json (distinct from individual tool descriptions) |
 | `--force` | Overwrite --out even if it already exists and is non-empty (default: refuse, to avoid silently destroying unrelated files) |
-| `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure — always exactly one JSON value, exit code still reflects success) |
+| `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success) |
 | `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line |
 
 ## Curation
 
-See [Curation](/docs/curation) for the full guide.
+See [Curation](/docs/how-to/curation) for the full guide.
 
 | Flag | What it does |
 |---|---|
 | `--include-tags <tags>` | Only include operations with at least one of these OpenAPI tags (comma-separated) |
 | `--exclude-tags <tags>` | Exclude operations with any of these OpenAPI tags (comma-separated) |
 | `--exclude-operation-ids <ids>` | Exclude these specific operationIds regardless of tags (comma-separated) |
-| `--include-paths <patterns>` | Only include operations whose path matches at least one of these regex patterns (comma-separated). Works even when the spec has zero OpenAPI tags — composes with --include-tags (both must pass). |
+| `--include-paths <patterns>` | Only include operations whose path matches at least one of these regex patterns (comma-separated). Works even when the spec has zero OpenAPI tags, composes with --include-tags (both must pass). |
 | `--exclude-paths <patterns>` | Exclude operations whose path matches any of these regex patterns (comma-separated) |
-| `--include-methods <methods>` | Only include operations using one of these HTTP methods (comma-separated, e.g. get,post) |
+| `--include-methods <methods>` | Only include operations using one of these HTTP methods (comma-separated, for example get,post) |
 | `--exclude-methods <methods>` | Exclude operations using any of these HTTP methods (comma-separated) |
-| `--interactive` | Prompt for which tags to include before generating. Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input. |
+| `--interactive` | Prompt for which tags to include before generating. Requires an interactive terminal, fails loudly if stdin is not a TTY (for example, running in CI or under an agent) instead of silently accepting empty input. |
 
 ## Architecture
 
-See [Architecture](/docs/code-mode) for the full guide.
+See [Architecture](/docs/how-to/code-mode) for the full guide.
 
 | Flag | What it does |
 |---|---|
-| `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess — for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
+| `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
 
 ## Plugins
 
-See [Plugins](/docs/plugins) for the full guide.
+See [Plugins](/docs/how-to/plugins) for the full guide.
 
 | Flag | What it does |
 |---|---|
@@ -63,7 +63,7 @@ See [Plugins](/docs/plugins) for the full guide.
 
 ## Licensing
 
-See [Licensing](/docs/licensing) for the full guide.
+See [Licensing](/docs/how-to/licensing) for the full guide.
 
 | Flag | What it does |
 |---|---|
@@ -72,7 +72,7 @@ See [Licensing](/docs/licensing) for the full guide.
 
 ## Transport
 
-See [Transport](/docs/transports) for the full guide.
+See [Transport](/docs/how-to/transports) for the full guide.
 
 | Flag | What it does |
 |---|---|
@@ -81,7 +81,7 @@ See [Transport](/docs/transports) for the full guide.
 
 ## Docker
 
-See [Docker](/docs/docker) for the full guide.
+See [Docker](/docs/how-to/docker) for the full guide.
 
 | Flag | What it does |
 |---|---|
@@ -89,19 +89,19 @@ See [Docker](/docs/docker) for the full guide.
 
 ## OAuth
 
-See [OAuth](/docs/oauth) for the full guide.
+See [OAuth](/docs/how-to/oauth) for the full guide.
 
 | Flag | What it does |
 |---|---|
-| `--oauth-issuer <url>` | OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server. |
+| `--oauth-issuer <url>` | OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation), never as an authorization server. |
 | `--oauth-jwks-uri <url>` | JWKS URI to fetch the IdP's signing keys from. When omitted, resolved automatically from --oauth-issuer's OIDC discovery document (&lt;issuer&gt;/.well-known/openid-configuration) at generation time. |
-| `--oauth-audience <uri>` | Expected token audience (RFC 8707) — the canonical URI this server will be reachable at, e.g. https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected. |
+| `--oauth-audience <uri>` | Expected token audience (RFC 8707), the canonical URI this server will be reachable at, for example https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected. |
 | `--oauth-required-scopes <scopes>` | Comma-separated OAuth scopes required on every tool call (default: none beyond token validity) |
 
 ## MCP Registry
 
-See [MCP Registry](/docs/mcp-registry) for the full guide.
+See [MCP Registry](/docs/how-to/mcp-registry) for the full guide.
 
 | Flag | What it does |
 |---|---|
-| `--registry-name <name>` | Reverse-DNS name for the official MCP Registry, e.g. io.github.&lt;you&gt;/&lt;server&gt;. When set, the emitted server.json and package.json mcpName use it. |
+| `--registry-name <name>` | Reverse-DNS name for the official MCP Registry, for example io.github.&lt;you&gt;/&lt;server&gt;. When set, the emitted server.json and package.json mcpName use it. |

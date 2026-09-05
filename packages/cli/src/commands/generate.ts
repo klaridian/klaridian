@@ -57,7 +57,8 @@ const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
  * Doc-generation metadata for `klaridian generate`'s flags (see
  * scripts/generate-cli-docs.mjs, wired into `npm run docs:gen` and CI's
  * `docs-flags-sync` gate). This is the single source of truth for how the
- * public docs site's /docs/cli-reference groups flags into sections — the
+ * public docs site's /docs/reference/cli-reference groups flags into
+ * sections — the
  * generator introspects the real commander.js Command for flag names,
  * descriptions, and defaults (so those can never drift from the CLI), and
  * cross-references this map only for grouping + a link to the page with
@@ -77,7 +78,7 @@ export const GENERATE_FLAG_DOC_GROUPS: {
   },
   {
     category: "Curation",
-    docPage: "/docs/curation",
+    docPage: "/docs/how-to/curation",
     flags: [
       "--include-tags",
       "--exclude-tags",
@@ -89,21 +90,21 @@ export const GENERATE_FLAG_DOC_GROUPS: {
       "--interactive",
     ],
   },
-  { category: "Architecture", docPage: "/docs/code-mode", flags: ["--architecture"] },
+  { category: "Architecture", docPage: "/docs/how-to/code-mode", flags: ["--architecture"] },
   {
     category: "Plugins",
-    docPage: "/docs/plugins",
+    docPage: "/docs/how-to/plugins",
     flags: ["--plugin", "--plugin-config"],
   },
-  { category: "Licensing", docPage: "/docs/licensing", flags: ["--license", "--author"] },
-  { category: "Transport", docPage: "/docs/transports", flags: ["--transport", "--port"] },
-  { category: "Docker", docPage: "/docs/docker", flags: ["--docker"] },
+  { category: "Licensing", docPage: "/docs/how-to/licensing", flags: ["--license", "--author"] },
+  { category: "Transport", docPage: "/docs/how-to/transports", flags: ["--transport", "--port"] },
+  { category: "Docker", docPage: "/docs/how-to/docker", flags: ["--docker"] },
   {
     category: "OAuth",
-    docPage: "/docs/oauth",
+    docPage: "/docs/how-to/oauth",
     flags: ["--oauth-issuer", "--oauth-jwks-uri", "--oauth-audience", "--oauth-required-scopes"],
   },
-  { category: "MCP Registry", docPage: "/docs/mcp-registry", flags: ["--registry-name"] },
+  { category: "MCP Registry", docPage: "/docs/how-to/mcp-registry", flags: ["--registry-name"] },
 ];
 
 export function registerGenerateCommand(program: Command): void {
@@ -128,7 +129,7 @@ export function registerGenerateCommand(program: Command): void {
     .option(
       // MCPFO-8: tag-independent curation for specs with no OpenAPI tags at all.
       "--include-paths <patterns>",
-      "Only include operations whose path matches at least one of these regex patterns (comma-separated). Works even when the spec has zero OpenAPI tags — composes with --include-tags (both must pass)."
+      "Only include operations whose path matches at least one of these regex patterns (comma-separated). Works even when the spec has zero OpenAPI tags, composes with --include-tags (both must pass)."
     )
     .option(
       "--exclude-paths <patterns>",
@@ -136,7 +137,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--include-methods <methods>",
-      "Only include operations using one of these HTTP methods (comma-separated, e.g. get,post)"
+      "Only include operations using one of these HTTP methods (comma-separated, for example get,post)"
     )
     .option(
       "--exclude-methods <methods>",
@@ -145,7 +146,7 @@ export function registerGenerateCommand(program: Command): void {
     .option(
       // ARCHITECTURE.md section 24: user-chosen curation, not LLM-suggested.
       "--interactive",
-      "Prompt for which tags to include before generating. Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input.",
+      "Prompt for which tags to include before generating. Requires an interactive terminal, fails loudly if stdin is not a TTY (for example, running in CI or under an agent) instead of silently accepting empty input.",
       false
     )
     .option(
@@ -186,12 +187,12 @@ export function registerGenerateCommand(program: Command): void {
     .option(
       // MCPFO-28/ARCHITECTURE.md section 43.
       "--architecture <id>",
-      "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess — for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
+      "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
       "tools"
     )
     .option(
       "--registry-name <name>",
-      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it."
+      "Reverse-DNS name for the official MCP Registry, for example io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it."
     )
     .option(
       // MCPFO-12: a containerized stdio server leaks orphaned containers,
@@ -203,7 +204,7 @@ export function registerGenerateCommand(program: Command): void {
     .option(
       // MCPFO-22.
       "--oauth-issuer <url>",
-      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
+      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation), never as an authorization server."
     )
     .option(
       "--oauth-jwks-uri <url>",
@@ -211,7 +212,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--oauth-audience <uri>",
-      "Expected token audience (RFC 8707) — the canonical URI this server will be reachable at, e.g. https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected."
+      "Expected token audience (RFC 8707), the canonical URI this server will be reachable at, for example https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected."
     )
     .option(
       "--oauth-required-scopes <scopes>",
@@ -228,7 +229,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--json",
-      "Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure — always exactly one JSON value, exit code still reflects success)",
+      "Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success)",
       false
     )
     .option(

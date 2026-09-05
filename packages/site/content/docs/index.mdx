@@ -5,7 +5,9 @@ description: Generate your first instrumented MCP server from an OpenAPI spec.
 
 ## Install
 
-Run the generator directly with `npx` — no install step required.
+Run the generator directly with `npx` — no install step required. Today,
+klaridian is CLI-only: there is no `import`/`require` library mode yet
+(tracked separately, not built).
 
 ```bash
 npx klaridian generate --spec ./api.yaml --plugin otel
@@ -13,11 +15,23 @@ npx klaridian generate --spec ./api.yaml --plugin otel
 
 ## What you get
 
-- One MCP tool per OpenAPI operation (byte-identical names to your `operationId`s)
+- One MCP tool per OpenAPI operation (byte-identical names to your
+  `operationId`s) — the default **tools** architecture
 - A stateless TypeScript server (SDK v2, protocol 2025-11-25)
-- OpenTelemetry spans wired at the `registerTool` boundary — no manual instrumentation
+- OpenTelemetry spans wired at the `registerTool` boundary — no manual
+  instrumentation
+
+## Two architectures
+
+For large specs (dozens to hundreds of operations), generating one MCP
+tool per operation gets chatty. klaridian also supports a **code-mode**
+architecture — a typed client plus two tools (`execute_code`,
+`search_docs`) instead of one tool per operation. See
+[Code-mode architecture](/docs/code-mode).
 
 ## Next steps
 
 - [Curating the tool surface](/docs/curation)
+- [Code-mode architecture](/docs/code-mode)
 - [Plugins: OpenTelemetry](/docs/plugins/otel)
+- [Plugins: PostHog](/docs/plugins/posthog)

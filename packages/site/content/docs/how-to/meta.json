@@ -1,6 +1,7 @@
 {
   "title": "How-to guides",
   "pages": [
+    "init",
     "config-file",
     "curation",
     "code-mode",

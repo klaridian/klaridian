@@ -3,6 +3,7 @@
 
 import { Command } from "commander";
 import { registerGenerateCommand } from "./commands/generate.js";
+import { registerInitCommand } from "./commands/init.js";
 
 const program = new Command();
 program
@@ -11,5 +12,6 @@ program
   .version("0.0.1");
 
 registerGenerateCommand(program);
+registerInitCommand(program);
 
 program.parseAsync(process.argv);

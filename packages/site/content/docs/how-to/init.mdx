@@ -1,0 +1,75 @@
+---
+title: Onboarding wizard
+description: Use klaridian init to scaffold a klaridian.config.json before your first generate.
+---
+
+## Why this matters
+
+`klaridian generate` has many flags. The first time you run it, choosing them one by one on the command line is easy to get wrong. `klaridian init` asks a short series of questions and writes the answers to a [configuration file](/docs/how-to/config-file) that `generate` reads on every later run.
+
+`init` writes the file and nothing else. It doesn't generate a server. When it finishes, it prints the exact `generate` command to run next.
+
+## Run the wizard
+
+```bash
+npx klaridian init
+```
+
+The wizard asks for:
+
+- The OpenAPI spec path or URL.
+- The output directory for the generated server.
+- The observability plugins to enable, if any.
+- The license for the generated server.
+- The transport for the generated server.
+
+It writes `klaridian.config.json` in the current directory, then prints the next command:
+
+```text
+✅ Wrote /path/to/klaridian.config.json
+   Next: run `klaridian generate --spec ./api.yaml --out ./my-server` (klaridian.config.json is picked up automatically)
+```
+
+Run that command. `generate` finds the file and takes the plugin, license, and transport values from it.
+
+## Skip a prompt with a flag
+
+Pass a flag and the wizard doesn't ask that question:
+
+```bash
+npx klaridian init --spec ./api.yaml --license apache-2.0
+```
+
+This still prompts for the output directory, plugins, and transport. The rule is the same one `generate` uses for the configuration file: an explicit flag wins, and the wizard fills the rest.
+
+## Run without prompts
+
+Pass every field the wizard would ask for and it writes the file without prompting, which is what you want in a script or a container:
+
+```bash
+npx klaridian init \
+  --spec ./api.yaml \
+  --generate-out ./my-server \
+  --plugin otel \
+  --license mit \
+  --transport stdio
+```
+
+`--spec` and `--generate-out` are required in this mode. Without a terminal to prompt and without those flags, the command fails with a clear message instead of guessing.
+
+Use `--json` for a machine-readable result. `--json` is always non-interactive, so pass the fields as flags.
+
+## Flags
+
+| Flag | What it does |
+|---|---|
+| `--out <path>` | Where to write the config file. Defaults to `./klaridian.config.json`. |
+| `--generate-out <dir>` | The output directory for `generate`, written as the file's `out` field. This is different from `--out`, which is where the config file itself goes. |
+| `--force` | Overwrite the config file if it already exists. |
+| `--spec`, `--plugin`, `--license`, `--transport` | Set the matching field and skip its prompt. Same names and values as the `generate` flags. |
+
+See the [CLI reference](/docs/reference/cli-reference) for the full list.
+
+## What the file can't hold yet
+
+`generate` still needs `--spec` and `--out` on the command line even when a configuration file is present, so the "Next" command includes them. The file records your choices for `plugin`, `license`, and `transport`. See [Configuration file](/docs/how-to/config-file) for how precedence works.

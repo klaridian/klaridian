@@ -53,6 +53,59 @@ const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
   [mixpanelPlugin.id]: mixpanelPlugin,
 };
 
+/**
+ * Doc-generation metadata for `klaridian generate`'s flags (see
+ * scripts/generate-cli-docs.mjs, wired into `npm run docs:gen` and CI's
+ * `docs-flags-sync` gate). This is the single source of truth for how the
+ * public docs site's /docs/cli-reference groups flags into sections — the
+ * generator introspects the real commander.js Command for flag names,
+ * descriptions, and defaults (so those can never drift from the CLI), and
+ * cross-references this map only for grouping + a link to the page with
+ * more detail. Every flag registered below via .option()/.requiredOption()
+ * MUST have an entry here — the generator fails loudly on any that don't,
+ * rather than silently omitting them from the docs.
+ */
+export const GENERATE_FLAG_DOC_GROUPS: {
+  category: string;
+  docPage?: string;
+  flags: string[];
+}[] = [
+  { category: "Required", flags: ["--spec", "--out"] },
+  {
+    category: "Basics",
+    flags: ["--name", "--base-url", "--server-description", "--force", "--json", "--quiet"],
+  },
+  {
+    category: "Curation",
+    docPage: "/docs/curation",
+    flags: [
+      "--include-tags",
+      "--exclude-tags",
+      "--exclude-operation-ids",
+      "--include-paths",
+      "--exclude-paths",
+      "--include-methods",
+      "--exclude-methods",
+      "--interactive",
+    ],
+  },
+  { category: "Architecture", docPage: "/docs/code-mode", flags: ["--architecture"] },
+  {
+    category: "Plugins",
+    docPage: "/docs/plugins",
+    flags: ["--plugin", "--plugin-config"],
+  },
+  { category: "Licensing", docPage: "/docs/licensing", flags: ["--license", "--author"] },
+  { category: "Transport", docPage: "/docs/transports", flags: ["--transport", "--port"] },
+  { category: "Docker", docPage: "/docs/docker", flags: ["--docker"] },
+  {
+    category: "OAuth",
+    docPage: "/docs/oauth",
+    flags: ["--oauth-issuer", "--oauth-jwks-uri", "--oauth-audience", "--oauth-required-scopes"],
+  },
+  { category: "MCP Registry", docPage: "/docs/mcp-registry", flags: ["--registry-name"] },
+];
+
 export function registerGenerateCommand(program: Command): void {
   program
     .command("generate")
@@ -73,24 +126,26 @@ export function registerGenerateCommand(program: Command): void {
       "Exclude these specific operationIds regardless of tags (comma-separated)"
     )
     .option(
+      // MCPFO-8: tag-independent curation for specs with no OpenAPI tags at all.
       "--include-paths <patterns>",
-      "MCPFO-8: only include operations whose path matches at least one of these regex patterns (comma-separated). Tag-independent — works even when the spec has zero OpenAPI tags (e.g. Stripe's public spec), since real-world APIs are almost always structured by path. Composes with --include-tags (both must pass)."
+      "Only include operations whose path matches at least one of these regex patterns (comma-separated). Works even when the spec has zero OpenAPI tags — composes with --include-tags (both must pass)."
     )
     .option(
       "--exclude-paths <patterns>",
-      "MCPFO-8: exclude operations whose path matches any of these regex patterns (comma-separated)"
+      "Exclude operations whose path matches any of these regex patterns (comma-separated)"
     )
     .option(
       "--include-methods <methods>",
-      "MCPFO-8: only include operations using one of these HTTP methods (comma-separated, e.g. get,post). Tag-independent."
+      "Only include operations using one of these HTTP methods (comma-separated, e.g. get,post)"
     )
     .option(
       "--exclude-methods <methods>",
-      "MCPFO-8: exclude operations using any of these HTTP methods (comma-separated)"
+      "Exclude operations using any of these HTTP methods (comma-separated)"
     )
     .option(
+      // ARCHITECTURE.md section 24: user-chosen curation, not LLM-suggested.
       "--interactive",
-      "Prompt for which tags to include before generating (ARCHITECTURE.md section 24 — user-chosen curation, not LLM-suggested). Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input.",
+      "Prompt for which tags to include before generating. Requires an interactive terminal — fails loudly if stdin is not a TTY (e.g. running in CI or under an agent) instead of silently accepting empty input.",
       false
     )
     .option(
@@ -105,8 +160,10 @@ export function registerGenerateCommand(program: Command): void {
       []
     )
     .option(
+      // ARCHITECTURE.md section 27: MCP servers run with real credentials next
+      // to an autonomous agent, so shipping without a license is a real trust gap.
       "--license <id>",
-      `License for the generated server (ARCHITECTURE.md section 27 — MCP servers run with real credentials next to an autonomous agent, so shipping without a license is a real trust gap): ${SUPPORTED_LICENSES.join(", ")}`,
+      `License for the generated server: ${SUPPORTED_LICENSES.join(", ")}`,
       "mit"
     )
     .option(
@@ -114,8 +171,11 @@ export function registerGenerateCommand(program: Command): void {
       "Author/copyright holder name for the generated LICENSE file (default: your git user.name, or \"the project author\" if unset)"
     )
     .option(
+      // ARCHITECTURE.md section 29: stdio-only was a v0 guardrail, lifted in
+      // the emitter. The v2 emitter is stateless by construction, so
+      // streamable-http does not hit the v1 2nd-request crash (MCPFO-10).
       "--transport <type>",
-      "Transport for the generated server: stdio (default) or streamable-http (ARCHITECTURE.md section 29 — stdio-only was a v0 guardrail, lifted in the emitter). The v2 emitter is stateless by construction, so streamable-http does not hit the v1 2nd-request crash (MCPFO-10).",
+      "Transport for the generated server: stdio (default) or streamable-http",
       "stdio"
     )
     .option(
@@ -124,22 +184,26 @@ export function registerGenerateCommand(program: Command): void {
       (value: string) => parseInt(value, 10)
     )
     .option(
+      // MCPFO-28/ARCHITECTURE.md section 43.
       "--architecture <id>",
-      "MCPFO-28/ARCHITECTURE.md section 43: tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess (MCPFO-29/30) — for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec) since the sandbox's network permission needs a concrete host.",
+      "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess — for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
       "tools"
     )
     .option(
       "--registry-name <name>",
-      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it (MCPFO-25)."
+      "Reverse-DNS name for the official MCP Registry, e.g. io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it."
     )
     .option(
+      // MCPFO-12: a containerized stdio server leaks orphaned containers,
+      // so this only makes sense with streamable-http.
       "--docker",
-      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server (MCPFO-12). Requires --transport streamable-http (a containerized stdio server leaks orphaned containers).",
+      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server. Requires --transport streamable-http.",
       false
     )
     .option(
+      // MCPFO-22.
       "--oauth-issuer <url>",
-      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server (MCPFO-22). Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
+      "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation) — never as an authorization server."
     )
     .option(
       "--oauth-jwks-uri <url>",

@@ -1,0 +1,31 @@
+---
+title: OAuth 2.1
+description: Protect a remote server with an external identity provider.
+---
+
+## What this is (and isn't)
+
+klaridian can generate a server that checks OAuth bearer tokens before running any tool call. It does **not** generate an OAuth server—that stays with your identity provider (Auth0, WorkOS, or similar). klaridian's generated server only ever validates tokens; it never issues them.
+
+This only works with `--transport streamable-http`. A `stdio` server takes its credentials from the environment, not from inbound tokens, so OAuth doesn't apply there.
+
+## Set it up
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --transport streamable-http \
+  --oauth-issuer https://your-idp.example.com \
+  --oauth-audience https://mcp.yourcompany.com/mcp
+```
+
+- **`--oauth-issuer`**—your identity provider's issuer URL.
+- **`--oauth-audience`**—the exact URL this server will be reachable at. Tokens issued for a different audience are rejected. This is required whenever you set `--oauth-issuer`.
+
+## Optional flags
+
+- **`--oauth-jwks-uri`**—where to fetch your IdP's signing keys. Usually you don't need to set this: klaridian resolves it automatically from your issuer's OIDC discovery document.
+- **`--oauth-required-scopes`**—a comma-separated list of scopes every tool call must carry. Leave this unset if any valid token should be enough.
+
+## What you still need to do
+
+Your identity provider—not klaridian—handles user login, consent, and issuing tokens. klaridian's job stops at generating a server that correctly validates whatever token it receives.

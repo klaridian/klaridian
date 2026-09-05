@@ -78,3 +78,27 @@ jobs:
             SECURITY.md CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs \
             packages/python-posthog-middleware/README.md
         continue-on-error: true
+
+  docs-flags-sync:
+    name: CLI flags <-> docs sync (blocking)
+    runs-on: ubuntu-latest
+    # BLOCKING, unlike docs-style above: packages/site/content/docs/cli-reference.mdx
+    # is generated from the live `klaridian generate` Command
+    # (packages/cli/scripts/generate-cli-docs.mjs), not hand-written. This
+    # job regenerates it from the current code and fails the build if the
+    # committed file doesn't match -- the exact drift (documented flags
+    # that don't exist, real flags never documented) that motivated
+    # building this generator in the first place. Fix locally with
+    # `npm run docs:gen` (packages/cli) and commit the result.
+    defaults:
+      run:
+        working-directory: packages/cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Regenerate CLI reference and diff against the committed file
+        run: npm run docs:check

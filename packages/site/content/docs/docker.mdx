@@ -1,0 +1,17 @@
+---
+title: Docker output
+description: Emit a Dockerfile alongside your generated server.
+---
+
+## Enable it
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --transport streamable-http --docker
+```
+
+This writes a minimal, least-privilege `Dockerfile` and `.dockerignore` next to the generated server.
+
+## Why it requires streamable-http
+
+`--docker` only works with `--transport streamable-http`, not `stdio`. Here's why: stdio-based MCP clients spawn a server as a child process and manage its lifecycle directly. If that process is actually a `docker run` command, the client's process exits when the session ends, but the container it started keeps running—orphaned, with an open connection nobody's using anymore. `streamable-http` servers don't have this problem, since the container is a normal network service, not something imitating a local child process.

@@ -1,0 +1,17 @@
+---
+title: Publishing to the MCP Registry
+description: Give your server a reverse-DNS name for the official MCP Registry.
+---
+
+## What this does
+
+The [official MCP Registry](https://modelcontextprotocol.io) expects servers to identify themselves with a reverse-DNS-style name, like `io.github.you/server-name`. Setting `--registry-name` at generation time writes that name into the generated `server.json` and into `package.json`'s `mcpName` field.
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --registry-name io.github.yourname/your-server
+```
+
+## What this doesn't do
+
+`--registry-name` only sets the name in the generated files. It doesn't publish anything—actually submitting your server to the registry is a separate step you do yourself, using the registry's own tools.

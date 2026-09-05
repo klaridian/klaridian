@@ -1,70 +1,41 @@
 ---
 title: Code-mode architecture
-description: For large APIs—a typed client and two tools (execute_code, search_docs) instead of one tool per operation.
+description: For large APIs—a typed client and two tools instead of one tool per operation.
 ---
 
 ## The problem it solves
 
-An OpenAPI spec designed for humans is "generous"—hundreds of atomic
-endpoints. Agents pay a real per-tool cost in context and reasoning
-overhead. Auto-converting every operation into its own MCP tool works
-well for small APIs, but on a large spec (dozens to hundreds of
-operations) it produces a bloated, "chatty" tool catalog.
+By default, klaridian makes one MCP tool per OpenAPI operation. That's fine for small specs. On a large one—dozens or hundreds of operations—it produces a bloated tool list that costs agents context and makes them more likely to pick the wrong tool.
 
 ## What code-mode generates instead
 
 ```bash
-npx klaridian generate --spec ./api.yaml \
-  --engine v2 \
+npx klaridian generate --spec ./api.yaml --out ./my-server \
   --architecture code-mode \
   --base-url https://api.example.com
 ```
 
-Instead of one MCP tool per operation, you get exactly **two** tools:
+Instead of one tool per operation, you get exactly two tools:
 
-- **`search_docs`**—the model looks up a generated function's
-  signature and purpose (real OpenAPI description, or a structural
-  fallback built from the operation's shape when the spec's own
-  description is missing/sparse) before writing any code.
-- **`execute_code`**—runs model-written TypeScript against a fully
-  typed, Zod-validated client (`src/client.ts`), generated from the same
-  tool data as the one-tool-per-operation mode—one exported async
-  function per operation.
+- **`search_docs`**—look up a function's signature and purpose before writing code against it.
+- **`execute_code`**—run TypeScript against a typed, validated client. One function per operation, generated from your spec.
 
-## Why a sandboxed subprocess, not eval-in-process
+## Why a sandboxed subprocess
 
-Model-written code runs in an isolated **Deno subprocess**, not inside
-the server's own Node process:
+Code passed to `execute_code` runs in an isolated **Deno subprocess**, not inside the server's own process. The sandbox only allows:
 
-```
---allow-net=<api-host-only>      # only the target API host, nothing else
---allow-read=<generated-dist-dir> # only the generated client's own files
-# no --allow-write, --allow-run, --allow-ffi, --allow-env(*) ever
-```
+- Network access to the target API's host—nothing else
+- Reading the generated client's own files—nothing else
+- No file writes, no subprocess spawning, no arbitrary file reads
 
-Real, validated boundaries—not assumed ones: cross-host `fetch()` is
-blocked (`NotCapable`), arbitrary file writes are blocked, and reads
-outside the generated client's directory are blocked, each confirmed
-with a real spawned Deno subprocess against adversarial test code.
+These boundaries are tested directly, not just declared: a cross-host request is blocked, a file write attempt is blocked, and reading outside the client's directory is blocked.
 
-## Why this shape (not a hand-rolled sandbox)
+## Why this design
 
-Evaluated against three published architectures (SDK code mode, Cloudflare
-Code Mode, generic "dynamic" meta-tools) on a real 31-case benchmark: SDK
-code mode won on completeness (98%), efficiency (95%), and factuality
-(53%)—the other approaches returned confidently wrong aggregate results
-with no signal the answer was incomplete. klaridian's code-mode follows
-the same proven shape (typed client + sandboxed execution), using Deno
-for the sandbox boundary instead of embedding V8 directly.
+Independent benchmarks compared three approaches for letting an agent call a large API: a typed client + sandboxed execution (what klaridian does), a "dynamic" set of generic lookup/invoke tools, and Cloudflare's isolate-based code mode. The typed-client approach won clearly—the other two sometimes gave wrong answers with no sign anything was wrong.
 
-## Constraints today
+## Things to know
 
-- Requires `--engine v2` (the default) and an **absolute** `--base-url`—the
-  sandbox's network permission is fixed at generation time, so there's
-  no safe fallback for a relative or missing base URL.
-- No plugin instrumentation yet (`--plugin otel`/`--plugin posthog` +
-  `--architecture code-mode` is rejected)—the collapsed single
-  `execute_code` call site doesn't have a per-operation instrumentation
-  hook to wire into yet.
-- One architecture per generated server—`tools` and `code-mode` are not
-  combined in a single output.
+- `--base-url` must be an absolute URL. The sandbox's network permission is fixed at generation time, so there's no way to fall back if it's missing.
+- Plugins (`--plugin otel`, `--plugin posthog`) aren't supported with code-mode yet—there's no per-operation hook to attach them to in the collapsed `execute_code` tool.
+- You pick one architecture per server. `tools` and `code-mode` don't mix in a single generation.

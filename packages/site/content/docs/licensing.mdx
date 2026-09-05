@@ -1,0 +1,32 @@
+---
+title: Licensing
+description: Every generated server ships with a real license, by default.
+---
+
+## Why this matters
+
+An MCP server runs with real credentials, next to an agent that decides on its own when to call it. That's a bigger trust ask than a normal API a human calls deliberately. Shipping a server with no license attached is a real gap in that trust—so klaridian sets one by default instead of leaving it blank.
+
+## Default
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server
+```
+
+This ships MIT by default: a real `LICENSE` file, and `"license": "MIT"` in `package.json`.
+
+## Choosing a different license
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --license apache-2.0
+```
+
+Options: `mit` (default), `apache-2.0`, or `none`. Choosing `none` prints a warning—it's allowed, but you're opting out of something klaridian considers important.
+
+## Setting the copyright holder
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --author "Jane Doe"
+```
+
+Defaults to your git `user.name`. Falls back to "the project author" if that isn't set either.

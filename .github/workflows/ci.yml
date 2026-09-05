@@ -44,3 +44,31 @@ jobs:
           pip install -e ".[dev]"
       - name: Test
         run: pytest tests/
+
+  docs-style:
+    name: Documentation style (Vale, non-blocking)
+    runs-on: ubuntu-latest
+    # Reports Microsoft Writing Style Guide violations (STYLE.md) as an
+    # annotated check without failing the build -- author/reviewer
+    # discipline for now, not yet a hard gate. Flip continue-on-error to
+    # false once the backlog of any newly-introduced violations is clean
+    # on a few consecutive PRs.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Vale (Microsoft Writing Style Guide)
+        uses: errata-ai/vale-action@v2
+        with:
+          version: 3.20.0
+          fail_on_error: false
+          files: |
+            README.md
+            AGENTS.md
+            PLAN.md
+            ARCHITECTURE.md
+            CONTRIBUTING.md
+            SECURITY.md
+            CODE_OF_CONDUCT.md
+            STYLE.md
+            packages/site/content/docs
+            packages/python-posthog-middleware/README.md

@@ -38,6 +38,7 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
 import { isSwagger2Document, convertSwagger2ToOpenApi3, Swagger2ConversionError } from "../spec/swagger2-conversion.js";
+import { loadConfigFile, ConfigFileError, CONFIG_FILE_NAME } from "../config/config-file.js";
 import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
@@ -75,6 +76,11 @@ export const GENERATE_FLAG_DOC_GROUPS: {
   {
     category: "Basics",
     flags: ["--name", "--base-url", "--server-description", "--force", "--json", "--quiet"],
+  },
+  {
+    category: "Configuration",
+    docPage: "/docs/how-to/config-file",
+    flags: ["--config"],
   },
   {
     category: "Curation",
@@ -115,6 +121,15 @@ export function registerGenerateCommand(program: Command): void {
     )
     .requiredOption("--spec <path>", "Path to the OpenAPI spec (JSON or YAML)")
     .requiredOption("--out <dir>", "Output directory for the generated server")
+    .option(
+      // MCPFO-37 / ARCHITECTURE.md section 52: a defaults layer, not a
+      // source of truth. Any flag passed explicitly on the command line
+      // still wins; the file only overrides the command's built-in
+      // defaults. Auto-discovered as klaridian.config.json in the current
+      // directory when --config isn't passed.
+      "--config <path>",
+      `Path to a ${CONFIG_FILE_NAME} file providing default values for other flags (overridden by any flag explicitly passed on the command line). Auto-discovered in the current directory if present.`
+    )
     .option("--name <name>", "Name for the generated server (default: derived from the spec's info.title)")
     .option("--base-url <url>", "Override the API base URL (required if the spec's servers[] is relative/missing)")
     .option(
@@ -239,6 +254,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .action(
       async (opts: {
+        config?: string;
         spec: string;
         out: string;
         name?: string;
@@ -268,10 +284,51 @@ export function registerGenerateCommand(program: Command): void {
         force: boolean;
         json: boolean;
         quiet: boolean;
-      }) => {
+      }, command: Command) => {
+        const warnings: string[] = [];
+
+        // MCPFO-37 / ARCHITECTURE.md section 52: merge the config file (a
+        // defaults layer) into `opts` BEFORE anything reads it — including
+        // --json/--quiet below, which the file is allowed to set. commander
+        // mutates its option store in place, so `opts` sees these writes.
+        //
+        // Precedence: explicit CLI flag > config file value > built-in
+        // default. commander's own getOptionValueSource() is the only
+        // reliable way to tell "passed on the command line" ("cli"/"env")
+        // apart from "left at its default" ("default"/undefined) — a naive
+        // `opts[x] !== undefined` check can't, since every flag with a
+        // default is always defined.
+        let configLoadError: string | undefined;
+        let configNotice: string | undefined;
+        const configWarnings: string[] = [];
+        try {
+          const loaded = await loadConfigFile(opts.config);
+          if (loaded) {
+            const knownAttrs = new Set(command.options.map((o) => o.attributeName()));
+            for (const key of Object.keys(loaded.config)) {
+              if (key === "config") continue; // a config file pointing at another config file: ignore
+              if (!knownAttrs.has(key)) {
+                configWarnings.push(
+                  `⚠️  Config file ${loaded.path}: ignoring unknown key "${key}" — not a known \`klaridian generate\` flag. Check for a typo.`
+                );
+                continue;
+              }
+              const source = command.getOptionValueSource(key);
+              if (source === "cli" || source === "env") continue; // explicit flag always wins
+              command.setOptionValueWithSource(key, loaded.config[key], "config");
+            }
+            configNotice = `Using defaults from config file ${loaded.path}`;
+          }
+        } catch (err) {
+          if (err instanceof ConfigFileError) {
+            configLoadError = err.message;
+          } else {
+            throw err;
+          }
+        }
+
         const jsonMode = opts.json;
         const quietMode = opts.quiet || opts.json;
-        const warnings: string[] = [];
 
         /** Human-readable-mode-only progress line; suppressed by --quiet and --json. */
         const step = (msg: string) => {
@@ -300,6 +357,17 @@ export function registerGenerateCommand(program: Command): void {
             console.error(`❌ ${message}`);
           }
         };
+
+        // Flush the config-file load result now that the output helpers
+        // (which depend on jsonMode/quietMode, themselves possibly set by
+        // the file) exist. A broken explicit --config is fatal and fails
+        // loudly; unknown keys are warnings, not errors.
+        if (configLoadError) {
+          fail(configLoadError, "config-file");
+          return;
+        }
+        if (configNotice) step(configNotice);
+        for (const w of configWarnings) warn(w);
 
         let tempSpecDirs: string[] = [];
         try {

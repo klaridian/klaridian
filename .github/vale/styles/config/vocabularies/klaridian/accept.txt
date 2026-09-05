@@ -19,6 +19,7 @@ npm
 CLI
 SDK
 JSON-RPC
+camelCase
 operationId
 registerTool
 execute_code

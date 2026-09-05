@@ -6,7 +6,7 @@ export default function Home() {
     <main className="min-h-screen bg-[var(--klaridian-paper)] text-[var(--klaridian-ink)] font-mono">
       {/* Header */}
       <header className="border-b-[3px] border-[var(--klaridian-ink)]">
-        <div className="max-w-[900px] mx-auto px-5 flex items-center justify-between py-[18px]">
+        <div className="max-w-[860px] mx-auto px-5 flex items-center justify-between py-[18px]">
           <div className="font-extrabold text-[19px] tracking-tight">
             klaridian<span className="text-[var(--klaridian-accent)]">()</span>
           </div>
@@ -14,9 +14,6 @@ export default function Home() {
             <Link href="/docs" className="hover:border-b-2 hover:border-[var(--klaridian-accent)]">
               docs
             </Link>
-            <a href="#" className="hover:border-b-2 hover:border-[var(--klaridian-accent)]">
-              plugins
-            </a>
             <a
               href="https://github.com/ricardocvasconcelos/klaridian"
               className="hover:border-b-2 hover:border-[var(--klaridian-accent)]"
@@ -27,36 +24,72 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="border-b-[3px] border-[var(--klaridian-ink)] py-14">
-        <div className="max-w-[900px] mx-auto px-5 text-center">
-          <div className="inline-block border-2 border-[var(--klaridian-ink)] px-2.5 py-1 text-[11px] font-bold tracking-wider mb-6">
-            OPENAPI → MCP SERVER
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-[1.15] mb-4 max-w-[640px] mx-auto">
+      {/* Hero — Starship-style: claim, one-line sub, single CTA. No badge, no stats. */}
+      <section className="border-b-[3px] border-[var(--klaridian-ink)] py-[90px]">
+        <div className="max-w-[860px] mx-auto px-5 text-center">
+          <h1 className="text-[42px] md:text-5xl font-extrabold tracking-tight leading-[1.2] mb-5 max-w-[620px] mx-auto">
             Generate an{" "}
             <span className="text-[var(--klaridian-accent)]">instrumented</span>{" "}
             MCP server from your API spec.
           </h1>
-          <p className="text-sm max-w-[560px] mx-auto mb-9 text-[#333]">
-            Point it at an OpenAPI document. Get a stateless, TypeScript MCP
-            server with engineering observability (OpenTelemetry) and
-            product analytics (PostHog, Amplitude, Mixpanel) wired in—no
-            manual instrumentation, no closed binary.
+          <p className="text-sm max-w-[480px] mx-auto mb-9 text-[#333]">
+            OpenAPI in, a stateless TypeScript MCP server out — engineering
+            observability and product analytics wired in from the start.
           </p>
+          <a
+            href="#install"
+            className="inline-block px-7 py-3.5 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] hover:bg-[var(--klaridian-accent)] hover:border-[var(--klaridian-accent)] hover:text-[var(--klaridian-ink)] transition-colors"
+          >
+            Get started →
+          </a>
+        </div>
+      </section>
 
+      {/* Three one-sentence blurbs — no cards, no icons, no borders */}
+      <section className="border-b-[3px] border-[var(--klaridian-ink)] py-[60px]">
+        <div className="max-w-[860px] mx-auto px-5 grid grid-cols-1 md:grid-cols-3 gap-10">
+          {[
+            {
+              title: "Born instrumented",
+              body: "OTel spans and product-analytics events wired at generation time — not bolted on after the fact.",
+            },
+            {
+              title: "Curated, not dumped",
+              body: "Exclude, rename, and tag operations so agents see a clean tool catalog, not your whole API.",
+            },
+            {
+              title: "Open by default",
+              body: "MIT-licensed generator, plain readable TypeScript output. Read it before you trust it with real credentials.",
+            },
+          ].map((b) => (
+            <div key={b.title}>
+              <h3 className="text-sm font-extrabold mb-2.5">
+                <span className="text-[var(--klaridian-accent)]">
+                  {b.title.split(" ")[0]}
+                </span>{" "}
+                {b.title.split(" ").slice(1).join(" ")}
+              </h3>
+              <p className="text-xs leading-relaxed text-[#444]">{b.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Quick install — the one prominent code block */}
+      <section id="install" className="py-[60px]">
+        <div className="max-w-[860px] mx-auto px-5 text-center">
+          <h2 className="text-xl font-extrabold mb-7">Quick install</h2>
           <CopyInstallCommand />
-
-          <div className="flex items-center justify-center gap-3.5 flex-wrap">
+          <div className="text-xs mt-5">
             <Link
               href="/docs"
-              className="inline-block px-5 py-3 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] hover:bg-[var(--klaridian-accent)] hover:border-[var(--klaridian-accent)] hover:text-[var(--klaridian-ink)] transition-colors"
+              className="underline decoration-[var(--klaridian-accent)] underline-offset-4 mx-2.5"
             >
               Read the docs
             </Link>
             <a
               href="https://github.com/ricardocvasconcelos/klaridian"
-              className="inline-block px-5 py-3 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] hover:bg-[var(--klaridian-ink)] hover:text-[var(--klaridian-paper)] transition-colors"
+              className="underline decoration-[var(--klaridian-accent)] underline-offset-4 mx-2.5"
             >
               View on GitHub
             </a>
@@ -64,49 +97,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4-column feature strip */}
-      <section className="border-b-[3px] border-[var(--klaridian-ink)]">
-        <div className="max-w-[900px] mx-auto grid grid-cols-1 md:grid-cols-4">
-          {[
-            {
-              n: "01",
-              title: "Parse",
-              body: "OpenAPI 3.x or Swagger 2.0, converted transparently. 122/122 operations on real production specs.",
-            },
-            {
-              n: "02",
-              title: "Curate",
-              body: "Exclude, rename, override tool hints via CLI flags or an x-klaridian-mcp overlay.",
-            },
-            {
-              n: "03",
-              title: "Instrument",
-              body: "OTel spans at the registerTool boundary. OTLPTraceExporter—Datadog, Grafana, any OTLP backend.",
-            },
-            {
-              n: "04",
-              title: "Analyze",
-              body: "One event per tool call (tool_name, duration_ms, success). PostHog, Amplitude, or Mixpanel—see which tools agents actually use.",
-            },
-          ].map((c, i) => (
-            <div
-              key={c.n}
-              className={`px-6 py-7 ${
-                i > 0 ? "border-t-2 md:border-t-0 md:border-l-2 border-[var(--klaridian-ink)]" : ""
-              }`}
-            >
-              <div className="text-[11px] font-extrabold text-[var(--klaridian-accent)] mb-2.5">
-                {c.n}
-              </div>
-              <h3 className="text-sm font-bold mb-2">{c.title}</h3>
-              <p className="text-xs text-[#444]">{c.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <footer className="py-5">
-        <div className="max-w-[900px] mx-auto px-5 flex justify-between text-[11px] text-[#666]">
+      <footer className="border-t-[3px] border-[var(--klaridian-ink)] py-5">
+        <div className="max-w-[860px] mx-auto px-5 flex justify-between text-[11px] text-[#666]">
           <span>MIT LICENSE</span>
           <span>BUILT ON THE OFFICIAL MCP SDK</span>
         </div>

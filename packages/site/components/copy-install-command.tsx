@@ -15,7 +15,7 @@ export function CopyInstallCommand() {
 
   return (
     <div
-      className="border-[3px] border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] mx-auto mb-9 max-w-[620px]"
+      className="border-[3px] border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] mx-auto max-w-[560px]"
       style={{ boxShadow: "8px 8px 0 var(--klaridian-accent)" }}
     >
       <div className="flex justify-between px-3.5 py-2 border-b border-[#444] text-[11px] text-[#999]">

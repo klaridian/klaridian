@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian()</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0a0a0a; --paper:#f5f3ee; --accent:#00c853; }
+  * { box-sizing: border-box; margin:0; padding:0; }
+  html,body { background: var(--paper); color: var(--ink); font-family: 'JetBrains Mono', monospace; }
+  body { line-height: 1.5; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+  a { color: inherit; }
+
+  header.topbar { border-bottom: 3px solid var(--ink); position: sticky; top:0; background: var(--paper); z-index: 10; }
+  .topbar .wrap { display:flex; justify-content:space-between; align-items:center; padding-top:18px; padding-bottom:18px; }
+  .brand { font-weight:800; font-size:19px; }
+  .brand .fn { color: var(--accent); }
+  nav a { text-decoration:none; margin-left:24px; font-size:13px; border-bottom: 2px solid transparent; }
+  nav a:hover { border-bottom: 2px solid var(--accent); }
+
+  /* HERO */
+  .hero { padding: 56px 0 40px; border-bottom: 3px solid var(--ink); }
+  .tag { display:inline-block; border:2px solid var(--ink); padding:3px 10px; font-size:11px; font-weight:700; letter-spacing:1px; margin-bottom:24px; }
+  h1 { font-size: 40px; font-weight:800; letter-spacing:-1px; line-height:1.15; margin-bottom:18px; max-width: 660px; }
+  h1 .accent { color: var(--accent); }
+  .sub { font-size:14px; max-width:580px; margin-bottom:36px; color:#333; }
+  .install { border: 3px solid var(--ink); background: var(--ink); color: var(--paper); box-shadow: 8px 8px 0 var(--accent); margin: 0 auto 36px; max-width: 620px; }
+  .install .bar { display:flex; justify-content:space-between; padding:8px 14px; border-bottom:1px solid #444; font-size:11px; color:#999; }
+  .install pre { padding: 22px 20px 26px; font-size:16px; overflow-x:auto; text-align:left; }
+  .install .prompt { color: var(--accent); }
+  .install .comment { color:#888; font-size:12px; display:block; margin-top:10px; }
+  .copybtn { background: var(--accent); color:var(--ink); border:none; font-family:inherit; font-weight:800; font-size:11px; padding:4px 10px; cursor:pointer; }
+  .ctaRow { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .btn { display:inline-block; padding:12px 22px; font-size:13px; font-weight:700; text-decoration:none; border:2px solid var(--ink); }
+  .btn.solid { background:var(--ink); color:var(--paper); }
+  .btn.solid:hover { background: var(--accent); border-color:var(--accent); color:var(--ink); }
+  .btn.ghost:hover { background: var(--ink); color:var(--paper); }
+
+  /* PROOF STRIP */
+  section.proof { border-bottom: 3px solid var(--ink); background:#fff; }
+  .proof .wrap { display:grid; grid-template-columns: repeat(3, 1fr); }
+  .proof .cell { padding: 24px 22px; border-left: 2px solid var(--ink); text-align:center; }
+  .proof .cell:first-child { border-left:none; }
+  .proof .num { font-size: 26px; font-weight:800; color: var(--accent); }
+  .proof .label { font-size: 11px; color:#444; margin-top:4px; }
+
+  /* PROBLEM */
+  section.problem { border-bottom: 3px solid var(--ink); padding: 50px 0; }
+  section.problem h2 { font-size: 24px; font-weight:800; margin-bottom: 18px; text-align:center; }
+  section.problem p { font-size:13px; color:#333; max-width:640px; margin: 0 auto 14px; text-align:center; }
+  section.problem p b { color: var(--ink); }
+
+  /* HOW IT WORKS (steps) */
+  section.steps { border-bottom: 3px solid var(--ink); }
+  .steps .wrap { padding: 40px 20px; }
+  .steps h2 { font-size:24px; font-weight:800; text-align:center; margin-bottom: 36px; }
+  .steprow { display:grid; grid-template-columns: 40px 1fr; gap: 18px; margin-bottom: 30px; align-items:start; }
+  .steprow .n { font-size:22px; font-weight:800; color: var(--accent); }
+  .steprow h3 { font-size:14px; margin-bottom:6px; }
+  .steprow p { font-size:12px; color:#444; margin-bottom:10px; }
+  .steprow code.block { display:block; background: var(--ink); color:#eee; padding:10px 14px; font-size:12px; border:2px solid var(--ink); }
+  .steprow code.block .p { color: var(--accent); }
+
+  /* ARCHITECTURES */
+  section.arch { border-bottom: 3px solid var(--ink); background:#fff; }
+  .arch .wrap { padding: 40px 20px; }
+  .arch h2 { font-size:24px; font-weight:800; text-align:center; margin-bottom:8px; }
+  .arch .subtitle { text-align:center; font-size:12px; color:#666; margin-bottom:30px; }
+  .archgrid { display:grid; grid-template-columns: 1fr 1fr; gap:0; border: 2px solid var(--ink); }
+  .archcol { padding: 22px; }
+  .archcol:first-child { border-right: 2px solid var(--ink); }
+  .archcol .tag2 { display:inline-block; font-size:10px; font-weight:800; border:2px solid var(--ink); padding:2px 8px; margin-bottom:12px; }
+  .archcol .tag2.reco { background: var(--accent); }
+  .archcol h3 { font-size:15px; margin-bottom:10px; }
+  .archcol ul { font-size:12px; color:#333; padding-left:18px; }
+  .archcol li { margin-bottom:6px; }
+
+  /* WHY OPEN SOURCE / TRUST */
+  section.trust { border-bottom: 3px solid var(--ink); padding: 46px 0; text-align:center; }
+  section.trust h2 { font-size:24px; font-weight:800; margin-bottom:14px; }
+  section.trust p { font-size:13px; color:#333; max-width:600px; margin:0 auto 20px; }
+  section.trust a.gh { font-size:12px; text-decoration:underline; text-decoration-color: var(--accent); text-underline-offset:4px; }
+
+  /* FAQ */
+  section.faq { border-bottom: 3px solid var(--ink); }
+  .faq .wrap { padding: 40px 20px; max-width: 720px; }
+  .faq h2 { font-size:24px; font-weight:800; text-align:center; margin-bottom:30px; }
+  .faqitem { border: 2px solid var(--ink); margin-bottom: -2px; }
+  .faqitem summary { padding: 14px 18px; font-size:13px; font-weight:700; cursor:pointer; list-style:none; display:flex; justify-content:space-between; }
+  .faqitem summary::-webkit-details-marker { display:none; }
+  .faqitem summary::after { content:"+"; color: var(--accent); font-size:18px; }
+  .faqitem[open] summary::after { content:"−"; }
+  .faqitem .body { padding: 0 18px 16px; font-size:12px; color:#444; }
+
+  /* FINAL CTA */
+  section.finalcta { padding: 60px 0; text-align:center; background: var(--ink); color: var(--paper); }
+  section.finalcta h2 { font-size: 26px; font-weight:800; margin-bottom:14px; }
+  section.finalcta h2 .accent { color: var(--accent); }
+  section.finalcta p { font-size:13px; color:#ccc; margin-bottom:26px; }
+
+  footer { padding:20px 0; }
+  footer .wrap { display:flex; justify-content:space-between; font-size:11px; color:#666; }
+
+  @media (max-width: 700px) {
+    h1 { font-size:30px; }
+    .proof .wrap { grid-template-columns: 1fr; }
+    .proof .cell { border-left:none; border-top:2px solid var(--ink); }
+    .proof .cell:first-child { border-top:none; }
+    .archgrid { grid-template-columns: 1fr; }
+    .archcol:first-child { border-right:none; border-bottom: 2px solid var(--ink); }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">klaridian<span class="fn">()</span></div>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+      <a href="#">Docs</a>
+      <a href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap" style="text-align:center;">
+    <div class="tag">OPENAPI → MCP SERVER · v0, PRE-1.0</div>
+    <h1 style="margin-left:auto;margin-right:auto;">Generate an <span class="accent">instrumented</span> MCP server from your API spec.</h1>
+    <p class="sub" style="margin-left:auto;margin-right:auto;">Point it at an OpenAPI document. Get a stateless, TypeScript MCP server with engineering observability (OpenTelemetry) and product analytics (PostHog, Amplitude, Mixpanel) wired in — no manual instrumentation, no closed binary.</p>
+    <div class="install">
+      <div class="bar"><span>install.sh</span><button class="copybtn">COPY</button></div>
+      <pre><span class="prompt">$</span> npx klaridian generate --spec ./api.yaml
+<span class="comment"># → 31 tools · otel wired · dist/src/index.js ready</span></pre>
+    </div>
+    <div class="ctaRow">
+      <a href="#" class="btn solid">Read the docs</a>
+      <a href="#" class="btn ghost">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<section class="proof">
+  <div class="wrap">
+    <div class="cell"><div class="num">452/452</div><div class="label">tools generated from Stripe's public OpenAPI spec</div></div>
+    <div class="cell"><div class="num">122/122</div><div class="label">operations matched Wavix's official hosted MCP server, byte-for-byte tool names</div></div>
+    <div class="cell"><div class="num">MIT</div><div class="label">open source generator — read the code before you trust it with real credentials</div></div>
+  </div>
+</section>
+
+<section class="problem">
+  <div class="wrap">
+    <h2>Building an MCP server today means writing it twice.</h2>
+    <p>Once for the tools. Once more, by hand, for tracing, product analytics, and tool curation — repetitive work every MCP server author redoes from scratch.</p>
+    <p><b>Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own</b> — but those let an agent <i>query</i> those platforms, not automatically instrument a new server you're building. klaridian closes that gap: pick a plugin at generation time, get a server that's already instrumented.</p>
+  </div>
+</section>
+
+<section class="steps" id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+
+    <div class="steprow">
+      <div class="n">01</div>
+      <div>
+        <h3>Parse</h3>
+        <p>Any OpenAPI 3.x document — Swagger 2.0 is converted transparently before parsing.</p>
+        <code class="block"><span class="p">$</span> klaridian generate --spec ./api.yaml</code>
+      </div>
+    </div>
+
+    <div class="steprow">
+      <div class="n">02</div>
+      <div>
+        <h3>Curate</h3>
+        <p>Exclude, rename, or tag operations so agents see a clean tool catalog — not your whole API surface by default.</p>
+        <code class="block"><span class="p">$</span> --exclude-tags internal,admin --overlay ./overlay.yaml</code>
+      </div>
+    </div>
+
+    <div class="steprow">
+      <div class="n">03</div>
+      <div>
+        <h3>Emit</h3>
+        <p>A stateless <code>@modelcontextprotocol/server</code> project (SDK v2, protocol 2025-11-25) — plain, readable TypeScript source, not a generated binary.</p>
+        <code class="block"><span class="p">$</span> --transport streamable-http --architecture tools</code>
+      </div>
+    </div>
+
+    <div class="steprow">
+      <div class="n">04</div>
+      <div>
+        <h3>Instrument + analyze</h3>
+        <p>OTel spans on every tool call, product-analytics events via PostHog/Amplitude/Mixpanel — wired at generation time, not bolted on later.</p>
+        <code class="block"><span class="p">$</span> --plugin otel <span style="color:#888">or</span> --plugin posthog</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="arch">
+  <div class="wrap">
+    <h2>Two ways to expose your API</h2>
+    <p class="subtitle">Pick per generation — one tool per operation, or a typed client for large specs</p>
+    <div class="archgrid">
+      <div class="archcol">
+        <span class="tag2 reco">DEFAULT</span>
+        <h3>Tools architecture</h3>
+        <ul>
+          <li>One MCP tool per OpenAPI operation</li>
+          <li>Byte-identical tool names to your <code>operationId</code>s</li>
+          <li>Best for small-to-medium specs (tens of operations)</li>
+          <li>Validated 1:1 against Stripe (452 tools) and a real production API</li>
+        </ul>
+      </div>
+      <div class="archcol">
+        <span class="tag2">CODE-MODE</span>
+        <h3>Typed client + execute_code</h3>
+        <ul>
+          <li>Two tools total: <code>execute_code</code>, <code>search_docs</code></li>
+          <li>Model writes TypeScript against a typed, Zod-validated client</li>
+          <li>Runs sandboxed in an isolated Deno subprocess</li>
+          <li>Built for large specs — avoids hundreds of chatty tools</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="wrap">
+    <h2>Read it before you trust it</h2>
+    <p>An MCP server runs with real operational credentials next to an autonomous, non-deterministic caller. That's a materially higher trust bar than a normal backend a human calls deliberately — so klaridian's generator, and everything it emits, is open source and auditable by default.</p>
+    <a class="gh" href="#">View source on GitHub →</a>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>FAQ</h2>
+    <details class="faqitem" open>
+      <summary>Is klaridian production-ready?</summary>
+      <div class="body">It's a working v0, pre-1.0. Core generation, curation, and both plugin families are tested end-to-end (real npm install + build + stdio JSON-RPC drives), but the API surface may still change before 1.0.</div>
+    </details>
+    <details class="faqitem">
+      <summary>What license do generated servers ship under?</summary>
+      <div class="body">MIT by default (<code>--license mit</code>), Apache-2.0 as an option. Every generated server ships a real LICENSE file and package.json license field — <code>--license none</code> opts out but prints a warning.</div>
+    </details>
+    <details class="faqitem">
+      <summary>Can I use more than one plugin on the same server?</summary>
+      <div class="body">Not on the current emitter — one plugin per generated server today (otel, or one of posthog/amplitude/mixpanel). Multi-plugin composition was supported by an earlier pipeline and is a tracked follow-up.</div>
+    </details>
+    <details class="faqitem">
+      <summary>Does it support Python / FastMCP?</summary>
+      <div class="body">The generator itself is TypeScript/Node-only. A separate, native FastMCP middleware ships for Python product-analytics (PostHog) — see the docs for details.</div>
+    </details>
+  </div>
+</section>
+
+<section class="finalcta">
+  <div class="wrap">
+    <h2>Generate your first <span class="accent">instrumented</span> server.</h2>
+    <p>One command. No account, no API key, no closed binary.</p>
+    <div class="ctaRow">
+      <a href="#" class="btn solid" style="background:var(--accent); color:var(--ink); border-color:var(--accent);">Read the docs</a>
+      <a href="#" class="btn ghost" style="border-color:var(--paper);">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT LICENSE</span>
+    <span>BUILT ON THE OFFICIAL MCP SDK</span>
+  </div>
+</footer>
+
+</body>
+</html>

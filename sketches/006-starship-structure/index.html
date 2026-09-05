@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian()</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0a0a0a; --paper:#f5f3ee; --accent:#00c853; }
+  * { box-sizing: border-box; margin:0; padding:0; }
+  html,body { background: var(--paper); color: var(--ink); font-family: 'JetBrains Mono', monospace; }
+  body { line-height: 1.5; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+  a { color: inherit; }
+
+  header.topbar { border-bottom: 3px solid var(--ink); }
+  .topbar .wrap { display:flex; justify-content:space-between; align-items:center; padding-top:18px; padding-bottom:18px; }
+  .brand { font-weight:800; font-size:19px; }
+  .brand .fn { color: var(--accent); }
+  nav a { text-decoration:none; margin-left:24px; font-size:13px; border-bottom: 2px solid transparent; }
+  nav a:hover { border-bottom: 2px solid var(--accent); }
+
+  /* HERO — Starship-style: claim, one-line sub, single CTA. No badge, no stats. */
+  .hero { padding: 90px 0 70px; border-bottom: 3px solid var(--ink); text-align:center; }
+  h1 { font-size: 42px; font-weight:800; letter-spacing:-1px; line-height:1.2; margin-bottom:20px; max-width: 620px; margin-left:auto; margin-right:auto; }
+  h1 .accent { color: var(--accent); }
+  .sub { font-size:14px; max-width:480px; margin:0 auto 34px; color:#333; }
+  .btn { display:inline-block; padding:13px 28px; font-size:13px; font-weight:700; text-decoration:none; border:2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  .btn:hover { background: var(--accent); border-color:var(--accent); color:var(--ink); }
+
+  /* THREE BLURBS — one sentence each, no icons, no borders around individual cells */
+  section.blurbs { padding: 60px 0; border-bottom: 3px solid var(--ink); }
+  .blurbgrid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+  .blurb h3 { font-size:14px; font-weight:800; margin-bottom:10px; }
+  .blurb h3 .accent { color: var(--accent); }
+  .blurb p { font-size:12.5px; color:#444; line-height:1.6; }
+
+  /* INSTALL — the one prominent code block, like Starship's Quick Install */
+  section.install { padding: 60px 0; }
+  section.install h2 { font-size: 20px; font-weight:800; text-align:center; margin-bottom: 28px; }
+  .installbox { border: 3px solid var(--ink); background: var(--ink); color: var(--paper); box-shadow: 8px 8px 0 var(--accent); margin: 0 auto; max-width: 560px; }
+  .installbox .bar { display:flex; justify-content:space-between; padding:8px 14px; border-bottom:1px solid #444; font-size:11px; color:#999; }
+  .installbox pre { padding: 20px; font-size:15px; text-align:left; overflow-x:auto; }
+  .installbox .prompt { color: var(--accent); }
+  .installbox .comment { color:#888; font-size:11px; display:block; margin-top:8px; }
+  .copybtn { background: var(--accent); color:var(--ink); border:none; font-family:inherit; font-weight:800; font-size:11px; padding:4px 10px; cursor:pointer; }
+  .install-links { text-align:center; margin-top:20px; font-size:12px; }
+  .install-links a { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset:3px; margin: 0 10px; }
+
+  footer { padding:20px 0; border-top: 3px solid var(--ink); }
+  footer .wrap { display:flex; justify-content:space-between; font-size:11px; color:#666; }
+
+  @media (max-width: 700px) {
+    h1 { font-size:30px; }
+    .blurbgrid { grid-template-columns: 1fr; gap: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">klaridian<span class="fn">()</span></div>
+    <nav>
+      <a href="#">Docs</a>
+      <a href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Generate an <span class="accent">instrumented</span> MCP server from your API spec.</h1>
+    <p class="sub">OpenAPI in, a stateless TypeScript MCP server out — engineering observability and product analytics wired in from the start.</p>
+    <a href="#install" class="btn">Get started →</a>
+  </div>
+</section>
+
+<section class="blurbs">
+  <div class="wrap">
+    <div class="blurbgrid">
+      <div class="blurb">
+        <h3>Born <span class="accent">instrumented</span></h3>
+        <p>OTel spans and product-analytics events wired at generation time — not bolted on after the fact.</p>
+      </div>
+      <div class="blurb">
+        <h3><span class="accent">Curated</span>, not dumped</h3>
+        <p>Exclude, rename, and tag operations so agents see a clean tool catalog, not your whole API.</p>
+      </div>
+      <div class="blurb">
+        <h3><span class="accent">Open</span> by default</h3>
+        <p>MIT-licensed generator, plain readable TypeScript output. Read it before you trust it with real credentials.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="install" id="install">
+  <div class="wrap">
+    <h2>Quick install</h2>
+    <div class="installbox">
+      <div class="bar"><span>install.sh</span><button class="copybtn">COPY</button></div>
+      <pre><span class="prompt">$</span> npx klaridian generate --spec ./api.yaml --plugin otel
+<span class="comment"># → 31 tools · otel wired · dist/src/index.js ready</span></pre>
+    </div>
+    <div class="install-links">
+      <a href="#">Read the docs</a>
+      <a href="#">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT LICENSE</span>
+    <span>BUILT ON THE OFFICIAL MCP SDK</span>
+  </div>
+</footer>
+
+</body>
+</html>

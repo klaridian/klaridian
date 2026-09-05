@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian — Hero Code-First</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background:#ffffff; color:#0f172a; }
+  code, .mono { font-family: 'SFMono-Regular', Menlo, Consolas, monospace; }
+  .gradient-text { background: linear-gradient(90deg, #6366f1, #ec4899); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tab-active { border-bottom: 2px solid #6366f1; color:#0f172a; }
+</style>
+</head>
+<body>
+  <nav class="max-w-6xl mx-auto flex items-center justify-between px-6 py-5">
+    <div class="flex items-center gap-2 font-semibold text-lg">
+      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-pink-500"></div>
+      klaridian
+    </div>
+    <div class="flex items-center gap-6 text-sm font-medium text-slate-600">
+      <a href="#" class="hover:text-slate-900">Docs</a>
+      <a href="#" class="hover:text-slate-900">Plugins</a>
+      <a href="#" class="hover:text-slate-900">Blog</a>
+      <a href="#" class="bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-700">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="max-w-4xl mx-auto px-6 pt-16 pb-10 text-center">
+    <div class="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 mb-6">v0 · OpenAPI-only · TypeScript</div>
+    <h1 class="text-5xl font-bold leading-[1.05] mb-5 tracking-tight">
+      Turn any API into an <span class="gradient-text">agent-ready</span> MCP server
+    </h1>
+    <p class="text-lg text-slate-600 max-w-xl mx-auto mb-8">
+      One command from OpenAPI spec to a working, instrumented Model Context Protocol server. Observability plugins included, not bolted on.
+    </p>
+  </header>
+
+  <section class="max-w-3xl mx-auto px-6 mb-16">
+    <div class="rounded-xl border border-slate-200 shadow-lg overflow-hidden">
+      <div class="flex text-sm mono border-b border-slate-200 bg-slate-50">
+        <div class="px-4 py-2.5 tab-active font-medium">generate.sh</div>
+        <div class="px-4 py-2.5 text-slate-400">server.ts</div>
+        <div class="px-4 py-2.5 text-slate-400">otel.config.ts</div>
+      </div>
+      <pre class="p-5 mono text-[13px] leading-relaxed bg-slate-900 text-slate-100 overflow-x-auto">npx klaridian generate \
+  --spec ./petstore.yaml \
+  --plugin otel \
+  --transport streamable-http
+
+<span class="text-emerald-400">✓ 19 tools generated · OTel wired · ready to run</span></pre>
+    </div>
+    <div class="flex justify-center gap-4 mt-6">
+      <a href="#" class="bg-indigo-600 text-white px-6 py-3 rounded-lg text-sm font-semibold hover:bg-indigo-700">Get started free</a>
+      <a href="#" class="border border-slate-300 px-6 py-3 rounded-lg text-sm font-semibold hover:border-slate-400">See it on Wavix's API →</a>
+    </div>
+  </section>
+
+  <section class="bg-slate-50 border-y border-slate-200 py-16">
+    <div class="max-w-5xl mx-auto px-6 grid md:grid-cols-3 gap-8">
+      <div class="bg-white rounded-xl p-6 border border-slate-200">
+        <div class="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center mb-4 text-indigo-600 font-bold">1:1</div>
+        <h3 class="font-semibold mb-2">Every operation, one tool</h3>
+        <p class="text-sm text-slate-600">Byte-identical tool names to your spec's operationIds — validated against real production APIs.</p>
+      </div>
+      <div class="bg-white rounded-xl p-6 border border-slate-200">
+        <div class="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center mb-4 text-pink-600 font-bold">⌘</div>
+        <h3 class="font-semibold mb-2">Curate before you ship</h3>
+        <p class="text-sm text-slate-600">Exclude, rename, override hints — agents see a clean catalog, not raw REST sprawl.</p>
+      </div>
+      <div class="bg-white rounded-xl p-6 border border-slate-200">
+        <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center mb-4 text-emerald-600 font-bold">◎</div>
+        <h3 class="font-semibold mb-2">Born instrumented</h3>
+        <p class="text-sm text-slate-600">OTel spans wrapped at the registerTool boundary — Datadog, Grafana, or generic OTLP.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="max-w-6xl mx-auto px-6 py-10 text-sm text-slate-500 flex justify-between">
+    <span>© 2026 klaridian — MIT License</span>
+    <div class="flex gap-4">
+      <a href="#" class="hover:text-slate-800">Docs</a>
+      <a href="#" class="hover:text-slate-800">GitHub</a>
+      <a href="#" class="hover:text-slate-800">npm</a>
+    </div>
+  </footer>
+</body>
+</html>

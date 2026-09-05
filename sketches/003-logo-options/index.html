@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian — logo options</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:#f5f3ee; color:#0a0a0a; font-family:'JetBrains Mono', monospace; padding: 40px 20px; }
+  .wrap { max-width: 820px; margin:0 auto; }
+  h1.page-title { font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#888; margin-bottom:40px; border-bottom:2px solid #0a0a0a; padding-bottom:14px; }
+  .option { border:2px solid #0a0a0a; margin-bottom:28px; display:flex; align-items:center; }
+  .option .label { width:150px; flex-shrink:0; font-size:11px; color:#888; padding:16px; border-right:2px solid #0a0a0a; text-transform:uppercase; letter-spacing:1px; }
+  .option .stage { flex:1; padding:26px 30px; background:#fff; display:flex; align-items:center; }
+
+  /* A: monospace bracket */
+  .logoA { font-family:'JetBrains Mono', monospace; font-weight:800; font-size:26px; letter-spacing:-1px; }
+  .logoA .b { color:#ff4d00; }
+
+  /* B: prompt-prefixed */
+  .logoB { font-family:'JetBrains Mono', monospace; font-weight:700; font-size:24px; }
+  .logoB .p { color:#ff4d00; }
+
+  /* C: underscore-split */
+  .logoC { font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:26px; letter-spacing:-0.5px; }
+  .logoC .u { text-decoration: underline; text-decoration-color:#ff4d00; text-decoration-thickness:4px; text-underline-offset:4px; }
+
+  /* D: boxed initial */
+  .logoD { display:flex; align-items:center; gap:10px; font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:24px; }
+  .logoD .box { background:#0a0a0a; color:#ff4d00; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+
+  /* E: strikethrough k, all caps spaced */
+  .logoE { font-family:'JetBrains Mono', monospace; font-weight:700; font-size:22px; letter-spacing:4px; text-transform:uppercase; }
+  .logoE .dot { color:#ff4d00; }
+
+  /* F: version-tag style */
+  .logoF { display:flex; align-items:baseline; gap:8px; font-family:'JetBrains Mono', monospace; }
+  .logoF .name { font-weight:800; font-size:24px; }
+  .logoF .tag { font-size:11px; background:#0a0a0a; color:#ff4d00; padding:2px 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="page-title">wordmark options — klaridian</h1>
+
+  <div class="option">
+    <div class="label">A) bracket</div>
+    <div class="stage"><span class="logoA">klaridian<span class="b">()</span></span></div>
+  </div>
+
+  <div class="option">
+    <div class="label">B) prompt</div>
+    <div class="stage"><span class="logoB"><span class="p">$</span> klaridian</span></div>
+  </div>
+
+  <div class="option">
+    <div class="label">C) underline</div>
+    <div class="stage"><span class="logoC">klari<span class="u">dian</span></span></div>
+  </div>
+
+  <div class="option">
+    <div class="label">D) boxed K</div>
+    <div class="stage"><span class="logoD"><span class="box">K</span> klaridian</span></div>
+  </div>
+
+  <div class="option">
+    <div class="label">E) spaced caps</div>
+    <div class="stage"><span class="logoE">KLARIDIAN<span class="dot">.</span></span></div>
+  </div>
+
+  <div class="option">
+    <div class="label">F) version tag</div>
+    <div class="stage"><span class="logoF"><span class="name">klaridian</span><span class="tag">v0</span></span></div>
+  </div>
+
+</div>
+</body>
+</html>

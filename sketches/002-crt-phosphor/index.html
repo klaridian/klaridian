@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian://</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --green:#33ff99; --dim:#1a7a4d; --bg:#050806; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background: var(--bg); color: var(--green);
+    font-family:'Space Mono', monospace;
+    min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
+  }
+  body::before {
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:5;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: multiply;
+  }
+  body::after {
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:4;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+  }
+  .crt { max-width: 820px; margin:0 auto; padding: 34px 20px 80px; position:relative; z-index:1; }
+
+  .topline { display:flex; justify-content:space-between; font-size:12px; color: var(--dim); border-bottom:1px solid var(--dim); padding-bottom:10px; margin-bottom:40px; }
+  .topline span.live::before { content:"● "; color: var(--green); }
+
+  .logo { font-size:13px; letter-spacing:3px; margin-bottom:6px; color: var(--dim); }
+  h1 { font-size: 30px; line-height:1.4; margin: 10px 0 20px; text-shadow: 0 0 8px rgba(51,255,153,0.5); }
+  h1 .cursor { display:inline-block; width:14px; height:26px; background:var(--green); vertical-align:middle; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  .desc { color: var(--dim); max-width:600px; margin-bottom:36px; font-size:13px; line-height:1.8; }
+  .desc b { color: var(--green); }
+
+  .terminal {
+    border: 1px solid var(--dim);
+    background: rgba(10,20,15,0.6);
+    box-shadow: 0 0 30px rgba(51,255,153,0.08), inset 0 0 40px rgba(0,0,0,0.4);
+    margin-bottom: 40px;
+  }
+  .terminal .tbar { display:flex; justify-content:space-between; padding:8px 14px; border-bottom:1px solid var(--dim); font-size:11px; color: var(--dim); }
+  .terminal pre { padding:24px 20px; font-size:15px; line-height:1.9; }
+  .terminal .p { color:#fff; }
+  .terminal .out { color: var(--dim); }
+  .terminal .ok { color: var(--green); }
+
+  .row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:50px; }
+  .btn { border:1px solid var(--green); color:var(--green); background:transparent; padding:12px 20px; font-family:inherit; font-size:12px; text-decoration:none; letter-spacing:1px; }
+  .btn:hover { background: var(--green); color: var(--bg); }
+  .btn.dim { border-color: var(--dim); color: var(--dim); }
+  .btn.dim:hover { background: var(--dim); color: var(--bg); }
+
+  .stages { display:grid; grid-template-columns:repeat(4,1fr); gap:0; border-top:1px solid var(--dim); border-bottom:1px solid var(--dim); }
+  .stage { padding: 18px 14px; border-left:1px solid var(--dim); font-size:11px; }
+  .stage:first-child { border-left:none; }
+  .stage .tag { color:var(--green); font-weight:700; display:block; margin-bottom:8px; }
+  .stage p { color: var(--dim); line-height:1.6; }
+
+  footer { margin-top:40px; font-size:11px; color:var(--dim); display:flex; justify-content:space-between; }
+
+  @media (max-width:700px){
+    .stages { grid-template-columns: 1fr 1fr; }
+    h1 { font-size:22px; }
+  }
+</style>
+</head>
+<body>
+<div class="crt">
+  <div class="topline">
+    <span class="live">SYSTEM ONLINE</span>
+    <span>PROTOCOL 2025-11-25</span>
+  </div>
+
+  <div class="logo">K L A R I D I A N</div>
+  <h1>openapi.yaml → mcp server<span class="cursor"></span></h1>
+  <p class="desc">Generate a <b>stateless Model Context Protocol server</b> straight from your OpenAPI spec. Observability plugins wired in at build time — <b>OpenTelemetry</b> traces on every tool call, not bolted on after the fact.</p>
+
+  <div class="terminal">
+    <div class="tbar"><span>~/api-project</span><span onclick="copyCmd()" style="cursor:pointer;text-decoration:underline;">[copy]</span></div>
+    <pre><span class="p">$</span> npx klaridian generate --spec ./api.yaml --plugin otel
+<span class="out">resolving 47 operations...</span>
+<span class="out">curating tool surface...</span>
+<span class="ok">✓ done — 31 tools, otel wired, dist/src/index.js</span></pre>
+  </div>
+
+  <div class="row">
+    <a href="#" class="btn">READ_DOCS →</a>
+    <a href="#" class="btn dim">VIEW_SOURCE →</a>
+  </div>
+
+  <div class="stages">
+    <div class="stage"><span class="tag">PARSE</span><p>OpenAPI 3.x / Swagger 2.0</p></div>
+    <div class="stage"><span class="tag">CURATE</span><p>exclude, rename, tag</p></div>
+    <div class="stage"><span class="tag">EMIT</span><p>SDK v2, stdio / http</p></div>
+    <div class="stage"><span class="tag">INSTRUMENT</span><p>OTel span per tool call</p></div>
+  </div>
+
+  <footer>
+    <span>MIT LICENSE</span>
+    <span>github.com/ricardocvasconcelos/klaridian</span>
+  </footer>
+</div>
+<script>
+function copyCmd(){ navigator.clipboard.writeText('npx klaridian generate --spec ./api.yaml --plugin otel'); }
+</script>
+</body>
+</html>

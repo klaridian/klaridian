@@ -56,10 +56,21 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Install Vale
+        run: |
+          curl -sfL https://raw.githubusercontent.com/errata-ai/vale/master/install.sh | \
+            sh -s -- -b /usr/local/bin v3.20.0
+      - name: Sync Vale styles (downloads the MIT-licensed Microsoft package)
+        run: vale sync
       - name: Run Vale (Microsoft Writing Style Guide)
-        uses: vale-cli/vale-action@v3
-        with:
-          version: 3.20.0
-          fail_on_error: false
-          separator: ","
-          files: "README.md,AGENTS.md,PLAN.md,ARCHITECTURE.md,CONTRIBUTING.md,SECURITY.md,CODE_OF_CONDUCT.md,STYLE.md,packages/site/content/docs,packages/python-posthog-middleware/README.md"
+        env:
+          # Vale resolves the custom vocabulary (Vocab=klaridian in .vale.ini)
+          # against this path, not .vale.ini's project-relative StylesPath --
+          # without it Vale looks under the global per-user config dir instead
+          # and fails with "vocabulary not found" in a fresh CI runner.
+          VALE_STYLES_PATH: ${{ github.workspace }}/.github/vale/styles
+        run: |
+          vale README.md AGENTS.md PLAN.md ARCHITECTURE.md CONTRIBUTING.md \
+            SECURITY.md CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs \
+            packages/python-posthog-middleware/README.md
+        continue-on-error: true

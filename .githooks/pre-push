@@ -32,3 +32,13 @@ echo "[pre-push] Running Python PostHog middleware tests (packages/python-postho
 )
 
 echo "[pre-push] All checks passed."
+
+echo "[pre-push] Running Vale doc style check (Microsoft Writing Style Guide, non-blocking)..."
+if command -v vale >/dev/null 2>&1; then
+  vale README.md AGENTS.md PLAN.md ARCHITECTURE.md CONTRIBUTING.md SECURITY.md \
+    CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs \
+    packages/python-posthog-middleware/README.md || \
+    echo "[pre-push] Vale reported style issues above -- see STYLE.md. Not blocking this push."
+else
+  echo "[pre-push] vale not installed locally (brew install vale) -- skipping; CI's docs-style job still runs it."
+fi

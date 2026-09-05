@@ -1,6 +1,6 @@
 ---
 title: PostHog
-description: Product-analytics events for every tool call — adoption, usage funnels, success rate.
+description: Product-analytics events for every tool call—adoption, usage funnels, success rate.
 ---
 
 ## Enabling the plugin
@@ -15,9 +15,9 @@ whether the server is up.
 
 ## Why a separate plugin from OTel
 
-Engineering observability (traces) has one shared standard —
-OpenTelemetry — so one `otel` plugin covers Datadog, Grafana, Honeycomb,
-and any other OTLP backend. Product analytics has no equivalent shared
+Engineering observability (traces) has one shared standard—OpenTelemetry—so
+one `otel` plugin covers Datadog, Grafana, Honeycomb, and any other OTLP
+backend. Product analytics has no equivalent shared
 ingestion standard: PostHog, Amplitude, and Mixpanel each need their own
 plugin. `posthog` is the first; `amplitude` and `mixpanel` ship the same
 event shape against their own SDKs.
@@ -42,6 +42,6 @@ not yet re-implemented on the current emitter.
 
 If you're generating for FastMCP directly rather than through klaridian's
 TypeScript emitter, see the standalone
-[`PostHogMiddleware`](https://github.com/ricardocvasconcelos/klaridian/tree/main/packages/python-posthog-middleware) —
-a native FastMCP middleware, not a code generator or patch, for
+[`PostHogMiddleware`](https://github.com/ricardocvasconcelos/klaridian/tree/main/packages/python-posthog-middleware)—a
+native FastMCP middleware, not a code generator or patch, for
 `mcp.add_middleware(PostHogMiddleware(...))`.

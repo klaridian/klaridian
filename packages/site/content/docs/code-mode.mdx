@@ -1,11 +1,11 @@
 ---
 title: Code-mode architecture
-description: For large APIs — a typed client and two tools (execute_code, search_docs) instead of one tool per operation.
+description: For large APIs—a typed client and two tools (execute_code, search_docs) instead of one tool per operation.
 ---
 
 ## The problem it solves
 
-An OpenAPI spec designed for humans is "generous" — hundreds of atomic
+An OpenAPI spec designed for humans is "generous"—hundreds of atomic
 endpoints. Agents pay a real per-tool cost in context and reasoning
 overhead. Auto-converting every operation into its own MCP tool works
 well for small APIs, but on a large spec (dozens to hundreds of
@@ -22,13 +22,13 @@ npx klaridian generate --spec ./api.yaml \
 
 Instead of one MCP tool per operation, you get exactly **two** tools:
 
-- **`search_docs`** — the model looks up a generated function's
+- **`search_docs`**—the model looks up a generated function's
   signature and purpose (real OpenAPI description, or a structural
   fallback built from the operation's shape when the spec's own
   description is missing/sparse) before writing any code.
-- **`execute_code`** — runs model-written TypeScript against a fully
+- **`execute_code`**—runs model-written TypeScript against a fully
   typed, Zod-validated client (`src/client.ts`), generated from the same
-  tool data as the one-tool-per-operation mode — one exported async
+  tool data as the one-tool-per-operation mode—one exported async
   function per operation.
 
 ## Why a sandboxed subprocess, not eval-in-process
@@ -42,7 +42,7 @@ the server's own Node process:
 # no --allow-write, --allow-run, --allow-ffi, --allow-env(*) ever
 ```
 
-Real, validated boundaries — not assumed ones: cross-host `fetch()` is
+Real, validated boundaries—not assumed ones: cross-host `fetch()` is
 blocked (`NotCapable`), arbitrary file writes are blocked, and reads
 outside the generated client's directory are blocked, each confirmed
 with a real spawned Deno subprocess against adversarial test code.
@@ -52,19 +52,19 @@ with a real spawned Deno subprocess against adversarial test code.
 Evaluated against three published architectures (SDK code mode, Cloudflare
 Code Mode, generic "dynamic" meta-tools) on a real 31-case benchmark: SDK
 code mode won on completeness (98%), efficiency (95%), and factuality
-(53%) — the other approaches returned confidently wrong aggregate results
+(53%)—the other approaches returned confidently wrong aggregate results
 with no signal the answer was incomplete. klaridian's code-mode follows
 the same proven shape (typed client + sandboxed execution), using Deno
 for the sandbox boundary instead of embedding V8 directly.
 
 ## Constraints today
 
-- Requires `--engine v2` (the default) and an **absolute** `--base-url` —
-  the sandbox's network permission is fixed at generation time, so there's
+- Requires `--engine v2` (the default) and an **absolute** `--base-url`—the
+  sandbox's network permission is fixed at generation time, so there's
   no safe fallback for a relative or missing base URL.
 - No plugin instrumentation yet (`--plugin otel`/`--plugin posthog` +
-  `--architecture code-mode` is rejected) — the collapsed single
+  `--architecture code-mode` is rejected)—the collapsed single
   `execute_code` call site doesn't have a per-operation instrumentation
   hook to wire into yet.
-- One architecture per generated server — `tools` and `code-mode` are not
+- One architecture per generated server—`tools` and `code-mode` are not
   combined in a single output.

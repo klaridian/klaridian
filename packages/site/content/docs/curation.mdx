@@ -1,35 +1,55 @@
 ---
 title: Curating the tool surface
-description: Exclude, rename, and tag operations so agents see a clean tool catalog.
+description: Control which OpenAPI operations become MCP tools.
 ---
 
 ## Why curate
 
-An OpenAPI spec designed for humans is "generous"—hundreds of atomic,
-composable endpoints. Agents pay a real cost per tool in context and
-reasoning overhead. Auto-conversion 1:1 produces a bloated, "chatty" tool
-catalog that makes agents slower and more error-prone, not more capable.
+An OpenAPI spec built for humans is generous—hundreds of small, separate endpoints. Agents pay a real cost for every tool they see: more context, more chances to pick the wrong one. Converting every operation into a tool, 1:1, can leave agents with a bloated, confusing tool list.
 
-## CLI flags
+Curation lets you decide what agents actually see.
 
-```bash
-npx klaridian generate --spec ./api.yaml \
-  --exclude-tags internal,admin \
-  --exclude-ops deleteAccount,purgeData
-```
+## By tag
 
-- `--exclude-tags`—drop every operation under the given OpenAPI tags
-- `--exclude-ops`—drop specific operations by `operationId`
-
-## Overlay-based curation (`x-klaridian-mcp`)
-
-For richer control—renaming tools, overriding descriptions, setting
-`readOnlyHint`/`destructiveHint`—klaridian reads a companion overlay file
-built on the OpenAPI Overlay Specification:
+Most specs group operations with OpenAPI tags. Use these to include or exclude by tag:
 
 ```bash
-npx klaridian generate --spec ./api.yaml --overlay ./overlay.yaml
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --exclude-tags internal,admin
 ```
 
-This keeps curation decisions in a small, reviewable file instead of
-editing the source spec directly.
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --include-tags public
+```
+
+## By operation ID
+
+Exclude specific operations regardless of tag:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --exclude-operation-ids deleteAccount,purgeData
+```
+
+## By path or method
+
+Some specs don't use tags at all. `--include-paths`, `--exclude-paths`, `--include-methods`, and `--exclude-methods` work without them—they match on the operation's URL path (regex) or HTTP method:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --exclude-paths "^/internal/" \
+  --exclude-methods delete
+```
+
+Path/method filters and tag filters can combine—an operation must pass both to be included.
+
+## Interactively
+
+Prefer to pick tags by hand instead of writing flags? Use `--interactive`:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --interactive
+```
+
+This prompts you for which tags to include before generating. It needs a real terminal—it fails with a clear error in CI or scripts, instead of silently generating with no tools.

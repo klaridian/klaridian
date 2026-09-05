@@ -1,37 +1,35 @@
 ---
 title: Getting Started
-description: Generate your first instrumented MCP server from an OpenAPI spec.
+description: Generate your first MCP server from an OpenAPI spec.
 ---
 
 ## Install
 
-Run the generator directly with `npx`—no install step required. Today,
-klaridian is CLI-only: there is no `import`/`require` library mode yet
-(tracked separately, not built).
+You don't need to install anything. Run the generator with `npx`:
 
 ```bash
-npx klaridian generate --spec ./api.yaml --plugin otel
+npx klaridian generate --spec ./api.yaml --out ./my-server --plugin otel
 ```
+
+klaridian is a CLI today. There's no library mode yet (no `import`/`require`)—that's tracked separately, not built.
 
 ## What you get
 
-- One MCP tool per OpenAPI operation (byte-identical names to your
-  `operationId`s)—the default **tools** architecture
-- A stateless TypeScript server (SDK v2, protocol 2025-11-25)
-- OpenTelemetry spans wired at the `registerTool` boundary—no manual
-  instrumentation
+- One MCP tool per operation in your OpenAPI spec
+- Tool names match your spec's `operationId`s exactly
+- A stateless TypeScript server, ready to run
+- OpenTelemetry tracing already wired in, if you passed `--plugin otel`
 
-## Two architectures
+## Two ways to generate
 
-For large specs (dozens to hundreds of operations), generating one MCP
-tool per operation gets chatty. klaridian also supports a **code-mode**
-architecture—a typed client plus two tools (`execute_code`,
-`search_docs`) instead of one tool per operation. See
-[Code-mode architecture](/docs/code-mode).
+By default, klaridian makes one MCP tool per API operation. This works well for small and medium specs.
+
+For large specs (dozens or hundreds of operations), that gets noisy. Use `--architecture code-mode` instead—it generates a typed client and just two tools (`execute_code`, `search_docs`). See [Code-mode architecture](/docs/code-mode).
 
 ## Next steps
 
-- [Curating the tool surface](/docs/curation)
-- [Code-mode architecture](/docs/code-mode)
+- [Curating the tool surface](/docs/curation)—control which operations become tools
+- [Code-mode architecture](/docs/code-mode)—for large specs
+- [CLI reference](/docs/cli-reference)—every flag
 - [Plugins: OpenTelemetry](/docs/plugins/otel)
 - [Plugins: PostHog](/docs/plugins/posthog)

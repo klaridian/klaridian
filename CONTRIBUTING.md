@@ -9,6 +9,7 @@ Thanks for considering a contribution! klaridian is early—the project is still
 - **"Fail loudly, don't guess."** If a change hits something ambiguous (an unsupported schema shape, a missing config value), it should produce a clear error or warning, never silently do something subtly wrong.
 - **Every non-trivial change should be validated end to end**, not just unit-tested. This project's own tests do real `npm install`/`tsc build`/spawn-and-drive-over-stdio for the TypeScript CLI, and a real FastMCP server + client round-trip for the Python middleware—because the riskiest failure modes only show up at that level.
 - **Documentation follows the Microsoft Writing Style Guide**—see [STYLE.md](STYLE.md) for the rule, the licensing basis for adopting it, project-specific exceptions, and how to lint with Vale before submitting a docs change.
+- **`packages/site/content/docs/cli-reference.mdx` is generated, never hand-edited.** It's produced from the real `klaridian generate` command (see `packages/cli/scripts/generate-cli-docs.mjs`) so the docs can't silently drift from the actual CLI flags. After changing a flag in `packages/cli/src/commands/generate.ts`, run `npm run docs:gen` (from `packages/cli`) and commit the regenerated file—CI and the pre-push hook both fail the build (`npm run docs:check`) if it's out of sync.
 
 ## Development setup
 

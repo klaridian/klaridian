@@ -1,28 +1,17 @@
 ---
 title: PostHog
-description: Product-analytics events for every tool call—adoption, usage funnels, success rate.
+description: See which tools agents actually use.
 ---
 
-## Enabling the plugin
+## Enable it
 
 ```bash
-npx klaridian generate --spec ./api.yaml --plugin posthog
+npx klaridian generate --spec ./api.yaml --out ./my-server --plugin posthog
 ```
 
-Every tool call emits a PostHog event (`tool_name`, `duration_ms`,
-`success`) so you can see which tools agents actually use, not just
-whether the server is up.
+Every tool call sends a PostHog event with the tool name, how long it took, and whether it succeeded. This tells you which tools get used—OpenTelemetry tells you if a call is slow or broken, but not whether anyone's calling it.
 
-## Why a separate plugin from OTel
-
-Engineering observability (traces) has one shared standard—OpenTelemetry—so
-one `otel` plugin covers Datadog, Grafana, Honeycomb, and any other OTLP
-backend. Product analytics has no equivalent shared
-ingestion standard: PostHog, Amplitude, and Mixpanel each need their own
-plugin. `posthog` is the first; `amplitude` and `mixpanel` ship the same
-event shape against their own SDKs.
-
-## Configuration
+## Configure it
 
 ```bash
 POSTHOG_API_KEY=phc_... \
@@ -30,18 +19,14 @@ POSTHOG_HOST=https://app.posthog.com \
 node dist/src/index.js
 ```
 
-## One plugin per server today
+## Why this is a separate plugin from OTel
 
-The current emitter supports one plugin per generated server
-(`--plugin otel` **or** `--plugin posthog`, not both at once). Composing
-an engineering plugin and a product plugin on the same server was
-supported by an earlier generation pipeline and is a tracked follow-up,
-not yet re-implemented on the current emitter.
+Tracing has one open standard—OpenTelemetry—so one `otel` plugin works with every backend. Product analytics doesn't have that: PostHog, Amplitude, and Mixpanel each need their own integration. `posthog` is the first; `amplitude` and `mixpanel` work the same way.
 
-## Python / FastMCP
+## One plugin at a time
 
-If you're generating for FastMCP directly rather than through klaridian's
-TypeScript emitter, see the standalone
-[`PostHogMiddleware`](https://github.com/ricardocvasconcelos/klaridian/tree/main/packages/python-posthog-middleware)—a
-native FastMCP middleware, not a code generator or patch, for
-`mcp.add_middleware(PostHogMiddleware(...))`.
+Today you can pick one plugin per server—`otel`, or one of the analytics plugins, not both together. Combining an engineering plugin and a product plugin on the same server is planned, not built yet.
+
+## Using FastMCP instead?
+
+If you're building with Python's FastMCP directly rather than generating with klaridian, there's a standalone [`PostHogMiddleware`](https://github.com/ricardocvasconcelos/klaridian/tree/main/packages/python-posthog-middleware) you can add with `mcp.add_middleware(PostHogMiddleware(...))`.

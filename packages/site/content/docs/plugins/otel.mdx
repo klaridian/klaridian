@@ -1,0 +1,32 @@
+---
+title: "Plugins: OpenTelemetry"
+description: Wire OTel tracing into every tool call without writing instrumentation code.
+---
+
+## Enabling the plugin
+
+```bash
+npx klaridian generate --spec ./api.yaml --plugin otel
+```
+
+Every tool call is wrapped in a span at the `registerTool` boundary — no
+manual instrumentation in the generated code.
+
+## Exporter
+
+klaridian always emits `OTLPTraceExporter`, diagnostics routed to `stderr`.
+**Never `ConsoleSpanExporter`** in an MCP server — writing to stdout
+corrupts the stdio JSON-RPC transport.
+
+## Backend configuration
+
+Point the generated server at any OTLP-compatible backend (Datadog,
+Grafana Tempo, Honeycomb, etc.) via standard OTel environment variables:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.your-backend.example \
+OTEL_EXPORTER_OTLP_HEADERS="api-key=..." \
+node dist/src/index.js
+```
+
+No backend-specific code is generated — it's plain, standard OpenTelemetry.

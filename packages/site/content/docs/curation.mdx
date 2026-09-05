@@ -1,0 +1,35 @@
+---
+title: Curating the tool surface
+description: Exclude, rename, and tag operations so agents see a clean tool catalog.
+---
+
+## Why curate
+
+An OpenAPI spec designed for humans is "generous" — hundreds of atomic,
+composable endpoints. Agents pay a real cost per tool in context and
+reasoning overhead. Auto-conversion 1:1 produces a bloated, "chatty" tool
+catalog that makes agents slower and more error-prone, not more capable.
+
+## CLI flags
+
+```bash
+npx klaridian generate --spec ./api.yaml \
+  --exclude-tags internal,admin \
+  --exclude-ops deleteAccount,purgeData
+```
+
+- `--exclude-tags` — drop every operation under the given OpenAPI tags
+- `--exclude-ops` — drop specific operations by `operationId`
+
+## Overlay-based curation (`x-klaridian-mcp`)
+
+For richer control — renaming tools, overriding descriptions, setting
+`readOnlyHint`/`destructiveHint` — klaridian reads a companion overlay file
+built on the OpenAPI Overlay Specification:
+
+```bash
+npx klaridian generate --spec ./api.yaml --overlay ./overlay.yaml
+```
+
+This keeps curation decisions in a small, reviewable file instead of
+editing the source spec directly.

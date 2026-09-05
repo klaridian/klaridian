@@ -142,3 +142,23 @@ See [Wizard fields](/docs/how-to/init) for the full guide.
 | `--plugin <id>` | Observability plugin to enable, repeatable (available: otel, posthog, amplitude, mixpanel); skips that prompt when passed |
 | `--license <id>` | License for the generated server: mit, apache-2.0, none (skips that prompt when passed). Defaults to `mit`. |
 | `--transport <type>` | Transport for the generated server: stdio or streamable-http (skips that prompt when passed). Defaults to `stdio`. |
+
+## klaridian plugins list
+
+List every available observability plugin (id and name)
+
+### Options
+
+| Flag | What it does |
+|---|---|
+| `--json` | Print the list as a single JSON object (`{ plugins: [...] }`) to stdout instead of aligned text |
+
+## klaridian licenses list
+
+List every supported license id for the generated server
+
+### Options
+
+| Flag | What it does |
+|---|---|
+| `--json` | Print the list as a single JSON object (`{ licenses: [...] }`) to stdout instead of aligned text |

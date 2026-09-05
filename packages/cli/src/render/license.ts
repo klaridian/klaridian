@@ -18,6 +18,18 @@ export function isSupportedLicense(value: string): value is LicenseId {
   return (SUPPORTED_LICENSES as string[]).includes(value);
 }
 
+/**
+ * Short human-readable label per license id, for `klaridian licenses list`
+ * (MCPFO-39). Typed as an exhaustive `Record<LicenseId, string>` on purpose:
+ * adding an id to `SUPPORTED_LICENSES` without a label here is a compile
+ * error, so the introspection command can never fall out of sync.
+ */
+export const LICENSE_LABELS: Record<LicenseId, string> = {
+  mit: "MIT License",
+  "apache-2.0": "Apache License 2.0",
+  none: "No LICENSE file — not recommended before distributing the server",
+};
+
 function mitText(author: string, year: number): string {
   return `MIT License
 

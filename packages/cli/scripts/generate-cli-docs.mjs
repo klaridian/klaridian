@@ -28,14 +28,36 @@ import {
   GENERATE_FLAG_DOC_GROUPS,
 } from "../dist/src/commands/generate.js";
 import { registerInitCommand, INIT_FLAG_DOC_GROUPS } from "../dist/src/commands/init.js";
+import {
+  registerPluginsCommand,
+  registerLicensesCommand,
+  PLUGINS_LIST_FLAG_DOC_GROUPS,
+  LICENSES_LIST_FLAG_DOC_GROUPS,
+} from "../dist/src/commands/list.js";
 
 // Every `klaridian` subcommand that gets a reference section, each paired
 // with its flag-grouping metadata (the single source of truth for how its
 // flags are organized on the docs page). Add a command here and it shows up
-// on the page automatically.
+// on the page automatically. `subcommand` handles two-level commands like
+// `klaridian plugins list`; `sourceFile` is the src/commands/*.ts file its
+// *_FLAG_DOC_GROUPS lives in (defaults to `name`), used only in drift errors.
 const DOCUMENTED_COMMANDS = [
   { name: "generate", register: registerGenerateCommand, groups: GENERATE_FLAG_DOC_GROUPS },
   { name: "init", register: registerInitCommand, groups: INIT_FLAG_DOC_GROUPS },
+  {
+    name: "plugins",
+    subcommand: "list",
+    sourceFile: "list",
+    register: registerPluginsCommand,
+    groups: PLUGINS_LIST_FLAG_DOC_GROUPS,
+  },
+  {
+    name: "licenses",
+    subcommand: "list",
+    sourceFile: "list",
+    register: registerLicensesCommand,
+    groups: LICENSES_LIST_FLAG_DOC_GROUPS,
+  },
 ];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,13 +107,22 @@ function formatDescription(opt) {
   return text;
 }
 
-function renderCommand({ name, register, groups }) {
+function renderCommand({ name, subcommand, sourceFile, register, groups }) {
   const program = new Command();
   register(program);
-  const cmd = program.commands.find((c) => c.name() === name);
+  let cmd = program.commands.find((c) => c.name() === name);
   if (!cmd) {
     throw new Error(`Could not find the '${name}' command on the built CLI.`);
   }
+  let fullName = name;
+  if (subcommand) {
+    cmd = cmd.commands.find((c) => c.name() === subcommand);
+    if (!cmd) {
+      throw new Error(`Could not find the '${name} ${subcommand}' subcommand on the built CLI.`);
+    }
+    fullName = `${name} ${subcommand}`;
+  }
+  const groupsFile = sourceFile ?? name;
 
   const allOptions = cmd.options.map((o) => ({
     flags: o.flags,
@@ -112,13 +143,13 @@ function renderCommand({ name, register, groups }) {
 
   if (undocumented.length > 0) {
     throw new Error(
-      `Flag(s) exist on 'klaridian ${name}' but aren't in its *_FLAG_DOC_GROUPS ` +
-        `(src/commands/${name}.ts): ${undocumented.join(", ")}. Add them to a group before regenerating docs.`
+      `Flag(s) exist on 'klaridian ${fullName}' but aren't in its *_FLAG_DOC_GROUPS ` +
+        `(src/commands/${groupsFile}.ts): ${undocumented.join(", ")}. Add them to a group before regenerating docs.`
     );
   }
   if (nonExistent.length > 0) {
     throw new Error(
-      `'klaridian ${name}''s *_FLAG_DOC_GROUPS references flag(s) that don't exist on the real CLI: ` +
+      `'klaridian ${fullName}''s *_FLAG_DOC_GROUPS references flag(s) that don't exist on the real CLI: ` +
         `${nonExistent.join(", ")}. Remove them or fix the flag name.`
     );
   }
@@ -132,7 +163,7 @@ function renderCommand({ name, register, groups }) {
     return `### ${category}\n${seeAlso}\n| Flag | What it does |\n|---|---|\n${rows.join("\n")}\n`;
   });
 
-  return `## klaridian ${name}\n\n${cmd.description()}\n\n${groupSections.join("\n")}`;
+  return `## klaridian ${fullName}\n\n${cmd.description()}\n\n${groupSections.join("\n")}`;
 }
 
 function main() {

@@ -39,6 +39,7 @@ import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
 import { isSwagger2Document, convertSwagger2ToOpenApi3, Swagger2ConversionError } from "../spec/swagger2-conversion.js";
 import { loadConfigFile, ConfigFileError, CONFIG_FILE_NAME } from "../config/config-file.js";
+import { createCliOutput } from "../cli-output.js";
 import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
@@ -47,12 +48,23 @@ import {
   type GenerateJsonResult,
 } from "./generate-helpers.js";
 
-const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
+/**
+ * Every observability plugin `klaridian generate --plugin` accepts. Exported
+ * as the single source of truth so `klaridian init`'s wizard offers exactly
+ * this list rather than duplicating it (MCPFO-38 / ARCHITECTURE.md section 53).
+ */
+export const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
   [otelPlugin.id]: otelPlugin,
   [posthogPlugin.id]: posthogPlugin,
   [amplitudePlugin.id]: amplitudePlugin,
   [mixpanelPlugin.id]: mixpanelPlugin,
 };
+
+/**
+ * Transports the generated server (and so `--transport`) supports. Exported
+ * for the same single-source-of-truth reason as AVAILABLE_PLUGINS above.
+ */
+export const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http"] as const;
 
 /**
  * Doc-generation metadata for `klaridian generate`'s flags (see
@@ -285,8 +297,6 @@ export function registerGenerateCommand(program: Command): void {
         json: boolean;
         quiet: boolean;
       }, command: Command) => {
-        const warnings: string[] = [];
-
         // MCPFO-37 / ARCHITECTURE.md section 52: merge the config file (a
         // defaults layer) into `opts` BEFORE anything reads it — including
         // --json/--quiet below, which the file is allowed to set. commander
@@ -328,35 +338,12 @@ export function registerGenerateCommand(program: Command): void {
         }
 
         const jsonMode = opts.json;
-        const quietMode = opts.quiet || opts.json;
 
-        /** Human-readable-mode-only progress line; suppressed by --quiet and --json. */
-        const step = (msg: string) => {
-          if (!quietMode) console.error(msg);
-        };
-        /** Always recorded (surfaces in JSON's `warnings` array); also printed to stderr unless --json. */
-        const warn = (msg: string) => {
-          warnings.push(msg);
-          if (!jsonMode) console.error(msg);
-        };
-        /**
-         * Unified failure path for every error branch below: prints a single
-         * JSON error object to stdout in --json mode (tagged with `stage` so
-         * a caller/agent can tell which step failed without string-matching
-         * prose), or the human `❌ message` line(s) on stderr otherwise. Sets
-         * the process exit code either way. Callers still need their own
-         * `return` right after calling this (it doesn't throw/exit itself),
-         * matching every other early-return in this file.
-         */
-        const fail = (message: string, stage: string) => {
-          process.exitCode = 1;
-          if (jsonMode) {
-            const result: GenerateJsonResult = { success: false, error: message, stage, warnings };
-            process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-          } else {
-            console.error(`❌ ${message}`);
-          }
-        };
+        // step/warn/fail follow the shared CLI-UX contract (ARCHITECTURE.md
+        // section 32); the closures live in cli-output.ts so `klaridian init`
+        // reuses them verbatim (MCPFO-38). The richer success-path JSON
+        // payload below stays here — it isn't shared.
+        const { step, warn, fail, warnings } = createCliOutput({ json: opts.json, quiet: opts.quiet });
 
         // Flush the config-file load result now that the output helpers
         // (which depend on jsonMode/quietMode, themselves possibly set by
@@ -380,7 +367,6 @@ export function registerGenerateCommand(program: Command): void {
           }
           const license = opts.license;
 
-          const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http"] as const;
           type Transport = (typeof SUPPORTED_TRANSPORTS)[number];
           if (!(SUPPORTED_TRANSPORTS as readonly string[]).includes(opts.transport)) {
             fail(`Unknown transport "${opts.transport}". Supported: ${SUPPORTED_TRANSPORTS.join(", ")}`, "validate-transport");

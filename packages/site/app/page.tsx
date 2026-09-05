@@ -40,8 +40,9 @@ export default function Home() {
           </h1>
           <p className="text-sm max-w-[560px] mx-auto mb-9 text-[#333]">
             Point it at an OpenAPI document. Get a stateless, TypeScript MCP
-            server with OpenTelemetry traces wired in — no manual
-            instrumentation, no closed binary.
+            server with engineering observability (OpenTelemetry) and
+            product analytics (PostHog, Amplitude, Mixpanel) wired in—no
+            manual instrumentation, no closed binary.
           </p>
 
           <CopyInstallCommand />
@@ -63,9 +64,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3-column feature strip */}
+      {/* 4-column feature strip */}
       <section className="border-b-[3px] border-[var(--klaridian-ink)]">
-        <div className="max-w-[900px] mx-auto grid grid-cols-1 md:grid-cols-3">
+        <div className="max-w-[900px] mx-auto grid grid-cols-1 md:grid-cols-4">
           {[
             {
               n: "01",
@@ -80,7 +81,12 @@ export default function Home() {
             {
               n: "03",
               title: "Instrument",
-              body: "OTel spans at the registerTool boundary. OTLPTraceExporter — Datadog, Grafana, any OTLP backend.",
+              body: "OTel spans at the registerTool boundary. OTLPTraceExporter—Datadog, Grafana, any OTLP backend.",
+            },
+            {
+              n: "04",
+              title: "Analyze",
+              body: "One event per tool call (tool_name, duration_ms, success). PostHog, Amplitude, or Mixpanel—see which tools agents actually use.",
             },
           ].map((c, i) => (
             <div

@@ -12,7 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.json && node --test --test-concurrency=4 dist/test/*.test.js",
     "docs:gen": "npm run build --silent && node scripts/generate-cli-docs.mjs",
-    "docs:check": "npm run docs:gen --silent && git diff --exit-code -- ../site/content/docs/cli-reference.mdx"
+    "docs:check": "npm run docs:gen --silent && git diff --exit-code -- ../site/content/docs/reference/cli-reference.mdx"
   },
   "dependencies": {
     "@amplitude/analytics-node": "^1.5.71",

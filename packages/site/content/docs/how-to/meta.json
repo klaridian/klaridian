@@ -1,0 +1,13 @@
+{
+  "title": "How-to guides",
+  "pages": [
+    "curation",
+    "code-mode",
+    "transports",
+    "licensing",
+    "docker",
+    "oauth",
+    "mcp-registry",
+    "plugins"
+  ]
+}

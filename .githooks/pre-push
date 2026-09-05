@@ -35,6 +35,7 @@ echo "[pre-push] All checks passed."
 
 echo "[pre-push] Running Vale doc style check (Microsoft Writing Style Guide, non-blocking)..."
 if command -v vale >/dev/null 2>&1; then
+  VALE_STYLES_PATH="$(pwd)/.github/vale/styles" \
   vale README.md AGENTS.md PLAN.md ARCHITECTURE.md CONTRIBUTING.md SECURITY.md \
     CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs \
     packages/python-posthog-middleware/README.md || \

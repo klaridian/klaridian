@@ -4,3 +4,14 @@
 .hermes/
 dist/
 node_modules/
+
+# vale sync downloads the Microsoft style package here -- generated,
+# not hand-edited; .vale.ini and the vocabulary file are the checked-in
+# config (see STYLE.md). Each intermediate directory needs its own
+# negation -- git won't descend into an ignored dir to re-include a
+# deeper path.
+.github/vale/styles/*
+!.github/vale/styles/config/
+!.github/vale/styles/config/vocabularies/
+!.github/vale/styles/config/vocabularies/klaridian/
+!.github/vale/styles/config/vocabularies/klaridian/accept.txt

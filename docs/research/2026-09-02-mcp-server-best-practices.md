@@ -1,14 +1,14 @@
-# Production MCP Servers — 2026 Best Practices (Research Report)
+# Production MCP Servers—2026 Best Practices (Research Report)
 
 **Date:** 2026-09-02 · **Audience:** klaridian maintainers · **Perspective:** the *server developer* (independent of any generator/framework)
 
 **Method.** Web research over official MCP specification pages (2025-11-25 and 2026-07-28), the MCP blog, Anthropic/OpenAI/Cloudflare/Block/Stainless/AWS/Auth0/Docker engineering posts and docs, OWASP, Invariant Labs, Snyk, npm/PyPI docs, arXiv papers, and GitHub issues. Every externally sourced claim carries a numbered citation `[n]` resolving to the Sources section (URL + access date; all accessed 2026-09-02). Claims are tagged:
 
-- **[verified]** — read directly in the cited primary source.
-- **[inferred]** — my synthesis/judgement; not stated by a source.
-- **[secondary]** — reported by a secondary source (blog/aggregator) that I could not check against the primary.
+- **[verified]**—read directly in the cited primary source.
+- **[inferred]**—my synthesis/judgement; not stated by a source.
+- **[secondary]**—reported by a secondary source (blog/aggregator) that I could not check against the primary.
 
-**Caveats.** (1) Web search hit a rate cap late in the session, so a few intended sources (Speakeasy tool-design posts, the OpenTelemetry MCP span conventions page — it moved to a new repo and the new page did not fetch) are not cited; where I rely on adjacent evidence instead I say so. (2) The `2026-07-28` MCP revision (released five weeks before this report) changes several "best practices" that older blog posts assume. Where guidance differs between spec versions I flag it.
+**Caveats.** (1) Web search hit a rate cap late in the session, so a few intended sources (Speakeasy tool-design posts, the OpenTelemetry MCP span conventions page—it moved to a new repo and the new page did not fetch) are not cited; where I rely on adjacent evidence instead I say so. (2) The `2026-07-28` MCP revision (released five weeks before this report) changes several "best practices" that older blog posts assume. Where guidance differs between spec versions I flag it.
 
 ---
 
@@ -37,14 +37,14 @@
 | Client hard caps (secondary) | Cursor caps 40 tools; GitHub Copilot 128 per request; Playwright MCP's tool list alone consumed ~22% of a 200K context in one measurement. [30] | secondary |
 | Anthropic, *Writing tools for agents* | Claude Code restricts tool responses to 25,000 tokens by default. [3] | verified |
 
-**[inferred]** A defensible 2026 rule of thumb for a *single* server: aim for ≤15 tools by default, treat 20–30 as the ceiling for frontier models, and assume the client will be aggregating several servers, so your budget is smaller than it looks. A generator that emits one tool per OpenAPI operation will exceed this for nearly every real API — this is the core critique in [5] and the reason Stainless omitted that design from its benchmark [10].
+**[inferred]** A defensible 2026 rule of thumb for a *single* server: aim for ≤15 tools by default, treat 20–30 as the ceiling for frontier models, and assume the client will be aggregating several servers, so your budget is smaller than it looks. A generator that emits one tool per OpenAPI operation will exceed this for nearly every real API—this is the core critique in [5] and the reason Stainless omitted that design from its benchmark [10].
 
 ### 1.2 Workflow-oriented tools vs 1:1 endpoint mapping
 
 - Block (60+ internal MCP servers): "Design top-down from workflows, not bottom-up from API endpoints… Don't expose raw, granular API endpoints like `GET /user` or `GET /file`." Their Linear server went from 30+ endpoint-shaped tools → consolidated `get_issue_info(issue_id, info_category)` → finally two tools `execute_readonly_query` / `execute_mutation_query` taking GraphQL, with the schema supplied via instructions or a `get_linear_graphql_schema` tool. Google Calendar went from thin API wrappers to a DuckDB-backed `query_database` tool with SQL macros. [4] **[verified]**
 - Jeremiah Lowin (FastMCP author): "an API built for a human will poison your AI agent… Bootstrap, Don't Deploy… Curate aggressively… Start with the agent story." He reports daily FastMCP issues of the form "the LLM timed out trying to decide between create_invoice and generate_invoice." [5] **[verified]**
 - Anthropic: "instead of writing tools and MCP servers the way we'd write functions and APIs for other developers or systems, we need to design them for agents"; principles include choosing which tools *not* to implement, namespacing, returning meaningful context, token-efficient responses, prompt-engineered descriptions. [3] **[verified]**
-- Anthropic (Tool Use Examples): JSON schemas "can't express usage patterns" — provide input examples alongside schemas. [8] **[verified]**
+- Anthropic (Tool Use Examples): JSON schemas "can't express usage patterns"—provide input examples alongside schemas. [8] **[verified]**
 
 ### 1.3 Naming and descriptions
 
@@ -57,18 +57,18 @@
 ### 1.4 Input schema tightness
 
 - Spec: `inputSchema` MUST be a JSON Schema object; for no-parameter tools the recommended form is `{ "type": "object", "additionalProperties": false }`. Servers MUST validate all tool inputs. [31] In 2026-07-28, `inputSchema`/`outputSchema` may use any JSON Schema 2020-12 keyword, with `$ref` resolution and composition-keyword bounds. [1] **[verified]**
-- Block recommends Pydantic-style models with field descriptions for complex parameters. [4] OpenAI requires "minimal and purpose-driven inputs" — no "just in case" context fields, no precise geolocation. [16] **[verified]**
+- Block recommends Pydantic-style models with field descriptions for complex parameters. [4] OpenAI requires "minimal and purpose-driven inputs"—no "just in case" context fields, no precise geolocation. [16] **[verified]**
 - Block: prefer tools with a single risk level; bundle related *read-only* actions into one tool rather than mixing reads and writes. [4] Claude Directory goes further: a single tool that accepts both safe and unsafe HTTP methods is rejected outright. [15] **[verified]**
 
 ### 1.5 Annotations
 
-Schema (2025-11-25) — all four are *hints*, default values in parentheses: `readOnlyHint` (false), `destructiveHint` (true; only meaningful when `readOnlyHint == false`), `idempotentHint` (false), `openWorldHint` (true). "Clients should never make tool use decisions based on ToolAnnotations received from untrusted servers." [33] **[verified]**
+Schema (2025-11-25)—all four are *hints*, default values in parentheses: `readOnlyHint` (false), `destructiveHint` (true; only meaningful when `readOnlyHint == false`), `idempotentHint` (false), `openWorldHint` (true). "Clients should never make tool use decisions based on ToolAnnotations received from untrusted servers." [33] **[verified]**
 
 How they are actually used in 2026:
 - Claude: read-only tools can run without per-call confirmation; destructive tools always prompt; `title` + applicable hint is a hard directory requirement. [15][17] **[verified]**
 - OpenAI: `readOnlyHint`, `destructiveHint`, `openWorldHint` must be correct and *justified* at submission; "incorrect or missing action labels are a common cause of rejection"; any action that sends data outside the boundary must be surfaced as a write action. [16] **[verified]**
 - Block/Goose uses annotations for "smart approval" and server `instructions` for the system prompt. [4] **[verified]**
-- **[inferred]** Because the spec defaults `destructiveHint` to `true`, an un-annotated write tool is treated as destructive — a generator should emit explicit annotations for every tool (e.g. GET→`readOnlyHint:true`; PUT/idempotent DELETE→`idempotentHint:true`; POST create→`destructiveHint:false`), and always `openWorldHint:true` for tools that call an external API.
+- **[inferred]** Because the spec defaults `destructiveHint` to `true`, an un-annotated write tool is treated as destructive—a generator should emit explicit annotations for every tool (e.g. GET→`readOnlyHint:true`; PUT/idempotent DELETE→`idempotentHint:true`; POST create→`destructiveHint:false`), and always `openWorldHint:true` for tools that call an external API.
 
 ### 1.6 Structured outputs / `outputSchema`
 
@@ -80,7 +80,7 @@ How they are actually used in 2026:
 
 - Anthropic, *Code execution with MCP* (Nov 2025): present MCP servers as code APIs on a filesystem; "reduces the token usage from 150,000 tokens to 2,000 tokens—a time and cost saving of 98.7%"; benefits: progressive disclosure, filtering results before they reach the model, control flow in code, privacy-preserving intermediate results, state persistence. Cost: needs a sandbox with resource limits and monitoring. [9] **[verified]**
 - Cloudflare *Code Mode*: convert MCP tool schemas into a TypeScript API with doc comments; the agent gets one `execute` tool; code runs in an internet-isolated V8 isolate whose only egress is the MCP RPC bindings. Rationale: "LLMs have seen a lot of code. They have not seen a lot of 'tool calls'." [10] **[verified]**
-- Stainless *SDK code mode*: model calls `docs_search` then `execute` with SDK code, type-checked before execution. On 31 Increase-API tasks with Claude Opus: Stainless 98% completeness / 95% efficiency / 53% factuality / 48.5s; Anthropic Code Mode 94/82/46/68.7s; Cloudflare 90/95/43/55.9s; a "Dynamic" meta-tool server (`list_api_endpoints`/`get_api_endpoint_schema`/`invoke_api_endpoint`) 70/86/33/65.1s. Vendor-run benchmark — treat as indicative. [10] **[verified; vendor benchmark]**
+- Stainless *SDK code mode*: model calls `docs_search` then `execute` with SDK code, type-checked before execution. On 31 Increase-API tasks with Claude Opus: Stainless 98% completeness / 95% efficiency / 53% factuality / 48.5s; Anthropic Code Mode 94/82/46/68.7s; Cloudflare 90/95/43/55.9s; a "Dynamic" meta-tool server (`list_api_endpoints`/`get_api_endpoint_schema`/`invoke_api_endpoint`) 70/86/33/65.1s. Vendor-run benchmark—treat as indicative. [10] **[verified; vendor benchmark]**
 - Anthropic's API-side answer (Tool Search Tool with `defer_loading`, Programmatic Tool Calling, Tool Use Examples) is client/platform-side, not something a server controls, but servers can help by shipping a small `search_tools`-style discovery tool. [8][9] **[verified]**
 - **[inferred]** For an OpenAPI→MCP generator this suggests a third output mode besides "N tools" and "curated M tools": a *code-mode server* exposing `search_docs` + `execute` over a generated typed SDK. It shifts risk from tool bloat to sandboxing.
 
@@ -89,11 +89,11 @@ How they are actually used in 2026:
 - Anthropic: implement "some combination of pagination, range selection, filtering, and/or truncation with sensible default parameter values" for any tool whose responses could be large; offer a `response_format: detailed|concise` enum (their example: 206 vs 72 tokens). [3] **[verified]**
 - Block: check byte/char/token size before returning; choose between raising a tool error with a recovery hint (Goose's file tool errors above 400 KB and tells the model to use `sed -n`), truncating with an explicit note, or paginating. [4] **[verified]**
 - Claude Directory: "Keep responses reasonably sized for the task. Do not return a full database dump when a summary was requested." [15] **[verified]**
-- 2026-07-28: list results MUST carry `ttlMs` and `cacheScope`; `tools/list` SHOULD be deterministic to improve prompt-cache hits; `cacheScope:"public"` on tenant-specific data is a disclosure risk — default to `"private"`. [1][34][35] **[verified]**
+- 2026-07-28: list results MUST carry `ttlMs` and `cacheScope`; `tools/list` SHOULD be deterministic to improve prompt-cache hits; `cacheScope:"public"` on tenant-specific data is a disclosure risk—default to `"private"`. [1][34][35] **[verified]**
 
 ### 1.9 Error handling: `isError` vs protocol errors
 
-- Spec: two mechanisms. **Protocol errors** (JSON-RPC) for unknown tools, malformed requests, server errors. **Tool execution errors** (`isError: true` in the result) for API failures, input validation and business-logic errors — these "contain actionable feedback that language models can use to self-correct". Clients SHOULD pass tool execution errors to the model; MAY pass protocol errors. [31] **[verified]**
+- Spec: two mechanisms. **Protocol errors** (JSON-RPC) for unknown tools, malformed requests, server errors. **Tool execution errors** (`isError: true` in the result) for API failures, input validation and business-logic errors—these "contain actionable feedback that language models can use to self-correct". Clients SHOULD pass tool execution errors to the model; MAY pass protocol errors. [31] **[verified]**
 - 2026-07-28 partitions JSON-RPC server-error codes: `-32000..-32019` implementation-defined, `-32020..-32099` reserved for MCP; resource-not-found moved from `-32002` to `-32602`. [1] **[verified]**
 - Anthropic: "prompt-engineer your error responses to clearly communicate specific and actionable improvements, rather than opaque error codes or tracebacks." [3] Both directories reject generic errors ("Internal Server Error", "Bad Request" with no detail). [15][16] **[verified]**
 - Security caveat: error messages must not leak internal topology or secrets (see SSRF section of [11]). **[verified]**
@@ -117,7 +117,7 @@ How they are actually used in 2026:
 | Risk | Server-side mitigation | Source |
 |---|---|---|
 | Token passthrough / confused deputy | MUST NOT accept tokens not issued for this server (validate audience); do not forward the client's token upstream; if proxying a third-party API with a static client ID, obtain per-client user consent before forwarding. | [11] |
-| Excessive scopes | Progressive, least-privilege scopes; minimal initial set; incremental `WWW-Authenticate scope=` challenges; accept down-scoped tokens; never publish full catalog in `scopes_supported`; never use `*`/`all`; don't treat token scopes as sufficient — enforce server-side authorization. | [11] |
+| Excessive scopes | Progressive, least-privilege scopes; minimal initial set; incremental `WWW-Authenticate scope=` challenges; accept down-scoped tokens; never publish full catalog in `scopes_supported`; never use `*`/`all`; don't treat token scopes as sufficient—enforce server-side authorization. | [11] |
 | Session hijack (legacy lane) | Verify authorization on every request; MUST NOT use sessions for auth; secure random session IDs; bind session to user identity. Under 2026-07-28 the session disappears entirely; instead enforce ownership on every server-minted handle and protect `requestState` with HMAC/AEAD. | [11][1][35] |
 | Prompt injection via tool results | Spec: servers MUST "sanitize tool outputs"; clients SHOULD validate results before passing to the LLM. Marketplace policy: descriptions must not instruct the model, pull instructions from external sources, or contain hidden/encoded content. Treat upstream API responses as untrusted text. | [31][15] |
 | SSRF | Applies mostly to clients fetching OAuth metadata, but a server that fetches user-supplied URLs must allowlist schemes/hosts, block private ranges and cloud metadata IPs, and handle DNS rebinding/redirects. Also: validate `Origin`, bind local servers to 127.0.0.1. | [11][37] |
@@ -128,7 +128,7 @@ How they are actually used in 2026:
 ### 2.3 Per-user vs shared service credentials
 
 - Block: "Use OAuth whenever possible… trigger the OAuth flow only upon an extension's first use… request the minimum necessary scopes… store tokens in the platform keyring… invalidate stored tokens if an extension is removed or access is revoked." [4] **[verified]**
-- Anthropic's directory checklist: OAuth (DCR or CIMD) or `none`; "Static bearer tokens are private-deploy only and block listing. Authless is valid for public-data servers — the server holds any upstream API keys." [32] **[verified]**
+- Anthropic's directory checklist: OAuth (DCR or CIMD) or `none`; "Static bearer tokens are private-deploy only and block listing. Authless is valid for public-data servers—the server holds any upstream API keys." [32] **[verified]**
 - Spec anti-pattern: a server acting as a "pure proxy" that forwards client tokens loses audit attribution and bypasses downstream controls. [11] **[verified]**
 - **[inferred]** Rule: a single shared upstream API key is acceptable only when the server exposes public/non-user data or is deployed privately; anything user-specific needs per-user OAuth with the MCP server as its own OAuth resource server.
 
@@ -142,7 +142,7 @@ How they are actually used in 2026:
 
 - **npm:** trusted publishing via OIDC (GitHub Actions, GitLab, CircleCI; npm ≥11.5.1, Node ≥22.14) removes long-lived tokens and auto-generates provenance attestations; otherwise `npm publish --provenance` on a cloud runner with `id-token: write`. Attestations are Sigstore-signed and logged to a public transparency ledger; consumers verify with `npm audit signatures`. Provenance "does not guarantee the package has no malicious code". [19][39] **[verified]**
 - **PyPI:** attestations are generated automatically by `pypa/gh-action-pypi-publish` under trusted publishing (keyless Sigstore); "An attestation will tell you where a PyPI package came from, but not whether you should trust it." The March 2026 `litellm` incident (malicious versions uploaded outside the project's CI) is the motivating case for recording publisher identity in lockfiles. [20][40] **[verified; litellm detail is secondary]**
-- **Reference implementation:** `modelcontextprotocol/servers` publishes via "OIDC trusted publishing from CI — no registry tokens", ships `SECURITY.md`, and is transitioning MIT→Apache-2.0. [41] **[verified]**
+- **Reference implementation:** `modelcontextprotocol/servers` publishes via "OIDC trusted publishing from CI—no registry tokens", ships `SECURITY.md`, and is transitioning MIT→Apache-2.0. [41] **[verified]**
 - **Docker MCP Catalog:** `source.commit` pin enforced in CI, propagated into `org.opencontainers.image.revision`; publisher trust levels (official/verified vs community); agentic review of updates. [21] **[verified]**
 - **[inferred]** SLSA level language is rarely used in MCP docs; in practice "SLSA-ish" for an MCP server means: build in hosted CI, trusted publishing, provenance attestation, pinned lockfile, commit-pinned container build.
 
@@ -160,7 +160,7 @@ How they are actually used in 2026:
 ### 3.2 Statelessness and session handling
 
 - **2025-11-25 (legacy lane):** optional `Mcp-Session-Id` assigned at `initialize`; sessions must be secure-random; clients echo the header; servers may expire sessions (404) and support resumability via SSE event IDs / `Last-Event-ID`. Horizontal scaling needed sticky routing or a shared session store. [37][42] **[verified]**
-- **2026-07-28:** no handshake, no session header, every request carries protocol version + client capabilities in `_meta`; `server/discover` is mandatory server-side; cross-call state uses server-minted handles passed as ordinary tool arguments; SSE resumability removed — clients re-issue broken calls, so **tools should be idempotent**; server-initiated requests replaced by Multi Round-Trip Requests (`resultType:"input_required"` + opaque `requestState`). [1][2][42] **[verified]**
+- **2026-07-28:** no handshake, no session header, every request carries protocol version + client capabilities in `_meta`; `server/discover` is mandatory server-side; cross-call state uses server-minted handles passed as ordinary tool arguments; SSE resumability removed—clients re-issue broken calls, so **tools should be idempotent**; server-initiated requests replaced by Multi Round-Trip Requests (`resultType:"input_required"` + opaque `requestState`). [1][2][42] **[verified]**
 - AWS: "stateless describes the protocol, not your application"; delete ALB stickiness and DynamoDB/ElastiCache session stores once pre-2026 clients are gone; route/throttle on `Mcp-Method`/`Mcp-Name` headers; Lambda becomes a natural fit. Keep the legacy lane until old-client traffic reaches zero, and log protocol version per request. [42] **[verified]**
 - A practitioner on HN reports running ~46 tools stateless (GET→405, everything POST) before the spec allowed it; "most clients coped"; auth got simpler. [27] **[verified; anecdote]**
 
@@ -176,8 +176,8 @@ How they are actually used in 2026:
 - 2026-07-28 documents W3C Trace Context (`traceparent`, `tracestate`, `baggage`) in `_meta` (SEP-414) and deprecates protocol-level logging in favor of stderr/OpenTelemetry. [1] **[verified]**
 - OpenTelemetry GenAI semantic conventions (including MCP spans) moved to the `semantic-conventions-genai` repository; the original page now redirects. I could not fetch the MCP span page itself. [43] **[verified that it moved; content unverified]**
 - OWASP MCP08: maintain detailed, immutable logs of tool invocations, context changes and user-agent interactions. [12] Spec: clients SHOULD log tool usage for audit. [31] **[verified]**
-- Anthropic: analyze tool-calling metrics — redundant calls suggest pagination/limit tuning; invalid-parameter errors suggest description fixes. [3] MCP blog quotes vendors saying statelessness "makes it easier for us to add analytics for our customers' MCP servers". [2] **[verified]**
-- **[inferred]** Minimum viable telemetry per tool call: tool name, duration, `isError`, response size (bytes/tokens), upstream status, caller identity hash, trace id — with PII redaction before export (see §5).
+- Anthropic: analyze tool-calling metrics—redundant calls suggest pagination/limit tuning; invalid-parameter errors suggest description fixes. [3] MCP blog quotes vendors saying statelessness "makes it easier for us to add analytics for our customers' MCP servers". [2] **[verified]**
+- **[inferred]** Minimum viable telemetry per tool call: tool name, duration, `isError`, response size (bytes/tokens), upstream status, caller identity hash, trace id—with PII redaction before export (see §5).
 
 ### 3.5 Versioning without breaking clients
 
@@ -222,7 +222,7 @@ Drawn from the reference repo layout, the directory policies, and supply-chain d
 7. `server.json` for the MCP Registry, with DNS-verified namespace. [45]
 8. A `Dockerfile` and (optionally) a Docker MCP Registry entry with `source.commit` pin. [21]
 9. CHANGELOG and a stated tool-versioning policy (§3.5).
-10. No OAuth client secrets or API keys in the repo — see 4.5.
+10. No OAuth client secrets or API keys in the repo—see 4.5.
 
 **[inferred]** Items 1–7 are directly evidenced; 8–10 are my consolidation.
 
@@ -252,7 +252,7 @@ What changes when strangers connect via claude.ai or ChatGPT:
 3. **Audit logs.** OWASP MCP08 and the spec both call for per-invocation logs; marketplaces additionally forbid collecting conversation data "even for logging purposes" and forbid metadata profiling (timestamps, IPs, query patterns) unless disclosed and narrowly scoped. [12][18][16] **[verified]**
 4. **Data minimization is a listing requirement, not a nicety.** Tools may not request full chat history or precise location; the server "must not pull, reconstruct, or infer the full chat log". [16][18] **[verified]**
 5. **Operational bar.** Public HTTPS domain matching your service; CSP for any UI; test account with populated data; public documentation by launch; predictable errors; low latency; ongoing compliance reviews and health/usage dashboards. [15][16][17][51] **[verified]**
-6. **GDPR / EU residency.** Guidance from integration vendors: the LLM host and every hop that can read or replay personal data is a (sub-)processor needing a DPA, SCCs and a transfer impact assessment; recommended architecture is a pass-through (no sync/cache) MCP layer, EU-pinned configuration storage, field-level PII minimization before results reach the model, zero-retention LLM contracts, and EU inference regions (OpenAI EU data-residency projects; Claude via Bedrock/Vertex EU). Residency ≠ sovereignty (CLOUD Act). [52][53] **[secondary — vendor content; legal claims not independently verified]**
+6. **GDPR / EU residency.** Guidance from integration vendors: the LLM host and every hop that can read or replay personal data is a (sub-)processor needing a DPA, SCCs and a transfer impact assessment; recommended architecture is a pass-through (no sync/cache) MCP layer, EU-pinned configuration storage, field-level PII minimization before results reach the model, zero-retention LLM contracts, and EU inference regions (OpenAI EU data-residency projects; Claude via Bedrock/Vertex EU). Residency ≠ sovereignty (CLOUD Act). [52][53] **[secondary—vendor content; legal claims not independently verified]**
 7. **Caching pitfalls.** `cacheScope:"public"` on tenant-specific list results lets shared intermediaries leak one tenant's tool list to another; default `"private"`. [42][34] **[verified]**
 
 **[inferred]** For a generator this means: multi-tenant is not "the same server with OAuth switched on". It needs a pluggable identity/session-less user context, an encrypted token store abstraction, structured audit events with redaction, and configuration for data-residency-sensitive logging. Those are runtime concerns that argue for a shared, maintained runtime library rather than re-generated code in every project.
@@ -262,18 +262,18 @@ What changes when strangers connect via claude.ai or ChatGPT:
 ## 6. What the community says is still painful in 2026
 
 1. **OAuth interop.** Claude Code fails against servers whose AS lacks DCR ("Incompatible auth server: does not support dynamic client registration"; Slack's official server, Apr 2026) [24]; Codex has the same class of issue open since Mar 2026 [23]; OpenCode's auto-connect path was broken for all OAuth servers (Mar 2026) [25]; a Claude connector failure traced to a PRM `resource` mismatch on the *server publisher's* side (Jul 2026) [22]. CIMD adoption is meant to fix this but is only weeks old as the recommended path. [48] **[verified]**
-2. **Tool bloat and auto-generated servers.** Lowin's "Stop converting your REST APIs to MCP" [5], Block's rewrites [4], Perplexity's CTO reportedly moving away from MCP internally over schema overhead (Mar 2026) [54 — secondary], and MCPGAUGE's finding that MCP access *reduced* accuracy on average [29]. **[verified except where marked]**
+2. **Tool bloat and auto-generated servers.** Lowin's "Stop converting your REST APIs to MCP" [5], Block's rewrites [4], Perplexity's CTO reportedly moving away from MCP internally over schema overhead (Mar 2026) [54—secondary], and MCPGAUGE's finding that MCP access *reduced* accuracy on average [29]. **[verified except where marked]**
 3. **A breaking protocol revision.** 2026-07-28 removed the handshake, sessions, resumability, `ping`, `logging/setLevel`, and deprecated Roots/Sampling/Logging/DCR; servers must opt in via SDK upgrade; dual-lane operation is needed until old clients disappear; dated versions rather than semver make compatibility hard to track. [1][42][27] **[verified]**
 4. **Versioning of tools/servers has no standard**; clients have no reliable way to learn a server updated. [26][44] **[verified]**
 5. **Supply-chain trust of `npx`-installed servers.** Real incident (`postmark-mcp`) [13]; HN commentary that the install culture is indistinguishable from malware delivery [27]; Docker's response is commit pinning + trust labels [21]. **[verified]**
 6. **Directory friction.** Anthropic's submission portal requires a Team/Enterprise org; verification "is not a security audit"; both directories reject a large class of generated servers by policy (catch-all `api_request` tools, generic errors, missing annotations). [17][15][16] **[verified]**
-7. **outputSchema value is debated** (Reddit thread titled "outputSchema in MCP: useful feature or token tax") — I did not read the thread body, so treat as a signal only. [55] **[secondary]**
+7. **outputSchema value is debated** (Reddit thread titled "outputSchema in MCP: useful feature or token tax")—I did not read the thread body, so treat as a signal only. [55] **[secondary]**
 
 ---
 
-## 7. Implications for klaridian (generator vs runtime) — [inferred]
+## 7. Implications for klaridian (generator vs runtime)—[inferred]
 
-- **Standalone generated code wins** for: transparency (users can read every line — the trust argument in §4.1), licensing simplicity, zero runtime dependency on klaridian, and marketplace review (reviewers see exactly what runs).
+- **Standalone generated code wins** for: transparency (users can read every line—the trust argument in §4.1), licensing simplicity, zero runtime dependency on klaridian, and marketplace review (reviewers see exactly what runs).
 - **A runtime framework wins** for: keeping up with breaking spec revisions (the 2026-07-28 migration is exactly the kind of change you want to ship once, not re-generate into N repos), OAuth resource-server plumbing, token stores, audit/telemetry with redaction, rate limiting, conformance-tested transport code.
 - **The evidence points to a hybrid**: generate the *thin, reviewable part* (tool catalog, schemas, annotations, upstream call mapping, README/SECURITY/LICENSE/server.json scaffolding) and depend on a *versioned, provenance-signed runtime package* for transport/auth/observability. That is roughly what Stainless and Speakeasy do commercially, and what `openapi-mcp-generator` + the official SDK already approximate.
 - **Non-negotiable generator defaults suggested by the evidence**: curated tool selection (never all operations by default), explicit annotations on every tool, split read/write tools, `isError` on every upstream failure, size limits on responses, deterministic `tools/list` with `ttlMs`/`cacheScope:"private"`, no secrets in output, trusted-publishing CI templates, and a conformance-suite step in the generated project's CI.
@@ -321,61 +321,61 @@ What changes when strangers connect via claude.ai or ChatGPT:
 
 All accessed 2026-09-02.
 
-1. MCP specification 2026-07-28 — Key Changes (changelog). https://modelcontextprotocol.io/specification/2026-07-28/changelog
-2. MCP Blog — "The 2026-07-28 Specification" (release post). https://blog.modelcontextprotocol.io/posts/2026-07-28/
-3. Anthropic Engineering — "Writing effective tools for agents — with agents" (Sep 11, 2025). https://www.anthropic.com/engineering/writing-tools-for-agents
-4. Block Engineering — "Block's Playbook for Designing MCP Servers". https://engineering.block.xyz/blog/blocks-playbook-for-designing-mcp-servers
-5. Jeremiah Lowin — "Stop Converting Your REST APIs to MCP". https://jlowin.dev/blog/stop-converting-rest-apis-to-mcp
-6. Gan & Sun — "RAG-MCP: Mitigating Prompt Bloat in LLM Tool Selection via Retrieval-Augmented Generation" (arXiv 2505.03275). https://arxiv.org/abs/2505.03275
-7. Rodrigues & Vas — "MCP Server Architecture Patterns for LLM-Integrated Applications" (arXiv 2606.30317, ICSME 2026 industry track). https://arxiv.org/abs/2606.30317
-8. Anthropic Engineering — "Introducing advanced tool use on the Claude Developer Platform" (Nov 2025). https://www.anthropic.com/engineering/advanced-tool-use
-9. Anthropic Engineering — "Code execution with MCP: building more efficient agents" (Nov 4, 2025). https://www.anthropic.com/engineering/code-execution-with-mcp
-10. Cloudflare Blog — "Code Mode: the better way to use MCP". https://blog.cloudflare.com/code-mode/ ; Stainless Blog — "SDK code mode shows SotA accuracy and performance for agents using APIs". https://www.stainless.com/blog/sdk-code-mode
-11. MCP specification 2025-11-25 — Security Best Practices. https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
-12. OWASP — "OWASP MCP Top 10" (v0.1 beta). https://owasp.org/www-project-mcp-top-10/
-13. Snyk — "Malicious MCP Server on npm postmark-mcp Harvests Emails". https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails/
-14. The Hacker News — "First Malicious MCP Server Found Stealing Emails in Rogue Postmark-MCP Package". https://thehackernews.com/2025/09/first-malicious-mcp-server-found.html
-15. Claude Docs — Connectors Directory "Pre-submission checklist / review criteria". https://claude.com/docs/connectors/building/review-criteria
-16. OpenAI Developers — "Plugin guidelines" (MCP servers and optional UI in published plugins). https://developers.openai.com/plugins/app-guidelines (also served at https://developers.openai.com/apps-sdk/app-submission-guidelines)
-17. Claude Docs — "Submitting to the Connectors Directory" and "Connectors Directory" overview. https://claude.com/docs/connectors/building/submission ; https://claude.com/docs/connectors/directory
-18. Anthropic — "Anthropic Software Directory Policy". https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy
-19. npm Docs — "Generating provenance statements". https://docs.npmjs.com/generating-provenance-statements/
-20. PyPI Docs — "Attestations: Security Model and Considerations". https://docs.pypi.org/attestations/security-model
-21. Docker Blog — "Securing the Docker MCP Catalog: Commit Pinning, Agentic Auditing, and Publisher Trust Levels" (Dec 3, 2025). https://www.docker.com/blog/enhancing-mcp-trust-with-the-docker-mcp-catalog/
-22. anthropics/claude-ai-mcp issue #560 — DCR failure traced to PRM `resource` mismatch (Jul 2026). https://github.com/anthropics/claude-ai-mcp/issues/560
-23. openai/codex issue #15818 — "Remote HTTP MCP OAuth login fails when authorization server does not support dynamic client registration" (Mar 2026). https://github.com/openai/codex/issues/15818
-24. anthropics/claude-code issue #52638 — "HTTP MCP servers with OAuth fail when auth server doesn't support dynamic client registration" (Apr 2026). https://github.com/anthropics/claude-code/issues/52638
-25. anomalyco/opencode issue #15546 — "Remote MCP servers with OAuth fail with 'No OAuth state saved'" (Mar 2026). https://github.com/anomalyco/opencode/issues/15546
-26. Nordic APIs — "The Weak Point in MCP Nobody's Talking About: API Versioning". https://nordicapis.com/the-weak-point-in-mcp-nobodys-talking-about-api-versioning/
-27. Hacker News — "MCP 2026-07-28 Specification: transport going stateless" discussion. https://news.ycombinator.com/item?id=49088058
-28. ResearchAudio — summary of arXiv 2606.30317 including tool-count table and anti-patterns (secondary). https://researchaudio.io/p/a-new-mcp-patterns-paper-sets-a-10-15-tool-ceiling-most-production-servers-are-already-over-it
+1. MCP specification 2026-07-28—Key Changes (changelog). https://modelcontextprotocol.io/specification/2026-07-28/changelog
+2. MCP Blog—"The 2026-07-28 Specification" (release post). https://blog.modelcontextprotocol.io/posts/2026-07-28/
+3. Anthropic Engineering—"Writing effective tools for agents—with agents" (Sep 11, 2025). https://www.anthropic.com/engineering/writing-tools-for-agents
+4. Block Engineering—"Block's Playbook for Designing MCP Servers". https://engineering.block.xyz/blog/blocks-playbook-for-designing-mcp-servers
+5. Jeremiah Lowin—"Stop Converting Your REST APIs to MCP". https://jlowin.dev/blog/stop-converting-rest-apis-to-mcp
+6. Gan & Sun—"RAG-MCP: Mitigating Prompt Bloat in LLM Tool Selection via Retrieval-Augmented Generation" (arXiv 2505.03275). https://arxiv.org/abs/2505.03275
+7. Rodrigues & Vas—"MCP Server Architecture Patterns for LLM-Integrated Applications" (arXiv 2606.30317, ICSME 2026 industry track). https://arxiv.org/abs/2606.30317
+8. Anthropic Engineering—"Introducing advanced tool use on the Claude Developer Platform" (Nov 2025). https://www.anthropic.com/engineering/advanced-tool-use
+9. Anthropic Engineering—"Code execution with MCP: building more efficient agents" (Nov 4, 2025). https://www.anthropic.com/engineering/code-execution-with-mcp
+10. Cloudflare Blog—"Code Mode: the better way to use MCP". https://blog.cloudflare.com/code-mode/ ; Stainless Blog—"SDK code mode shows SotA accuracy and performance for agents using APIs". https://www.stainless.com/blog/sdk-code-mode
+11. MCP specification 2025-11-25—Security Best Practices. https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices
+12. OWASP—"OWASP MCP Top 10" (v0.1 beta). https://owasp.org/www-project-mcp-top-10/
+13. Snyk—"Malicious MCP Server on npm postmark-mcp Harvests Emails". https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails/
+14. The Hacker News—"First Malicious MCP Server Found Stealing Emails in Rogue Postmark-MCP Package". https://thehackernews.com/2025/09/first-malicious-mcp-server-found.html
+15. Claude Docs—Connectors Directory "Pre-submission checklist / review criteria". https://claude.com/docs/connectors/building/review-criteria
+16. OpenAI Developers—"Plugin guidelines" (MCP servers and optional UI in published plugins). https://developers.openai.com/plugins/app-guidelines (also served at https://developers.openai.com/apps-sdk/app-submission-guidelines)
+17. Claude Docs—"Submitting to the Connectors Directory" and "Connectors Directory" overview. https://claude.com/docs/connectors/building/submission ; https://claude.com/docs/connectors/directory
+18. Anthropic—"Anthropic Software Directory Policy". https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy
+19. npm Docs—"Generating provenance statements". https://docs.npmjs.com/generating-provenance-statements/
+20. PyPI Docs—"Attestations: Security Model and Considerations". https://docs.pypi.org/attestations/security-model
+21. Docker Blog—"Securing the Docker MCP Catalog: Commit Pinning, Agentic Auditing, and Publisher Trust Levels" (Dec 3, 2025). https://www.docker.com/blog/enhancing-mcp-trust-with-the-docker-mcp-catalog/
+22. anthropics/claude-ai-mcp issue #560—DCR failure traced to PRM `resource` mismatch (Jul 2026). https://github.com/anthropics/claude-ai-mcp/issues/560
+23. openai/codex issue #15818—"Remote HTTP MCP OAuth login fails when authorization server does not support dynamic client registration" (Mar 2026). https://github.com/openai/codex/issues/15818
+24. anthropics/claude-code issue #52638—"HTTP MCP servers with OAuth fail when auth server doesn't support dynamic client registration" (Apr 2026). https://github.com/anthropics/claude-code/issues/52638
+25. anomalyco/opencode issue #15546—"Remote MCP servers with OAuth fail with 'No OAuth state saved'" (Mar 2026). https://github.com/anomalyco/opencode/issues/15546
+26. Nordic APIs—"The Weak Point in MCP Nobody's Talking About: API Versioning". https://nordicapis.com/the-weak-point-in-mcp-nobodys-talking-about-api-versioning/
+27. Hacker News—"MCP 2026-07-28 Specification: transport going stateless" discussion. https://news.ycombinator.com/item?id=49088058
+28. ResearchAudio—summary of arXiv 2606.30317 including tool-count table and anti-patterns (secondary). https://researchaudio.io/p/a-new-mcp-patterns-paper-sets-a-10-15-tool-ceiling-most-production-servers-are-already-over-it
 29. "Help or Hurdle? Rethinking Model Context Protocol-Augmented Large Language Models" (MCPGAUGE, arXiv 2508.12566). https://arxiv.org/html/2508.12566v1
-30. Stefano Demiliani — "Model Context Protocol and the 'too many tools' problem" (Sep 2025). https://demiliani.com/2025/09/04/model-context-protocol-and-the-too-many-tools-problem/
-31. MCP specification 2025-11-25 — Server Features: Tools. https://modelcontextprotocol.io/specification/2025-11-25/server/tools
-32. anthropics/claude-plugins-official — mcp-server-dev skill, "Connector-directory submission checklist". https://github.com/anthropics/claude-plugins-official/blob/66799ffb/plugins/mcp-server-dev/skills/build-mcp-app/references/directory-checklist.md
-33. MCP specification 2025-11-25 — Schema Reference (`ToolAnnotations`). https://modelcontextprotocol.io/specification/2025-11-25/schema
-34. MCP specification 2026-07-28 — Server Utilities: Caching. https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching
-35. AWS Architecture Blog — "MCP went stateless: Is your AWS MCP server deployment well-architected?" (Aug 2026). https://aws.amazon.com/blogs/architecture/mcp-went-stateless-is-your-aws-mcp-server-deployment-well-architected/
-36. Invariant Labs — "MCP Security Notification: Tool Poisoning Attacks" (Apr 1, 2025). https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks
-37. MCP specification 2025-11-25 — Transports. https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
-38. Docker Docs — "Docker MCP Catalog". https://docs.docker.com/ai/mcp-catalog-and-toolkit/catalog/
-39. npm Docs — "Trusted publishing for npm packages". https://docs.npmjs.com/trusted-publishers/
-40. pydevtools — "Why pylock.toml Includes Digital Attestations" (litellm March 2026 incident; secondary). https://pydevtools.com/handbook/explanation/why-pylock-toml-includes-digital-attestations
-41. GitHub — modelcontextprotocol/servers README and LICENSE (MIT→Apache-2.0 transition; OIDC trusted publishing; SECURITY.md). https://github.com/modelcontextprotocol/servers ; https://github.com/modelcontextprotocol/servers/blob/main/LICENSE
-42. Same as 35 (AWS) — session-infrastructure table, self-check, migration path.
-43. OpenTelemetry — "Moved: Generative AI semantic conventions" (redirect notice to semantic-conventions-genai repo). https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/
-44. modelcontextprotocol/modelcontextprotocol issue #1915 — "Document recommended tool versioning and naming patterns for MCP servers" (closed; body not rendered in fetch). https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1915
-45. MCP — "The MCP Registry" (about). https://modelcontextprotocol.io/registry/about
-46. GitHub — modelcontextprotocol/conformance README. https://github.com/modelcontextprotocol/conformance
-47. OpenAI Developers — Apps SDK "Authenticate your users". https://developers.openai.com/apps-sdk/build/auth
-48. MCP specification 2026-07-28 — Authorization: Client Registration (CIMD / pre-registration / DCR deprecated). https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration
-49. Auth0 Blog — "Client ID Metadata Documents Are the Future of MCP Client Registration" (Nov 24, 2025). https://auth0.com/blog/cimd-vs-dcr-mcp-registration
-50. Claude Docs — "Custom connectors: remote MCP" (OAuth options: hosted CIMD, DCR, own client; header-based API keys). https://claude.com/docs/connectors/custom/remote-mcp.md
-51. OpenAI Help — "Prepare and maintain an app for plugin submission" (MCP server requirements: public domain, CSP, universal URL). https://help.openai.com/en/articles/20001040
-52. Truto — "EU Data Residency and GDPR Compliance for MCP Servers (2026 Guide)" (vendor; secondary). https://truto.one/blog/how-to-handle-eu-data-residency-and-gdpr-compliance-for-mcp-servers/
-53. Frends — "MCP for regulated enterprises: EU data residency, GDPR and sovereign AI integration" (vendor; secondary). https://frends.com/insights/model-context-protocol-mcp-for-regulated-enterprises-eu-data-residency-gdpr-and-sovereign-ai-integration
-54. Albato — "How Too Many MCPs Break Your AI Agent" (reports Perplexity CTO remarks, Mar 2026; secondary). https://albato.com/blog/publications/embedded-mcp-context-bloat-hallucinations
-55. Reddit r/mcp — "outputSchema in MCP: useful feature or token tax with no…" (title only; not read). https://www.reddit.com/r/mcp/comments/1tauwhh/outputschema_in_mcp_useful_feature_or_token_tax
+30. Stefano Demiliani—"Model Context Protocol and the 'too many tools' problem" (Sep 2025). https://demiliani.com/2025/09/04/model-context-protocol-and-the-too-many-tools-problem/
+31. MCP specification 2025-11-25—Server Features: Tools. https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+32. anthropics/claude-plugins-official—mcp-server-dev skill, "Connector-directory submission checklist". https://github.com/anthropics/claude-plugins-official/blob/66799ffb/plugins/mcp-server-dev/skills/build-mcp-app/references/directory-checklist.md
+33. MCP specification 2025-11-25—Schema Reference (`ToolAnnotations`). https://modelcontextprotocol.io/specification/2025-11-25/schema
+34. MCP specification 2026-07-28—Server Utilities: Caching. https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching
+35. AWS Architecture Blog—"MCP went stateless: Is your AWS MCP server deployment well-architected?" (Aug 2026). https://aws.amazon.com/blogs/architecture/mcp-went-stateless-is-your-aws-mcp-server-deployment-well-architected/
+36. Invariant Labs—"MCP Security Notification: Tool Poisoning Attacks" (Apr 1, 2025). https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks
+37. MCP specification 2025-11-25—Transports. https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+38. Docker Docs—"Docker MCP Catalog". https://docs.docker.com/ai/mcp-catalog-and-toolkit/catalog/
+39. npm Docs—"Trusted publishing for npm packages". https://docs.npmjs.com/trusted-publishers/
+40. pydevtools—"Why pylock.toml Includes Digital Attestations" (litellm March 2026 incident; secondary). https://pydevtools.com/handbook/explanation/why-pylock-toml-includes-digital-attestations
+41. GitHub—modelcontextprotocol/servers README and LICENSE (MIT→Apache-2.0 transition; OIDC trusted publishing; SECURITY.md). https://github.com/modelcontextprotocol/servers ; https://github.com/modelcontextprotocol/servers/blob/main/LICENSE
+42. Same as 35 (AWS)—session-infrastructure table, self-check, migration path.
+43. OpenTelemetry—"Moved: Generative AI semantic conventions" (redirect notice to semantic-conventions-genai repo). https://opentelemetry.io/docs/specs/semconv/gen-ai/mcp/
+44. modelcontextprotocol/modelcontextprotocol issue #1915—"Document recommended tool versioning and naming patterns for MCP servers" (closed; body not rendered in fetch). https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1915
+45. MCP—"The MCP Registry" (about). https://modelcontextprotocol.io/registry/about
+46. GitHub—modelcontextprotocol/conformance README. https://github.com/modelcontextprotocol/conformance
+47. OpenAI Developers—Apps SDK "Authenticate your users". https://developers.openai.com/apps-sdk/build/auth
+48. MCP specification 2026-07-28—Authorization: Client Registration (CIMD / pre-registration / DCR deprecated). https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration
+49. Auth0 Blog—"Client ID Metadata Documents Are the Future of MCP Client Registration" (Nov 24, 2025). https://auth0.com/blog/cimd-vs-dcr-mcp-registration
+50. Claude Docs—"Custom connectors: remote MCP" (OAuth options: hosted CIMD, DCR, own client; header-based API keys). https://claude.com/docs/connectors/custom/remote-mcp.md
+51. OpenAI Help—"Prepare and maintain an app for plugin submission" (MCP server requirements: public domain, CSP, universal URL). https://help.openai.com/en/articles/20001040
+52. Truto—"EU Data Residency and GDPR Compliance for MCP Servers (2026 Guide)" (vendor; secondary). https://truto.one/blog/how-to-handle-eu-data-residency-and-gdpr-compliance-for-mcp-servers/
+53. Frends—"MCP for regulated enterprises: EU data residency, GDPR and sovereign AI integration" (vendor; secondary). https://frends.com/insights/model-context-protocol-mcp-for-regulated-enterprises-eu-data-residency-gdpr-and-sovereign-ai-integration
+54. Albato—"How Too Many MCPs Break Your AI Agent" (reports Perplexity CTO remarks, Mar 2026; secondary). https://albato.com/blog/publications/embedded-mcp-context-bloat-hallucinations
+55. Reddit r/mcp—"outputSchema in MCP: useful feature or token tax with no…" (title only; not read). https://www.reddit.com/r/mcp/comments/1tauwhh/outputschema_in_mcp_useful_feature_or_token_tax
 
 ### Sources searched for but not obtained
 - Speakeasy engineering posts on MCP tool design/curation (search rate-limited; only their generator-comparison post surfaced, not used).

@@ -9,13 +9,13 @@ description: Wire OTel tracing into every tool call without writing instrumentat
 npx klaridian generate --spec ./api.yaml --plugin otel
 ```
 
-Every tool call is wrapped in a span at the `registerTool` boundary — no
+Every tool call is wrapped in a span at the `registerTool` boundary—no
 manual instrumentation in the generated code.
 
 ## Exporter
 
 klaridian always emits `OTLPTraceExporter`, diagnostics routed to `stderr`.
-**Never `ConsoleSpanExporter`** in an MCP server — writing to stdout
+**Never `ConsoleSpanExporter`** in an MCP server—writing to stdout
 corrupts the stdio JSON-RPC transport.
 
 ## Backend configuration
@@ -29,4 +29,4 @@ OTEL_EXPORTER_OTLP_HEADERS="api-key=..." \
 node dist/src/index.js
 ```
 
-No backend-specific code is generated — it's plain, standard OpenTelemetry.
+No backend-specific code is generated—it's plain, standard OpenTelemetry.

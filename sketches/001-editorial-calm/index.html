@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>klaridian — Editorial Calm</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background:#fbfaf8; color:#1c1b19; }
+  .serif { font-family: 'Fraunces', serif; }
+  .glow { background: radial-gradient(600px circle at 20% -10%, rgba(255,120,60,0.08), transparent 60%); }
+  code { font-family: 'SFMono-Regular', Menlo, Consolas, monospace; }
+</style>
+</head>
+<body class="glow">
+  <nav class="max-w-5xl mx-auto flex items-center justify-between px-6 py-6">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded-full bg-orange-600"></div>
+      <span class="serif text-lg">klaridian</span>
+    </div>
+    <div class="flex gap-8 text-sm text-neutral-600">
+      <a href="#" class="hover:text-neutral-900">Docs</a>
+      <a href="#" class="hover:text-neutral-900">Plugins</a>
+      <a href="#" class="hover:text-neutral-900">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="max-w-3xl mx-auto px-6 pt-20 pb-24 text-center">
+    <p class="text-xs tracking-widest uppercase text-orange-700 mb-6">OpenAPI → MCP, born instrumented</p>
+    <h1 class="serif text-5xl md:text-6xl leading-tight mb-6">
+      Give your API to agents.<br/>Keep the observability.
+    </h1>
+    <p class="text-lg text-neutral-600 leading-relaxed max-w-xl mx-auto mb-10">
+      klaridian generates a Model Context Protocol server straight from your OpenAPI spec — with OpenTelemetry tracing wired in from the first tool call, not bolted on afterward.
+    </p>
+    <div class="flex items-center justify-center gap-4">
+      <a href="#" class="bg-neutral-900 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">Read the docs</a>
+      <button onclick="copyCmd()" class="group flex items-center gap-2 border border-neutral-300 px-5 py-3 rounded-full text-sm font-mono hover:border-neutral-500 transition">
+        <span id="cmdtext">npx klaridian generate</span>
+        <span id="copied" class="text-orange-700 hidden">copied ✓</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="max-w-4xl mx-auto px-6 pb-24">
+    <div class="grid md:grid-cols-3 gap-10">
+      <div>
+        <div class="serif text-2xl mb-2">01</div>
+        <h3 class="font-medium mb-2">Point at a spec</h3>
+        <p class="text-sm text-neutral-600 leading-relaxed">Any valid OpenAPI 3.x document. Swagger 2.0 is converted transparently.</p>
+      </div>
+      <div>
+        <div class="serif text-2xl mb-2">02</div>
+        <h3 class="font-medium mb-2">Curate the surface</h3>
+        <p class="text-sm text-neutral-600 leading-relaxed">Exclude, rename and tag operations so agents see a clean tool catalog, not your whole API.</p>
+      </div>
+      <div>
+        <div class="serif text-2xl mb-2">03</div>
+        <h3 class="font-medium mb-2">Ship, instrumented</h3>
+        <p class="text-sm text-neutral-600 leading-relaxed">A stateless MCP server with OTel spans on every tool call. Plug in Datadog or Grafana.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-neutral-200">
+    <div class="max-w-3xl mx-auto px-6 py-20 text-center">
+      <h2 class="serif text-3xl mb-4">Read it before you trust it</h2>
+      <p class="text-neutral-600 mb-8 max-w-lg mx-auto">Open source, MIT-licensed generator. The server it produces is plain, auditable TypeScript — no closed binary running next to your agent with real credentials.</p>
+      <a href="#" class="text-sm underline underline-offset-4 decoration-orange-400">View source on GitHub →</a>
+    </div>
+  </section>
+
+  <footer class="max-w-5xl mx-auto px-6 py-10 text-xs text-neutral-500 flex justify-between">
+    <span>© 2026 klaridian</span>
+    <span>MIT License</span>
+  </footer>
+
+<script>
+function copyCmd(){
+  navigator.clipboard.writeText('npx klaridian generate');
+  document.getElementById('cmdtext').classList.add('hidden');
+  document.getElementById('copied').classList.remove('hidden');
+  setTimeout(()=>{
+    document.getElementById('cmdtext').classList.remove('hidden');
+    document.getElementById('copied').classList.add('hidden');
+  }, 1500);
+}
+</script>
+</body>
+</html>

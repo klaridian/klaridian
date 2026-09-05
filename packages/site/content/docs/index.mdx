@@ -1,0 +1,23 @@
+---
+title: Getting Started
+description: Generate your first instrumented MCP server from an OpenAPI spec.
+---
+
+## Install
+
+Run the generator directly with `npx` — no install step required.
+
+```bash
+npx klaridian generate --spec ./api.yaml --plugin otel
+```
+
+## What you get
+
+- One MCP tool per OpenAPI operation (byte-identical names to your `operationId`s)
+- A stateless TypeScript server (SDK v2, protocol 2025-11-25)
+- OpenTelemetry spans wired at the `registerTool` boundary — no manual instrumentation
+
+## Next steps
+
+- [Curating the tool surface](/docs/curation)
+- [Plugins: OpenTelemetry](/docs/plugins/otel)

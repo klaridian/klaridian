@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/preset.css";
+@import "fumadocs-ui/css/black.css";
+
+:root {
+  --klaridian-ink: #0a0a0a;
+  --klaridian-paper: #f5f3ee;
+  --klaridian-accent: #00c853;
+
+  /* Fumadocs theme overrides -> Brutalist Terminal palette */
+  --color-fd-background: var(--klaridian-paper);
+  --color-fd-foreground: var(--klaridian-ink);
+  --color-fd-primary: var(--klaridian-accent);
+  --color-fd-primary-foreground: var(--klaridian-ink);
+  --color-fd-card: #ffffff;
+  --color-fd-border: var(--klaridian-ink);
+  --color-fd-muted: #e7e3d8;
+  --color-fd-muted-foreground: #444444;
+  --color-fd-accent: var(--klaridian-accent);
+  --color-fd-accent-foreground: var(--klaridian-ink);
+  --font-fd-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html, body {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Fumadocs docs layout: rigid borders instead of soft rounded cards */
+.fd-card, [data-card] {
+  border-radius: 0 !important;
+  border-width: 2px !important;
+}

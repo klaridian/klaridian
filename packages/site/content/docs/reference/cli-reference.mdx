@@ -29,6 +29,14 @@ description: Every flag for klaridian generate, generated from the real CLI.
 | `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success) |
 | `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line |
 
+## Configuration
+
+See [Configuration](/docs/how-to/config-file) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--config <path>` | Path to a klaridian.config.json file providing default values for other flags (overridden by any flag explicitly passed on the command line). Auto-discovered in the current directory if present. |
+
 ## Curation
 
 See [Curation](/docs/how-to/curation) for the full guide.

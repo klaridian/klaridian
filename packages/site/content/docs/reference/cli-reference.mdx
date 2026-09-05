@@ -1,6 +1,6 @@
 ---
 title: CLI reference
-description: Every flag for klaridian generate, generated from the real CLI.
+description: Every flag for the klaridian CLI, generated from the real commands.
 ---
 
 {/*
@@ -11,14 +11,18 @@ description: Every flag for klaridian generate, generated from the real CLI.
   file doesn't match what the generator produces from the current code.
 */}
 
-## Required
+## klaridian generate
+
+Generate an MCP server from an OpenAPI spec (via openapi-mcp-generator), optionally instrumented with one or more observability plugins
+
+### Required
 
 | Flag | What it does |
 |---|---|
 | `--spec <path>` | Path to the OpenAPI spec (JSON or YAML) |
 | `--out <dir>` | Output directory for the generated server |
 
-## Basics
+### Basics
 
 | Flag | What it does |
 |---|---|
@@ -29,7 +33,7 @@ description: Every flag for klaridian generate, generated from the real CLI.
 | `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success) |
 | `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line |
 
-## Configuration
+### Configuration
 
 See [Configuration](/docs/how-to/config-file) for the full guide.
 
@@ -37,7 +41,7 @@ See [Configuration](/docs/how-to/config-file) for the full guide.
 |---|---|
 | `--config <path>` | Path to a klaridian.config.json file providing default values for other flags (overridden by any flag explicitly passed on the command line). Auto-discovered in the current directory if present. |
 
-## Curation
+### Curation
 
 See [Curation](/docs/how-to/curation) for the full guide.
 
@@ -52,7 +56,7 @@ See [Curation](/docs/how-to/curation) for the full guide.
 | `--exclude-methods <methods>` | Exclude operations using any of these HTTP methods (comma-separated) |
 | `--interactive` | Prompt for which tags to include before generating. Requires an interactive terminal, fails loudly if stdin is not a TTY (for example, running in CI or under an agent) instead of silently accepting empty input. |
 
-## Architecture
+### Architecture
 
 See [Architecture](/docs/how-to/code-mode) for the full guide.
 
@@ -60,7 +64,7 @@ See [Architecture](/docs/how-to/code-mode) for the full guide.
 |---|---|
 | `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
 
-## Plugins
+### Plugins
 
 See [Plugins](/docs/how-to/plugins) for the full guide.
 
@@ -69,7 +73,7 @@ See [Plugins](/docs/how-to/plugins) for the full guide.
 | `--plugin <id>` | Observability plugin to enable, repeatable (available: otel, posthog, amplitude, mixpanel) |
 | `--plugin-config <keyvalue...>` | Plugin config in &lt;pluginId&gt;.&lt;key&gt;=&lt;value&gt; form, repeatable |
 
-## Licensing
+### Licensing
 
 See [Licensing](/docs/how-to/licensing) for the full guide.
 
@@ -78,7 +82,7 @@ See [Licensing](/docs/how-to/licensing) for the full guide.
 | `--license <id>` | License for the generated server: mit, apache-2.0, none. Defaults to `mit`. |
 | `--author <name>` | Author/copyright holder name for the generated LICENSE file (default: your git user.name, or "the project author" if unset) |
 
-## Transport
+### Transport
 
 See [Transport](/docs/how-to/transports) for the full guide.
 
@@ -87,7 +91,7 @@ See [Transport](/docs/how-to/transports) for the full guide.
 | `--transport <type>` | Transport for the generated server: stdio (default) or streamable-http |
 | `--port <number>` | Port for the generated server when --transport is streamable-http (default: 3000) |
 
-## Docker
+### Docker
 
 See [Docker](/docs/how-to/docker) for the full guide.
 
@@ -95,7 +99,7 @@ See [Docker](/docs/how-to/docker) for the full guide.
 |---|---|
 | `--docker` | Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server. Requires --transport streamable-http. |
 
-## OAuth
+### OAuth
 
 See [OAuth](/docs/how-to/oauth) for the full guide.
 
@@ -106,10 +110,35 @@ See [OAuth](/docs/how-to/oauth) for the full guide.
 | `--oauth-audience <uri>` | Expected token audience (RFC 8707), the canonical URI this server will be reachable at, for example https://mcp.example.com/mcp. Required with --oauth-issuer; tokens not bound to this exact value are rejected. |
 | `--oauth-required-scopes <scopes>` | Comma-separated OAuth scopes required on every tool call (default: none beyond token validity) |
 
-## MCP Registry
+### MCP Registry
 
 See [MCP Registry](/docs/how-to/mcp-registry) for the full guide.
 
 | Flag | What it does |
 |---|---|
 | `--registry-name <name>` | Reverse-DNS name for the official MCP Registry, for example io.github.&lt;you&gt;/&lt;server&gt;. When set, the emitted server.json and package.json mcpName use it. |
+
+## klaridian init
+
+Interactive wizard that scaffolds a klaridian.config.json for `klaridian generate` (writes the file only — it does not generate a server)
+
+### Options
+
+| Flag | What it does |
+|---|---|
+| `--out <path>` | Where to write the config file (default: ./klaridian.config.json in the current directory) |
+| `--force` | Overwrite the config file even if it already exists (default: refuse, to avoid silently replacing one you meant to keep) |
+| `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress on stderr. Implies non-interactive: every wizard answer must come from a flag. |
+| `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final next-steps line |
+
+### Wizard fields
+
+See [Wizard fields](/docs/how-to/init) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--spec <path>` | OpenAPI spec path or URL (skips that prompt when passed) |
+| `--generate-out <dir>` | Output directory `klaridian generate` should write the server to — the config file's `out` field, distinct from this command's own --out (skips that prompt when passed) |
+| `--plugin <id>` | Observability plugin to enable, repeatable (available: otel, posthog, amplitude, mixpanel); skips that prompt when passed |
+| `--license <id>` | License for the generated server: mit, apache-2.0, none (skips that prompt when passed). Defaults to `mit`. |
+| `--transport <type>` | Transport for the generated server: stdio or streamable-http (skips that prompt when passed). Defaults to `stdio`. |

@@ -1,0 +1,60 @@
+---
+title: Configuration file
+description: Set default flag values for klaridian generate in a file you check in.
+---
+
+## Why this matters
+
+Most teams run `klaridian generate` the same way every time: the same license, the same transport, the same plugin. Repeating those flags on every command is noise, and it's easy to forget one. A configuration file holds the defaults so each command stays short.
+
+The file is a defaults layer, not a source of truth. A flag you pass on the command line always wins over the file, and the file always wins over the built-in default.
+
+## Use a configuration file
+
+Create `klaridian.config.json` in the directory you run the command from:
+
+```json
+{
+  "license": "apache-2.0",
+  "transport": "streamable-http",
+  "port": 8080,
+  "plugin": ["otel"],
+  "pluginConfig": ["otel.serviceName=my-server"]
+}
+```
+
+Then run `generate` without those flags:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server
+```
+
+klaridian finds the file automatically and reports which one it used.
+
+## Point to a specific file
+
+Pass `--config` to use a file with a different name or location:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --config ./ci/klaridian.prod.json
+```
+
+When you pass `--config`, the file must exist and contain a JSON object. A missing or malformed file fails the command with a clear error instead of falling back to the defaults.
+
+## Keys
+
+Use the same names as the command's flags, in camelCase: `baseUrl` for `--base-url`, `oauthIssuer` for `--oauth-issuer`. `plugin` and `pluginConfig` take arrays. Run `klaridian generate --help` for the full list, or see the [CLI reference](/docs/reference/cli-reference).
+
+An unknown key produces a warning and is ignored, so a typo such as `frce` for `force` doesn't pass unnoticed.
+
+`--spec` and `--out` are required and can't come from the file. The command needs both before it reads the file.
+
+## Precedence
+
+For each flag, klaridian uses the first value it finds:
+
+1. The flag you passed on the command line.
+2. The value in the file.
+3. The built-in default.
+
+For example, with `"license": "apache-2.0"` in the file, `generate` produces an Apache 2.0 license by default, but `--license mit` on the command line still wins.

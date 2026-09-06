@@ -130,21 +130,45 @@ test(
       child.stdout.on("data", (d) => (stdout += d.toString()));
       child.stderr.on("data", (d) => (stderr += d.toString()));
 
+      const parsedIds = (): number[] =>
+        stdout
+          .split("\n")
+          .filter((l) => l.trim().startsWith("{"))
+          .map((l) => {
+            try {
+              return JSON.parse(l).id;
+            } catch {
+              return undefined;
+            }
+          })
+          .filter((id): id is number => typeof id === "number");
+
+      // Poll instead of fixed sleeps — CI runners are slower/less
+      // predictable than a local machine, and a real npm-start-spawns-
+      // node-bundle chain has real, variable startup latency.
+      const waitFor = async (predicate: () => boolean, timeoutMs: number): Promise<void> => {
+        const start = Date.now();
+        while (!predicate()) {
+          if (Date.now() - start > timeoutMs) return;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      };
+
       const send = (msg: unknown) => child.stdin.write(JSON.stringify(msg) + "\n");
-      await new Promise((r) => setTimeout(r, 400));
       send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "start-test", version: "0" } } });
-      await new Promise((r) => setTimeout(r, 300));
+      await waitFor(() => parsedIds().includes(1), 15_000);
       send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
-      await new Promise((r) => setTimeout(r, 500));
+      await waitFor(() => parsedIds().includes(2), 15_000);
       child.kill();
+      await new Promise((r) => setTimeout(r, 200)); // let stdio flush after kill
 
       const lines = stdout.split("\n").filter((l) => l.trim().startsWith("{"));
       const messages = lines.map((l) => JSON.parse(l));
       const initResult = messages.find((m) => m.id === 1);
       const listResult = messages.find((m) => m.id === 2);
 
-      assert.ok(initResult?.result?.protocolVersion, "initialize responded correctly");
-      assert.ok(Array.isArray(listResult?.result?.tools), "tools/list responded correctly");
+      assert.ok(initResult?.result?.protocolVersion, `initialize responded correctly (stdout: ${stdout.slice(0, 500)})`);
+      assert.ok(Array.isArray(listResult?.result?.tools), `tools/list responded correctly (stdout: ${stdout.slice(0, 500)})`);
       assert.equal(listResult.result.tools.length, 19, "real Petstore tool count");
       assert.equal(stderr.trim(), "", "no stderr noise (no crash, no corrupted-stdio warnings)");
     } finally {

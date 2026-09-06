@@ -4,6 +4,9 @@
 .hermes/
 dist/
 node_modules/
+.venv/
+__pycache__/
+*.pyc
 
 # vale sync downloads the Microsoft style package here -- generated,
 # not hand-edited; .vale.ini and the vocabulary file are the checked-in

@@ -116,7 +116,6 @@ export const GENERATE_FLAG_DOC_GROUPS: {
   },
   { category: "Licensing", docPage: "/docs/how-to/licensing", flags: ["--license", "--author"] },
   { category: "Transport", docPage: "/docs/how-to/transports", flags: ["--transport", "--port"] },
-  { category: "Docker", docPage: "/docs/how-to/docker", flags: ["--docker"] },
   {
     category: "OAuth",
     docPage: "/docs/how-to/oauth",
@@ -222,13 +221,6 @@ export function registerGenerateCommand(program: Command): void {
       "Reverse-DNS name for the official MCP Registry, for example io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it."
     )
     .option(
-      // MCPFO-12: a containerized stdio server leaks orphaned containers,
-      // so this only makes sense with streamable-http.
-      "--docker",
-      "Emit a minimal least-privilege Dockerfile + .dockerignore for the generated server. Requires --transport streamable-http.",
-      false
-    )
-    .option(
       // MCPFO-22.
       "--oauth-issuer <url>",
       "OAuth 2.1 issuer URL of the external Authorization Server (IdP) protecting this server. Requires --transport streamable-http. The generated server acts ONLY as a resource server (RFC 9728 PRM, bearer-token/audience validation), never as an authorization server."
@@ -287,7 +279,6 @@ export function registerGenerateCommand(program: Command): void {
         port?: number;
         architecture: string;
         registryName?: string;
-        docker: boolean;
         oauthIssuer?: string;
         oauthJwksUri?: string;
         oauthAudience?: string;
@@ -385,15 +376,6 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
           const architecture = opts.architecture as (typeof SUPPORTED_ARCHITECTURES)[number];
-
-          // MCPFO-12: --docker only makes sense for a network transport.
-          if (opts.docker && transport !== "streamable-http") {
-            fail(
-              `--docker requires --transport streamable-http (a containerized stdio server leaks orphaned containers when the client session ends).`,
-              "validate-docker"
-            );
-            return;
-          }
 
           // MCPFO-22: OAuth resource-server validation. stdio servers MUST
           // NOT implement authorization per spec (they get credentials from
@@ -676,7 +658,6 @@ export function registerGenerateCommand(program: Command): void {
             extraDependencies,
             description: opts.serverDescription,
             registryName: opts.registryName,
-            docker: opts.docker,
             auth: authConfig,
           });
 

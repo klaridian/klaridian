@@ -104,27 +104,26 @@ test("klaridian generate --engine: the flag was removed in the MCPFO-21 cutover 
   }
 });
 
-test("klaridian generate --docker: emits Dockerfile + .dockerignore for streamable-http (MCPFO-12)", async () => {
-  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-docker-"));
+test("klaridian generate: build script bundles the compiled server with esbuild (no --docker, section 55)", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-bundle-"));
   try {
     await execFileAsync("node", [
       CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
       "--name", "d", "--base-url", "https://x/api",
-      "--transport", "streamable-http", "--port", "3000", "--docker", "--license", "none",
+      "--transport", "streamable-http", "--port", "3000", "--license", "none",
     ]);
-    const df = await readFile(path.join(outDir, "Dockerfile"), "utf-8");
-    assert.match(df, /FROM node:\d+/, "pins a Node base");
-    assert.match(df, /USER node/, "non-root");
-    assert.match(df, /KLARIDIAN_BIND_HOST=0\.0\.0\.0/, "reachable in-container");
-    assert.match(df, /EXPOSE 3000/, "exposes the port");
-    const di = await readFile(path.join(outDir, ".dockerignore"), "utf-8");
-    assert.match(di, /node_modules/);
+    const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));
+    assert.equal(pkg.main, "dist/server.bundle.js");
+    assert.match(pkg.scripts.build, /tsc.*&&.*npm run bundle/);
+    assert.match(pkg.scripts.bundle, /esbuild dist\/index\.js --bundle/);
+    assert.equal(pkg.scripts.start, "node dist/server.bundle.js");
+    assert.ok(pkg.devDependencies.esbuild, "esbuild is a devDependency");
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
 });
 
-test("klaridian generate --docker with stdio transport fails loudly (MCPFO-12)", async () => {
+test("klaridian generate: --docker is no longer a recognized flag (removed, section 55)", async () => {
   const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-docker-bad-"));
   try {
     await assert.rejects(
@@ -133,7 +132,7 @@ test("klaridian generate --docker with stdio transport fails loudly (MCPFO-12)",
         "--name", "d", "--base-url", "https://x/api",
         "--transport", "stdio", "--docker", "--license", "none",
       ]),
-      /--docker requires --transport streamable-http/
+      /unknown option '--docker'/i
     );
   } finally {
     await rm(outDir, { recursive: true, force: true });

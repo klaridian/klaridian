@@ -19,7 +19,6 @@ import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames } from "./e
 import { emitSandboxRunner, emitExecuteCodeToolBlock, extractApiHost } from "./emit-sandbox.js";
 import { buildOperationDocs, emitDocsDataModule, emitSearchDocsToolBlock } from "./emit-docs.js";
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
-import { emitDockerfile, emitDockerignore } from "./emit-dockerfile.js";
 import { emitAuthModule } from "../render/auth.js";
 
 export type Transport = "stdio" | "streamable-http";
@@ -54,8 +53,6 @@ export interface EmitOptions {
   /** Reverse-DNS MCP Registry name, e.g. "io.github.acme/petstore" (MCPFO-25).
    *  When set, package.json gains an `mcpName` and server.json uses it. */
   registryName?: string;
-  /** Emit a Dockerfile + .dockerignore (MCPFO-12). streamable-http only. */
-  docker?: boolean;
   /** OAuth 2.1 Resource Server config (MCPFO-22). streamable-http only. */
   auth?: OAuthConfig;
 }
@@ -136,8 +133,8 @@ const nodeHandler = toNodeHandler(handler);
 const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
 // Bind host is configurable so the same server is secure locally (default
-// 127.0.0.1, per MCP spec) and reachable inside a container (set
-// KLARIDIAN_BIND_HOST=0.0.0.0 — see the generated Dockerfile). Host-header
+// 127.0.0.1, per MCP spec) and reachable when the caller controls the network
+// namespace it runs in (set KLARIDIAN_BIND_HOST=0.0.0.0). Host-header
 // validation still restricts callers to localhost, so 0.0.0.0 only widens the
 // network interface, not the accepted Host set.
 const bindHost = process.env.KLARIDIAN_BIND_HOST || "127.0.0.1";
@@ -205,11 +202,6 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
   }
   for (const [p, content] of Object.entries(opts.extraFiles ?? {})) {
     files[p] = content;
-  }
-  // MCPFO-12: containerization only makes sense for a network transport.
-  if (opts.docker && transport === "streamable-http") {
-    files["Dockerfile"] = emitDockerfile({ port: opts.port ?? 3000 });
-    files[".dockerignore"] = emitDockerignore();
   }
   return files;
 }

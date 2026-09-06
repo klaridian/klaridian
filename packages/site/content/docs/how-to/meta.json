@@ -7,7 +7,6 @@
     "code-mode",
     "transports",
     "licensing",
-    "docker",
     "oauth",
     "mcp-registry",
     "plugins"

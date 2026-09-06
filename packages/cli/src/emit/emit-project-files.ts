@@ -12,6 +12,7 @@ const SDK_SERVER_VERSION = "^2.0.0";
 const SDK_NODE_VERSION = "^2.0.0";
 const ZOD_VERSION = "^4.2.0";
 const JOSE_VERSION = "^6.2.0";
+const ESBUILD_VERSION = "^0.24.0";
 
 export function emitPackageJson(
   serverName: string,
@@ -36,28 +37,35 @@ export function emitPackageJson(
     dependencies["jose"] = JOSE_VERSION;
   }
 
-  const startScript =
-    transport === "streamable-http" ? "node dist/index.js" : "node dist/index.js";
-
+  // MCPFO-12 replacement (ARCHITECTURE.md section 55): the run artifact is a
+  // single bundled file (`dist/server.bundle.js`), not the tsc-compiled
+  // `dist/index.js` plus a live `node_modules` tree. `build` still runs `tsc`
+  // first — real type-checking against the SDK's types, catching a bad edit
+  // to this project's own generated source — then bundles the *compiled*
+  // output with esbuild. `start` runs only the bundle; restarting the server
+  // never re-resolves dependencies or touches the network.
   const pkg: Record<string, unknown> = {
     name: serverName,
     version: "1.0.0",
     private: true,
     type: "module",
-    main: "dist/index.js",
+    main: "dist/server.bundle.js",
     // mcpName is the official MCP Registry's npm package-ownership proof: it
     // MUST equal the server.json `name`. Only emitted when a registry name is
     // configured (MCPFO-25).
     ...(registryName ? { mcpName: registryName } : {}),
     scripts: {
-      build: "tsc -p tsconfig.json",
-      start: startScript,
+      build: "tsc -p tsconfig.json && npm run bundle",
+      bundle:
+        "esbuild dist/index.js --bundle --platform=node --target=node20 --format=esm --outfile=dist/server.bundle.js",
+      start: "node dist/server.bundle.js",
     },
     engines: { node: ">=20.0.0" },
     dependencies,
     devDependencies: {
       "@types/node": "^22.10.5",
       typescript: "^5.7.3",
+      esbuild: ESBUILD_VERSION,
     },
   };
   return JSON.stringify(pkg, null, 2) + "\n";

@@ -18,8 +18,8 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
   --transport streamable-http --port 3000
 ```
 
-The server listens on a network port instead. Use this when the server needs to run somewhere other than the client's own machine—for example, behind OAuth (see [OAuth 2.1](/docs/how-to/oauth)), or packaged as a container (see [Docker output](/docs/how-to/docker)). Both of those require `streamable-http`—they don't work with `stdio`.
+The server listens on a network port instead. Use this when the server needs to run somewhere other than the client's own machine—for example, behind OAuth (see [OAuth 2.1](/docs/how-to/oauth)). This requires `streamable-http`—it doesn't work with `stdio`.
 
 ## Which one should I pick?
 
-Start with `stdio`. Switch to `streamable-http` only when you need remote access, OAuth, or Docker.
+Start with `stdio`. Switch to `streamable-http` only when you need remote access or OAuth.

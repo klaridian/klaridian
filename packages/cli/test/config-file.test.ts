@@ -106,7 +106,7 @@ test(
       const configPath = path.join(workDir, "custom-name.json");
       await writeFile(
         configPath,
-        JSON.stringify({ transport: "streamable-http", port: 8081, docker: true })
+        JSON.stringify({ transport: "streamable-http", port: 8081 })
       );
 
       const result = await execFileAsync("node", [

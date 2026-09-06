@@ -17,10 +17,10 @@
 
 import type { ObservabilityPlugin, ResolvedPluginConfig } from "../plugins/plugin.interface.js";
 
-export class InstrumentationPatchError extends Error {
+export class PluginContributionError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "InstrumentationPatchError";
+    this.name = "PluginContributionError";
   }
 }
 
@@ -48,7 +48,7 @@ export function getPluginProjectAdditions(
     for (const c of contributions) {
       const existing = filesByPath.get(c.path);
       if (existing) {
-        throw new InstrumentationPatchError(
+        throw new PluginContributionError(
           `Plugins "${existing.pluginId}" and "${plugin.id}" both contribute a file at "${c.path}" — ` +
             `each plugin must write to its own path (e.g. src/instrumentation/<plugin-id>.ts).`
         );

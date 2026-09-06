@@ -199,8 +199,8 @@ test("generate: rejects more than one --plugin (the emitter supports at most one
   }
 });
 
-test("getPluginProjectAdditions throws InstrumentationPatchError on a file-path collision between plugins", async () => {
-  const { getPluginProjectAdditions, InstrumentationPatchError } = await import("../src/render/instrument.js");
+test("getPluginProjectAdditions throws PluginContributionError on a file-path collision between plugins", async () => {
+  const { getPluginProjectAdditions, PluginContributionError } = await import("../src/render/instrument.js");
   const { otelPlugin } = await import("../src/plugins/otel/otel.plugin.js");
 
   const conflictingPlugin = {
@@ -222,7 +222,7 @@ test("getPluginProjectAdditions throws InstrumentationPatchError on a file-path 
           ["otel-clone", { otlpEndpoint: "http://localhost:4318/v1/traces", serviceName: "b" }],
         ])
       ),
-    InstrumentationPatchError,
+    PluginContributionError,
     "two plugins contributing the same file path should fail loudly, not silently overwrite"
   );
 });

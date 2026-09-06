@@ -25,7 +25,8 @@ import path from "node:path";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions } from "../render/instrument.js";
-import { emitServerProject, resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
+import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
+import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -663,7 +664,14 @@ export function registerGenerateCommand(program: Command): void {
             extraDependencies = additions.dependencies;
           }
 
-          const project = emitServerProject({
+          // MCPFO-60.0: dispatch emission through a language target rather
+          // than calling the TypeScript emitter directly. --language is not a
+          // CLI flag yet (arrives with the real Python emitter, MCPFO-60.3),
+          // so this is fixed to "typescript" — the seam exists, the surface
+          // doesn't change, and behavior is byte-for-byte identical.
+          const language: TargetLanguage = "typescript";
+          const target = getEmitTarget(language);
+          const project = target.emitProject({
             serverName,
             tools,
             baseUrl,

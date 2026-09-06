@@ -101,3 +101,43 @@ export async function writeTempSpec(doc: unknown, dirPrefix: string): Promise<{ 
   await writeFile(specPath, JSON.stringify(doc), "utf-8");
   return { dir, specPath };
 }
+
+/**
+ * Runs `npm install --no-audit --no-fund` followed by `npm run build` inside
+ * a freshly generated project — the "prepare" step between `generate`
+ * (decide, rare, no network by default — ARCHITECTURE.md section 58) and
+ * `start` (run, frequent, never touches the network — section 56). Backing
+ * `generate --install`: opt-in so the base command stays network-free and
+ * predictable, but lets a caller who wants convenience fuse decide+prepare
+ * into one invocation instead of following the printed next-steps by hand.
+ *
+ * `--no-audit --no-fund` mirrors the flags this repo's own E2E tests and CI
+ * use everywhere else (AGENTS.md "Common pitfalls" / ARCHITECTURE.md section
+ * 41) — a bare `npm install` has been observed to hang indefinitely on some
+ * machines waiting on npm's audit/funding network round-trip.
+ *
+ * Deliberately dumb, like `start`: two sequential commands, stdout/stderr
+ * captured (not inherited — this runs during `generate`'s own structured
+ * step/warn/fail output, not as a handoff to a foreground process the way
+ * `start` hands off stdio to the generated server). Throws on either
+ * command's non-zero exit so the caller can report which stage failed,
+ * rather than silently leaving a half-installed project.
+ */
+export async function runInstallAndBuild(dir: string): Promise<void> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execFileAsync = promisify(execFile);
+  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+
+  try {
+    await execFileAsync(npmCmd, ["install", "--no-audit", "--no-fund"], { cwd: dir });
+  } catch (err) {
+    throw new Error(`npm install failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    await execFileAsync(npmCmd, ["run", "build"], { cwd: dir });
+  } catch (err) {
+    throw new Error(`npm run build failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}

@@ -226,3 +226,84 @@ test("getPluginProjectAdditions throws PluginContributionError on a file-path co
     "two plugins contributing the same file path should fail loudly, not silently overwrite"
   );
 });
+
+test(
+  "generate --install: fuses decide+prepare — installs, builds, and adjusts nextSteps to skip both",
+  { timeout: 180_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-install-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-petstore-install",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--license",
+        "none",
+        "--install",
+        "--json",
+      ]);
+
+      const jsonResult = JSON.parse(result.stdout);
+      assert.equal(jsonResult.success, true);
+      // ARCHITECTURE.md section 58: --install already ran npm install + npm
+      // run build, so the printed next step should be just `npm start` —
+      // no leftover "npm install && npm run build" for something already done.
+      assert.match(jsonResult.nextSteps, /npm start/);
+      assert.doesNotMatch(jsonResult.nextSteps, /npm install/);
+      assert.doesNotMatch(jsonResult.nextSteps, /npm run build/);
+
+      // The real artifact --install promised must actually exist — not
+      // just a next-steps string that claims it does.
+      const bundlePath = path.join(outputDir, "dist", "server.bundle.js");
+      const bundleStat = await import("node:fs/promises").then((fs) => fs.stat(bundlePath));
+      assert.ok(bundleStat.isFile(), "npm run build should have produced dist/server.bundle.js");
+
+      const nodeModulesStat = await import("node:fs/promises").then((fs) =>
+        fs.stat(path.join(outputDir, "node_modules"))
+      );
+      assert.ok(nodeModulesStat.isDirectory(), "npm install should have produced node_modules");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "generate (default, no --install): still requires the manual npm install/build step",
+  { timeout: 60_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-gen-noinstall-"));
+    try {
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "test-petstore-noinstall",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--license",
+        "none",
+        "--json",
+      ]);
+
+      const jsonResult = JSON.parse(result.stdout);
+      assert.equal(jsonResult.success, true);
+      assert.match(jsonResult.nextSteps, /npm install && npm run build && npm start/);
+
+      await assert.rejects(import("node:fs/promises").then((fs) => fs.stat(path.join(outputDir, "node_modules"))));
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);

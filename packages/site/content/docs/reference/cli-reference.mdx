@@ -33,6 +33,14 @@ Generate an MCP server from an OpenAPI spec (via openapi-mcp-generator), optiona
 | `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success) |
 | `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line |
 
+### Lifecycle
+
+See [Lifecycle](/docs/how-to/running-the-server) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--install` | After generating, also run `npm install --no-audit --no-fund` and `npm run build` in --out (skips the manual step normally printed in "Next"). The generated project still needs `npm start` or `klaridian start` to actually run it. |
+
 ### Configuration
 
 See [Configuration](/docs/how-to/config-file) for the full guide.

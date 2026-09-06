@@ -45,6 +45,7 @@ import {
   resolveGitAuthorName,
   directoryExistsAndIsNonEmpty,
   writeTempSpec,
+  runInstallAndBuild,
   type GenerateJsonResult,
 } from "./generate-helpers.js";
 
@@ -88,6 +89,11 @@ export const GENERATE_FLAG_DOC_GROUPS: {
   {
     category: "Basics",
     flags: ["--name", "--base-url", "--server-description", "--force", "--json", "--quiet"],
+  },
+  {
+    category: "Lifecycle",
+    docPage: "/docs/how-to/running-the-server",
+    flags: ["--install"],
   },
   {
     category: "Configuration",
@@ -256,6 +262,16 @@ export function registerGenerateCommand(program: Command): void {
       "Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line",
       false
     )
+    .option(
+      // ARCHITECTURE.md section 58: the "prepare" step (npm install + npm
+      // run build) sits between generate's decide (rare, no network by
+      // default) and start's run (frequent, never touches the network) —
+      // opt-in here fuses decide+prepare into one invocation without
+      // making the base `generate` reach for the network unasked.
+      "--install",
+      "After generating, also run `npm install --no-audit --no-fund` and `npm run build` in --out (skips the manual step normally printed in \"Next\"). The generated project still needs `npm start` or `klaridian start` to actually run it.",
+      false
+    )
     .action(
       async (opts: {
         config?: string;
@@ -287,6 +303,7 @@ export function registerGenerateCommand(program: Command): void {
         force: boolean;
         json: boolean;
         quiet: boolean;
+        install: boolean;
       }, command: Command) => {
         // MCPFO-37 / ARCHITECTURE.md section 52: merge the config file (a
         // defaults layer) into `opts` BEFORE anything reads it — including
@@ -696,6 +713,31 @@ export function registerGenerateCommand(program: Command): void {
             architecture === "code-mode"
               ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && npm start`
               : `cd ${opts.out} && npm install && npm run build && npm start`;
+
+          // ARCHITECTURE.md section 58: opt-in "prepare" step. Runs after
+          // the summary line above (so a failure here reads as "generation
+          // succeeded, then install/build failed" rather than muddying the
+          // generation outcome itself) but before the final next-steps
+          // output, which is adjusted below to reflect what's left to do.
+          let installError: string | undefined;
+          if (opts.install) {
+            step("📦 Installing dependencies and building (--install)...");
+            try {
+              await runInstallAndBuild(outputDir);
+              step("✅ Installed and built — ready to run");
+            } catch (err) {
+              installError = err instanceof Error ? err.message : String(err);
+              warn(`⚠️  --install failed: ${installError}. Run \`cd ${opts.out} && npm install && npm run build\` manually.`);
+            }
+          }
+
+          const readyToRun = opts.install && !installError;
+          const finalNextSteps = readyToRun
+            ? architecture === "code-mode"
+              ? `cd ${opts.out} && (install Deno if needed: https://deno.com/) && npm start`
+              : `cd ${opts.out} && npm start`
+            : nextSteps;
+
           if (jsonMode) {
             const result: GenerateJsonResult = {
               success: true,
@@ -707,7 +749,7 @@ export function registerGenerateCommand(program: Command): void {
               architecture,
               license: license !== "none" ? getPackageJsonLicenseField(license) : null,
               plugins: plugins.map((p) => p.id),
-              nextSteps,
+              nextSteps: finalNextSteps,
               warnings,
             };
             process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -715,7 +757,7 @@ export function registerGenerateCommand(program: Command): void {
             // The final summary line always prints, even under --quiet —
             // quiet reduces step-by-step noise, it doesn't hide the one
             // line a human actually needs to know what to do next.
-            console.error(`   Next: ${nextSteps}`);
+            console.error(`   Next: ${finalNextSteps}`);
           }
         } catch (err) {
           fail(err instanceof Error ? err.message : String(err), "unexpected");

@@ -1258,4 +1258,28 @@ Actioned the third deferred item from the section-57 audit. The error class in `
 
 Renamed to `PluginContributionError`, which names the actual failure it reports (a bad/colliding plugin *contribution*). Updated the class declaration, its `name`, the single throw site, the collision test (`test/generate.test.ts`, both the test title and the imported symbol), and the AGENTS.md "legacy leftover" parenthetical. Historical decision-log sections 20 and 28 still mention the old name in their original prose—left untouched, since this file is append-only and those sections describe the state at the time they were written; this section is the pointer that the name changed. No behavior change; full suite 161/161.
 
+## 58. `generate --install`—an opt-in "prepare" step, distinct from both `generate` and `start` (Sep 6, 2026)
+
+Prompted directly by a maintainer UX question: the docs (`running-the-server.mdx`) showed a 3-step lifecycle (`generate` → `npm install && npm run build` → `npm start`/`klaridian start`) without ever naming the middle step or explaining why it isn't folded into either neighbor—reading it, "why do I need this npm run build step, and how is it different from `klaridian start`?" was a fair question with no answer on the page.
+
+**The framing that resolved it:** a klaridian project's lifecycle has three steps with three different frequencies and constraints, not two:
+
+1. **Decide** (`generate`)—rare (once per project, or again on a real spec/plugin/architecture change), and deliberately network-free by default: this is the one place in the whole CLI where the "never phone-home, nothing happens without being asked" trust positioning (PLAN.md section 16, MCPFO-43) is most visible, since it's the step most likely to run in CI/scripting/agent contexts where an unexpected network call is worst.
+2. **Prepare** (`npm install && npm run build`)—rare (once per `generate`, idempotent until the next `generate`), *does* need the network (dependency install), but isn't a structural decision—it doesn't change what was emitted, just materializes it into a runnable bundle.
+3. **Run** (`npm start` / `klaridian start`)—frequent (every restart/deploy), and must stay network-free forever, which is the entire reason section 55's bundling and section 56's `start` guardrail (`start` explicitly refuses to run install/build) exist.
+
+**Why "prepare" doesn't belong inside `start`:** already decided and correctly held in section 56—`start` runs on every restart, so if it ran `npm install`, every restart would touch the network, which is exactly what the bundle-based restart model was built to prevent. Revisiting that call was never on the table; the gap was elsewhere.
+
+**Why "prepare" doesn't belong as a change to `generate`'s default behavior:** `generate` is the step most likely to run non-interactively (CI, scripting, an agent driving the CLI) and the one place the zero-surprise-network-calls trust story is most concrete. Making install-and-build automatic by default would mean `generate` always touches the network, silently, which cuts directly against that positioning.
+
+**The fix: `--install`, an opt-in flag on `generate` (not a new command, not a `start` behavior change).** After `generate` finishes emitting the project, `--install` runs `npm install --no-audit --no-fund && npm run build` in `--out` (shared helper `runInstallAndBuild()` in `generate-helpers.ts`, same `--no-audit --no-fund` flags this repo's own E2E tests and CI use everywhere per the section-41 npm-hang lesson). On success, the printed "Next" line (and `--json`'s `nextSteps` field) collapses to just `npm start`—on failure, `--install`'s own error is surfaced via `warn()` and `nextSteps` falls back to the full three-command chain, so a partial failure never claims more was done than actually was.
+
+**Why a flag on `generate` and not a third top-level command:** a `klaridian prepare` or `klaridian build` command would need to answer "prepare *what*, in which directory, built with which tool"—all of which is only meaningful immediately after a specific `generate` call already knows the answer to. Bolting it onto the command that already has that context (as an opt-in flag) is a smaller vocabulary than adding a fourth verb (`init`/`generate`/`start`/now-`prepare`) that always runs immediately after `generate` anyway.
+
+**Validated end to end:** two new tests in `generate.test.ts`—`--install` produces a real `node_modules/` and `dist/server.bundle.js` and reports `nextSteps: "... npm start"` (no leftover `npm install`/`npm run build` in the string); the default (no `--install`) path confirms no `node_modules` gets created and `nextSteps` still carries the full three-command chain. Full existing suite re-run green alongside the two new tests (6/6 in `generate.test.ts`).
+
+**Docs updated:** `running-the-server.mdx` now leads with an explicit decide/prepare/run table (frequency + network column) before the command lifecycle, and documents `--install` as fusing steps 1 and 2 without changing what either does. `cli-reference.mdx` regenerated (`npm run docs:gen`) to include the new flag under a new "Lifecycle" doc group.
+
+**What this does not change:** `start` (section 56) is untouched—still refuses to manage install/build, still hands off stdio unconditionally. `generate`'s default (no `--install`) behavior is unchanged—still emits files only, still no network. This is purely an additive, opt-in fusion of two already-existing steps.
+
 

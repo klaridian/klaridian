@@ -135,6 +135,18 @@ See [Wizard fields](/docs/how-to/init) for the full guide.
 | `--license <id>` | License for the generated server: mit, apache-2.0, none (skips that prompt when passed). Defaults to `mit`. |
 | `--transport <type>` | Transport for the generated server: stdio or streamable-http (skips that prompt when passed). Defaults to `stdio`. |
 
+## klaridian start
+
+Launch a server previously produced by `klaridian generate` — runs its `npm start` in place. Generates and configures nothing; pass every generation flag (--spec, --architecture, --plugin, ...) to `generate` instead, once, when you create or regenerate the project.
+
+### Options
+
+See [Options](/docs/how-to/running-the-server) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--json` | If a pre-launch check fails (missing/unbuilt project), print a single JSON error object to stdout instead of a human message. Has no effect once the server itself starts — from that point the server owns stdout. |
+
 ## klaridian plugins list
 
 List every available observability plugin (id and name)

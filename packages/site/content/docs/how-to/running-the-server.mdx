@@ -1,0 +1,42 @@
+---
+title: Running the server
+description: The generate-once, run-many lifecycle — and klaridian start.
+---
+
+## The lifecycle
+
+`klaridian generate` makes every structural decision about a server up front — spec, curation, architecture, plugins, transport, auth. Once that's done, running (and restarting) the server is a separate, much simpler step that never needs those flags again.
+
+```bash
+# 1. Generate once
+npx klaridian generate --spec ./api.yaml --out ./my-server --base-url https://api.example.com
+
+# 2. Install and build once
+cd my-server && npm install && npm run build
+
+# 3. Run — and re-run on every restart
+npm start
+```
+
+`npm run build` produces a single self-contained `dist/server.bundle.js` (see [why](/docs/reference/cli-reference#klaridian-generate) klaridian bundles instead of shipping a live `node_modules` tree). `npm start` only runs that file — a restart never re-installs dependencies or touches the network.
+
+## `klaridian start`
+
+`klaridian start [dir]` is a thin convenience wrapper around the same `npm start` step, for when it's easier to remember one command than "which directory, and which script":
+
+```bash
+npx klaridian start ./my-server
+```
+
+It takes **no generation flags** — no `--spec`, `--architecture`, `--plugin`, or anything else. Everything those flags would configure is already baked into `./my-server` by the `generate` that produced it. If you want a different architecture, a different plugin, or a different spec, run `klaridian generate` again (optionally into the same `--out` with `--force`) — don't look for a flag on `start`, there isn't one and there won't be.
+
+Two checks run before handing off to the server:
+
+- **Is this a klaridian project?** `start` looks for a `package.json` with a `start` script and a `server.json` (only `generate` emits that). If either is missing, it fails with a clear message instead of a confusing Node error.
+- **Has it been built?** `start` checks that the project's `main` entry (`dist/server.bundle.js` by default) exists. If not, it tells you to run `npm install && npm run build` first, rather than failing with a generic `MODULE_NOT_FOUND`.
+
+Once those pass, `start` hands stdin/stdout/stderr straight to the generated server (`npm start`, inherited I/O) — this matters for `stdio`-transport servers, where nothing may sit between the MCP client and the server on that stream.
+
+## Configuring a running server
+
+Everything that varies per environment — base URL, auth tokens, plugin credentials, bind host — is read from environment variables by the generated server itself, not passed as a flag to `start` or `generate`. See the relevant how-to page ([OAuth](/docs/how-to/oauth), [plugins](/docs/how-to/plugins), [transports](/docs/how-to/transports)) for which variables apply to your setup.

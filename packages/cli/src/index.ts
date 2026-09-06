@@ -4,6 +4,7 @@
 import { Command } from "commander";
 import { registerGenerateCommand } from "./commands/generate.js";
 import { registerInitCommand } from "./commands/init.js";
+import { registerStartCommand } from "./commands/start.js";
 import { registerPluginsCommand, registerLicensesCommand } from "./commands/list.js";
 
 const program = new Command();
@@ -14,6 +15,7 @@ program
 
 registerGenerateCommand(program);
 registerInitCommand(program);
+registerStartCommand(program);
 registerPluginsCommand(program);
 registerLicensesCommand(program);
 

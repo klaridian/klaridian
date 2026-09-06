@@ -28,6 +28,7 @@ import {
   GENERATE_FLAG_DOC_GROUPS,
 } from "../dist/src/commands/generate.js";
 import { registerInitCommand, INIT_FLAG_DOC_GROUPS } from "../dist/src/commands/init.js";
+import { registerStartCommand, START_FLAG_DOC_GROUPS } from "../dist/src/commands/start.js";
 import {
   registerPluginsCommand,
   registerLicensesCommand,
@@ -44,6 +45,7 @@ import {
 const DOCUMENTED_COMMANDS = [
   { name: "generate", register: registerGenerateCommand, groups: GENERATE_FLAG_DOC_GROUPS },
   { name: "init", register: registerInitCommand, groups: INIT_FLAG_DOC_GROUPS },
+  { name: "start", register: registerStartCommand, groups: START_FLAG_DOC_GROUPS },
   {
     name: "plugins",
     subcommand: "list",

@@ -15,11 +15,10 @@
 //   - the per-target conformance adapter (MCPFO-60.1, DONE) — spec-mandated
 //     JSON-RPC error shapes the underlying SDK doesn't provide for free; lives
 //     on the `conformance` slot below (emit/conformance/*).
-//   - the plugin dispatch-boundary contract (MCPFO-60.2, pending) — where a
+//   - the plugin dispatch-boundary contract (MCPFO-60.2, DONE) — how a
 //     plugin's instrumentation wraps the tool-dispatch path (per-tool
-//     `registerTool` for TS; the shared `on_call_tool` dispatch for Python).
-//     Still satisfied by the existing `wiring` field on EmitOptions until 60.2
-//     names it as a slot — do not pre-build it here.
+//     `registerTool` for TS; the shared `on_call_tool` dispatch for Python);
+//     lives on the `pluginDispatch` slot below (emit/plugin-dispatch/*).
 // Each is native/implicit for the TypeScript SDK v2; a second target is what
 // forces it to become an explicit slot on this interface. See ARCHITECTURE.md
 // section 60.1 / 60.2 for the design.
@@ -34,6 +33,8 @@ import type { EmitOptions, EmittedProject } from "./emit-server.js";
 import { emitServerProject } from "./emit-server.js";
 import { typescriptConformanceAdapter } from "./conformance/typescript.js";
 import type { ConformanceAdapter } from "./conformance/contract.js";
+import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
+import type { PluginDispatchStrategy } from "./plugin-dispatch/contract.js";
 
 /** Languages a generated MCP server project can be emitted in. */
 export type TargetLanguage = "typescript" | "python";
@@ -64,6 +65,14 @@ export interface EmitTarget {
   readonly conformance: ConformanceAdapter;
 
   /**
+   * The plugin dispatch strategy for this target (MCPFO-60.2): how a plugin's
+   * instrumentation wrap is rendered at this target's tool-dispatch boundary.
+   * TypeScript wraps per-tool (fine-grained); a target whose SDK only exposes a
+   * shared dispatch (e.g. Python, MCPFO-60.3) wraps once through the same slot.
+   */
+  readonly pluginDispatch: PluginDispatchStrategy;
+
+  /**
    * Emit a complete generated MCP server project from the IR + options.
    * Returns a path -> content map (relative paths, POSIX separators). Throws
    * loudly on an un-emittable configuration (e.g. code-mode without an
@@ -82,6 +91,7 @@ export interface EmitTarget {
 export const typescriptTarget: EmitTarget = {
   language: "typescript",
   conformance: typescriptConformanceAdapter,
+  pluginDispatch: typescriptPluginDispatch,
   emitProject(opts: EmitOptions): EmittedProject {
     // Route through the conformance adapter genuinely, not decoratively: the
     // TS SDK is natively conformant, so contributions MUST be empty and the

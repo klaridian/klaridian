@@ -17,6 +17,8 @@
 // client's directory, so relative `import { x } from "./client.js"` resolves
 // without writing a temp file to disk per invocation.
 
+import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
+
 /**
  * Extracts the `host` or `host:port` portion from an absolute base URL, in
  * the shape Deno's `--allow-net` expects (no scheme, no path). Throws if the
@@ -157,8 +159,9 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
  * process's OTel/PostHog SDK instances).
  */
 export function emitExecuteCodeToolBlock(apiHost: string, wrap?: { fn: string }): string {
-  const handlerOpen = wrap ? `${wrap.fn}("execute_code", async (args) => {` : `async (args) => {`;
-  const handlerClose = wrap ? `    })` : `    }`;
+  const wiring = wrap ? { importStatement: "", wrapFunctionName: wrap.fn } : undefined;
+  const handlerOpen = typescriptPluginDispatch.wrapHandlerOpen("execute_code", wiring);
+  const handlerClose = typescriptPluginDispatch.wrapHandlerClose(wiring);
   return `  server.registerTool(
     "execute_code",
     {

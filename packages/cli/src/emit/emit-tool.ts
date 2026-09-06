@@ -10,6 +10,7 @@
 
 import type { McpToolDefinition } from "openapi-mcp-generator";
 import { jsonSchemaToZod } from "json-schema-to-zod";
+import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
 
 /**
  * Maps an HTTP method to MCP tool annotations required by marketplace review
@@ -122,8 +123,9 @@ export function emitToolBlock(tool: McpToolDefinition, wrap?: { fn: string }): s
   const zodSrc = jsonSchemaToZod(tool.inputSchema ?? { type: "object", properties: {} });
   const ann = annotationsForMethod(tool.method || "get");
   const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
-  const handlerOpen = wrap ? `${wrap.fn}(${JSON.stringify(tool.name)}, async (args) => {` : `async (args) => {`;
-  const handlerClose = wrap ? `    })` : `    }`;
+  const wiring = wrap ? { importStatement: "", wrapFunctionName: wrap.fn } : undefined;
+  const handlerOpen = typescriptPluginDispatch.wrapHandlerOpen(tool.name, wiring);
+  const handlerClose = typescriptPluginDispatch.wrapHandlerClose(wiring);
   const annotations =
     `{ title: ${JSON.stringify(title)}, readOnlyHint: ${ann.readOnlyHint}, ` +
     `destructiveHint: ${ann.destructiveHint}, idempotentHint: ${ann.idempotentHint}, ` +

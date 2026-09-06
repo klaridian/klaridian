@@ -9,20 +9,20 @@
 // already-oversized generate.ts god file (section 57). This file defines that
 // dispatch seam.
 //
-// Scope discipline (MCPFO-60.0): this is a TS-first refactor with NO behavior
-// change. It defines the interface shape and makes the existing TypeScript
-// emitter its first implementation. The two abstractions that fill in the
-// target-specific slots below arrive in their own tickets and MUST NOT be
-// pre-built here:
-//   - the per-target conformance adapter (MCPFO-60.1) — spec-mandated JSON-RPC
-//     error shapes the underlying SDK doesn't provide for free;
-//   - the plugin dispatch-boundary contract (MCPFO-60.2) — where a plugin's
-//     instrumentation wraps the tool-dispatch path (per-tool `registerTool`
-//     for TS; the shared `on_call_tool` dispatch for Python).
-// Today both are satisfied natively by the TypeScript SDK v2 and by the
-// existing `wiring` field on EmitOptions respectively; a second target is what
-// forces them to become explicit slots on this interface. See ARCHITECTURE.md
-// section 60.1 / 60.2 for the design, and keep them out of this ticket.
+// Scope discipline: this file began as the MCPFO-60.0 TS-first refactor (the
+// EmitTarget interface + TypeScript implementation + dispatch seam). The
+// target-specific slots are filled in by their own tickets:
+//   - the per-target conformance adapter (MCPFO-60.1, DONE) — spec-mandated
+//     JSON-RPC error shapes the underlying SDK doesn't provide for free; lives
+//     on the `conformance` slot below (emit/conformance/*).
+//   - the plugin dispatch-boundary contract (MCPFO-60.2, pending) — where a
+//     plugin's instrumentation wraps the tool-dispatch path (per-tool
+//     `registerTool` for TS; the shared `on_call_tool` dispatch for Python).
+//     Still satisfied by the existing `wiring` field on EmitOptions until 60.2
+//     names it as a slot — do not pre-build it here.
+// Each is native/implicit for the TypeScript SDK v2; a second target is what
+// forces it to become an explicit slot on this interface. See ARCHITECTURE.md
+// section 60.1 / 60.2 for the design.
 //
 // The tool-data IR (openapi-mcp-generator's getToolsFromOpenApi() output) is
 // deliberately NOT part of this interface: spike 059 (ARCHITECTURE.md section
@@ -32,6 +32,8 @@
 
 import type { EmitOptions, EmittedProject } from "./emit-server.js";
 import { emitServerProject } from "./emit-server.js";
+import { typescriptConformanceAdapter } from "./conformance/typescript.js";
+import type { ConformanceAdapter } from "./conformance/contract.js";
 
 /** Languages a generated MCP server project can be emitted in. */
 export type TargetLanguage = "typescript" | "python";
@@ -54,6 +56,14 @@ export interface EmitTarget {
   readonly language: TargetLanguage;
 
   /**
+   * The conformance adapter guaranteeing spec-mandated JSON-RPC error shapes
+   * for this target (MCPFO-60.1). For TypeScript the SDK is natively conformant
+   * so the adapter contributes no server code; a target whose SDK isn't (e.g.
+   * Python, MCPFO-60.3) injects explicit error-mapping through the same slot.
+   */
+  readonly conformance: ConformanceAdapter;
+
+  /**
    * Emit a complete generated MCP server project from the IR + options.
    * Returns a path -> content map (relative paths, POSIX separators). Throws
    * loudly on an un-emittable configuration (e.g. code-mode without an
@@ -71,7 +81,22 @@ export interface EmitTarget {
  */
 export const typescriptTarget: EmitTarget = {
   language: "typescript",
+  conformance: typescriptConformanceAdapter,
   emitProject(opts: EmitOptions): EmittedProject {
+    // Route through the conformance adapter genuinely, not decoratively: the
+    // TS SDK is natively conformant, so contributions MUST be empty and the
+    // emitted project is byte-for-byte what emitServerProject produces. If a
+    // future change makes TS need injected error-mapping, this fails loudly
+    // here rather than silently emitting a non-conformant server — the same
+    // "fail loudly, don't guess" discipline the emitter already follows.
+    const contributions = this.conformance.emitServerContributions();
+    if (contributions !== "") {
+      throw new Error(
+        "TypeScript target expected native SDK conformance (no injected " +
+          "contributions), but the adapter produced server code. Wire it into " +
+          "the emitter before shipping — see emit/conformance/typescript.ts."
+      );
+    }
     return emitServerProject(opts);
   },
 };

@@ -16,6 +16,7 @@ import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { emitServerProject } from "../src/emit/emit-server.js";
+import { CONFORMANCE_CONTRACT } from "../src/emit/conformance/contract.js";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -94,11 +95,36 @@ test(
         const delPet = listResp.result.tools.find((t: any) => t.name === "deletePet");
         if (delPet) assert.equal(delPet.annotations?.destructiveHint, true, "DELETE tool annotated destructive");
 
-        // tools/call unknown -> native protocol error (-32602), no conformance patch needed
+        // tools/call unknown -> native protocol error. The TS SDK v2 gives
+        // this at the registerTool() boundary; MCPFO-60.1 names it as the
+        // shared conformance contract so the Python target (MCPFO-60.3)
+        // implements against the same guarantee.
+        assert.equal(CONFORMANCE_CONTRACT.unknownTool.kind, "protocol");
         sendJsonRpc(proc, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "noSuchTool", arguments: {} } });
         const unknownResp = await readOneJsonRpcLine(proc);
         assert.ok(unknownResp.error, "unknown tool is a protocol error");
-        assert.equal(unknownResp.error.code, -32602);
+        assert.equal(
+          unknownResp.error.code,
+          (CONFORMANCE_CONTRACT.unknownTool as { code: number }).code
+        );
+
+        // tools/call with arguments that violate the tool's input schema
+        // (getPetById requires petId). Per the MCP two-tier model this is a
+        // TOOL error, not a protocol error: the SDK returns a normal result
+        // with isError: true and a validation message, so the model can see
+        // and react to it. Verified against the real SDK — this corrected the
+        // ticket's initial "invalid-arguments -> -32602" assumption. The
+        // contract encodes it as { kind: "tool-error" }.
+        assert.equal(CONFORMANCE_CONTRACT.invalidArguments.kind, "tool-error");
+        sendJsonRpc(proc, { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "getPetById", arguments: {} } });
+        const invalidResp = await readOneJsonRpcLine(proc);
+        assert.ok(!invalidResp.error, "schema-invalid arguments are NOT a protocol error");
+        assert.equal(invalidResp.result?.isError, true, "schema-invalid arguments are a tool-error result");
+        assert.match(
+          invalidResp.result?.content?.[0]?.text ?? "",
+          /validation/i,
+          "tool-error content explains the validation failure"
+        );
       } finally {
         proc.kill("SIGKILL");
       }
@@ -169,7 +195,7 @@ test(
         const r3 = await post({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} });
         assert.ok(Array.isArray(r3?.result?.tools), "3rd request ok");
         const r4 = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "noSuchTool", arguments: {} } });
-        assert.equal(r4?.error?.code, -32602, "4th request: unknown tool is a native protocol error");
+        assert.equal(r4?.error?.code, (CONFORMANCE_CONTRACT.unknownTool as { code: number }).code, "4th request: unknown tool is a native protocol error");
 
         assert.equal(exitedEarly, false, "server did not crash across 4 sequential requests");
       } finally {

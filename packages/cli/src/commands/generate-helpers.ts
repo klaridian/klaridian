@@ -62,6 +62,7 @@ export interface GenerateJsonResult {
   transport?: string;
   port?: number | null;
   architecture?: string;
+  language?: string;
   license?: string | null;
   plugins?: string[];
   nextSteps?: string;

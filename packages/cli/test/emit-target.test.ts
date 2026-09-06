@@ -39,12 +39,18 @@ test("the TypeScript target emits byte-for-byte what emitServerProject does", ()
   assert.deepEqual(viaTarget, viaDirect);
 });
 
+test("python is now a registered target (MCPFO-60.3)", () => {
+  const target = getEmitTarget("python");
+  assert.equal(target.language, "python");
+});
+
 test("an unregistered language fails loudly instead of defaulting", () => {
-  // python has no target yet (arrives in MCPFO-60.3). Requesting it must throw,
-  // not silently fall back to a TypeScript project mislabeled as Python.
+  // A language with no registered target must throw, not silently fall back to
+  // a TypeScript project mislabeled as that language. (typescript + python are
+  // registered; anything else is not.)
   assert.throws(
     // deliberate off-contract call: exercise the runtime guard, not the type.
-    () => getEmitTarget("python" as never),
-    /No emit target for language "python"/
+    () => getEmitTarget("ruby" as never),
+    /No emit target for language "ruby"/
   );
 });

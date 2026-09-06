@@ -5,6 +5,7 @@
     "config-file",
     "curation",
     "code-mode",
+    "target-language",
     "running-the-server",
     "transports",
     "licensing",

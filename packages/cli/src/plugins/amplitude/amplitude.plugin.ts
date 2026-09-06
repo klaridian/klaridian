@@ -16,6 +16,7 @@ import type {
   TemplateContribution,
 } from "../plugin.interface.js";
 import { buildProductAnalyticsInstrumentationFile } from "../shared/product-analytics-template.js";
+import { buildPythonProductAnalyticsInstrumentationFile } from "../shared/product-analytics-python-template.js";
 
 const CONFIG_SCHEMA: PluginConfigField[] = [
   {
@@ -68,6 +69,45 @@ process.on("SIGTERM", () => flush().promise.finally(() => process.exit(0)));`,
   });
 }
 
+function generatePythonInstrumentationFile(config: ResolvedPluginConfig): string {
+  return buildPythonProductAnalyticsInstrumentationFile({
+    pluginId: "amplitude",
+    stdioSafetyLines: [
+      "The amplitude-analytics Python SDK logs via the standard `logging`",
+      "module and never prints to stdout, so it is safe alongside the stdio",
+      "MCP transport for the same reason the TS Amplitude plugin is (see",
+      "spikes/001-otel-mechanic/FINDINGS.md for why that distinction matters).",
+    ],
+    importStatement: `from amplitude import Amplitude, BaseEvent`,
+    credentialEnvVar: "AMPLITUDE_API_KEY",
+    credentialDescription: "your Amplitude project API key",
+    credentialConstName: "API_KEY",
+    initStatements: `SERVER_ZONE = os.environ.get("AMPLITUDE_SERVER_ZONE") or ${JSON.stringify(
+      config.serverZone
+    )}
+
+amplitude = Amplitude(API_KEY, server_zone=SERVER_ZONE)`,
+    // The SDK batches events; flush on exit so a short-lived stdio server
+    // doesn't drop the final batch.
+    flushHandlers: `import atexit
+
+atexit.register(amplitude.flush)`,
+    identityConstName: "device_id",
+    captureStatement: ({ identityConst, success }) =>
+      `amplitude.track(
+                BaseEvent(
+                    event_type="mcp tool called",
+                    device_id=${identityConst},
+                    event_properties={
+                        "tool_name": tool_name,
+                        "duration_ms": int((time.monotonic() - started_at) * 1000),
+                        "success": ${success ? "True" : "False"},${success ? "" : '\n                        "error_message": str(err),'}
+                    },
+                )
+            )`,
+  });
+}
+
 export const amplitudePlugin: ObservabilityPlugin = {
   id: "amplitude",
   name: "Amplitude (product observability)",
@@ -93,5 +133,23 @@ export const amplitudePlugin: ObservabilityPlugin = {
       importStatement: `import { wrapAmplitudeTool } from "./instrumentation/amplitude.js";`,
       wrapFunctionName: "wrapAmplitudeTool",
     };
+  },
+
+  python: {
+    getTemplateContributions(config: ResolvedPluginConfig): TemplateContribution[] {
+      return [
+        {
+          path: "instrumentation/amplitude.py",
+          content: generatePythonInstrumentationFile(config),
+        },
+      ];
+    },
+    getDependencies(): Record<string, string> {
+      return {
+        "amplitude-analytics": ">=1.1",
+      };
+    },
+    importStatement: `from instrumentation.amplitude import wrap_dispatch`,
+    wrapFunctionName: "wrap_dispatch",
   },
 };

@@ -21,6 +21,31 @@ export interface TemplateContribution {
   content: string | ((config: ResolvedPluginConfig) => string);
 }
 
+/**
+ * A plugin's contribution to a Python-target generated server (MCPFO-60.3).
+ * Optional on ObservabilityPlugin so a plugin can be TypeScript-only, but every
+ * shipped plugin provides it for launch parity (ARCHITECTURE.md section 60).
+ *
+ * The wrap shape is the SHARED-DISPATCH idiom (MCPFO-60.2 / plugin-dispatch/
+ * python.ts): the exported wrap function takes the server's single async
+ * `_dispatch(tool_name, arguments)` and returns a wrapped dispatch — so ONE
+ * reassignment (`_dispatch = wrap(_dispatch)`) instruments every tool call,
+ * versus TypeScript's per-tool `wrapTool(name, handler)`.
+ */
+export interface PythonPluginContribution {
+  /** Files this plugin contributes to the Python project (path relative to root,
+   *  e.g. "instrumentation/otel.py"). Vendored source per section 7. */
+  getTemplateContributions(config: ResolvedPluginConfig): TemplateContribution[];
+  /** pip requirement version specs the Python project needs, keyed by package
+   *  name, e.g. { "opentelemetry-sdk": ">=1.28" }. */
+  getDependencies(): Record<string, string>;
+  /** The import line the generated server.py adds, e.g.
+   *  `from instrumentation.otel import wrap_dispatch`. */
+  importStatement: string;
+  /** The wrap function name, applied as `_dispatch = <name>(_dispatch)`. */
+  wrapFunctionName: string;
+}
+
 export interface ObservabilityPlugin {
   /** Unique plugin id, used on the CLI: --plugin otel */
   id: string;
@@ -50,6 +75,15 @@ export interface ObservabilityPlugin {
     /** e.g. `wrapTool` — wraps `handler` as `wrapTool(toolName, handler)` */
     wrapFunctionName: string;
   };
+
+  /**
+   * The Python-target contribution (MCPFO-60.3). Optional at the type level so
+   * a TypeScript-only plugin still satisfies the interface, but every shipped
+   * plugin provides it (full launch parity, ARCHITECTURE.md section 60). When a
+   * plugin lacks it and `--language python` is requested, the CLI fails loudly
+   * rather than emitting an uninstrumented server.
+   */
+  python?: PythonPluginContribution;
 }
 
 /** Resolves a plugin's configSchema against CLI-provided values, applying defaults and checking required fields. */

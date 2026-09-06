@@ -32,9 +32,12 @@
 import type { EmitOptions, EmittedProject } from "./emit-server.js";
 import { emitServerProject } from "./emit-server.js";
 import { typescriptConformanceAdapter } from "./conformance/typescript.js";
+import { pythonConformanceAdapter } from "./conformance/python.js";
 import type { ConformanceAdapter } from "./conformance/contract.js";
 import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
+import { pythonPluginDispatch } from "./plugin-dispatch/python.js";
 import type { PluginDispatchStrategy } from "./plugin-dispatch/contract.js";
+import { emitPythonProject } from "./python/emit-python.js";
 
 /** Languages a generated MCP server project can be emitted in. */
 export type TargetLanguage = "typescript" | "python";
@@ -111,12 +114,39 @@ export const typescriptTarget: EmitTarget = {
   },
 };
 
+/**
+ * The Python target (MCPFO-60.3) — the first non-TypeScript EmitTarget. Emits a
+ * complete Python MCP server project (official mcp SDK) from the same tool-data
+ * IR. Its conformance adapter injects real server code (unlike TypeScript's
+ * no-op), because the low-level Python SDK does not provide spec-mandated error
+ * surfaces for free (spike 059). Its plugin dispatch is shared-dispatch
+ * granularity (one wrap of the shared _dispatch), not per-tool.
+ */
+export const pythonTarget: EmitTarget = {
+  language: "python",
+  conformance: pythonConformanceAdapter,
+  pluginDispatch: pythonPluginDispatch,
+  emitProject(opts: EmitOptions): EmittedProject {
+    // Python IS NOT natively conformant — the adapter MUST contribute real
+    // server code (conformance.py). Assert that genuinely, mirroring the TS
+    // target's opposite assertion: a Python target that suddenly produced no
+    // conformance code would be silently shipping the spike-059 bug.
+    const contributions = this.conformance.emitServerContributions();
+    if (contributions.trim() === "") {
+      throw new Error(
+        "Python target expected the conformance adapter to inject server code " +
+          "(the low-level SDK is not natively conformant — spike 059), but it " +
+          "produced none. See emit/conformance/python.ts."
+      );
+    }
+    return emitPythonProject(opts);
+  },
+};
+
 /** All registered targets, keyed by language. */
 const TARGETS: Record<TargetLanguage, EmitTarget> = {
   typescript: typescriptTarget,
-  // python: added in MCPFO-60.3, once the real Python emitter exists and has
-  // passed the full E2E matrix (MCPFO-60.4). Until then, requesting it below
-  // fails loudly instead of silently falling back to TypeScript.
+  python: pythonTarget,
 } as Record<TargetLanguage, EmitTarget>;
 
 /**

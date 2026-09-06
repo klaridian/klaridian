@@ -24,7 +24,7 @@ import type { Command } from "commander";
 import path from "node:path";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
-import { getPluginProjectAdditions } from "../render/instrument.js";
+import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
@@ -67,6 +67,13 @@ export const AVAILABLE_PLUGINS: Record<string, ObservabilityPlugin> = {
  * for the same single-source-of-truth reason as AVAILABLE_PLUGINS above.
  */
 export const SUPPORTED_TRANSPORTS = ["stdio", "streamable-http"] as const;
+
+/**
+ * Target languages `--language` accepts (MCPFO-60.3). Single source of truth,
+ * mirrored from the EmitTarget registry's TargetLanguage union so a new target
+ * can't be added to one without the other drifting.
+ */
+export const SUPPORTED_LANGUAGES = ["typescript", "python"] as const;
 
 /**
  * Doc-generation metadata for `klaridian generate`'s flags (see
@@ -116,6 +123,7 @@ export const GENERATE_FLAG_DOC_GROUPS: {
     ],
   },
   { category: "Architecture", docPage: "/docs/how-to/code-mode", flags: ["--architecture"] },
+  { category: "Target language", docPage: "/docs/how-to/target-language", flags: ["--language"] },
   {
     category: "Plugins",
     docPage: "/docs/how-to/plugins",
@@ -218,10 +226,19 @@ export function registerGenerateCommand(program: Command): void {
       (value: string) => parseInt(value, 10)
     )
     .option(
-      // MCPFO-28/ARCHITECTURE.md section 43.
       "--architecture <id>",
       "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
       "tools"
+    )
+    .option(
+      // MCPFO-60.3 / ARCHITECTURE.md section 60: the target language of the
+      // generated server. typescript (default) keeps every existing script/CI
+      // invocation unchanged; python emits an official-mcp-SDK Python project
+      // from the same tool-data IR. Dispatched via the EmitTarget lookup
+      // (MCPFO-60.0), never an if/else here.
+      "--language <lang>",
+      "Target language for the generated server: typescript (default) or python",
+      "typescript"
     )
     .option(
       "--registry-name <name>",
@@ -295,6 +312,7 @@ export function registerGenerateCommand(program: Command): void {
         transport: string;
         port?: number;
         architecture: string;
+        language: string;
         registryName?: string;
         oauthIssuer?: string;
         oauthJwksUri?: string;
@@ -394,6 +412,31 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
           const architecture = opts.architecture as (typeof SUPPORTED_ARCHITECTURES)[number];
+
+          // MCPFO-60.3: validate --language and resolve the emit target early,
+          // so a bad value fails fast before any spec work. SUPPORTED_LANGUAGES
+          // is the single source of truth (mirrors AVAILABLE_PLUGINS etc.).
+          if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(opts.language)) {
+            fail(`Unknown language "${opts.language}". Supported: ${SUPPORTED_LANGUAGES.join(", ")}`, "validate-language");
+            return;
+          }
+          const language = opts.language as TargetLanguage;
+          // Fail loudly on a language/architecture or language/oauth combination
+          // the target can't emit, at validation time rather than mid-emit.
+          if (language === "python" && architecture === "code-mode") {
+            fail(
+              `--language python does not support --architecture code-mode yet (tracked as MCPFO-60.35). Use the default 'tools' architecture, or --language typescript for code-mode.`,
+              "validate-language"
+            );
+            return;
+          }
+          if (language === "python" && opts.oauthIssuer) {
+            fail(
+              `--language python does not support OAuth (--oauth-*) yet (post-launch follow-up, MCPFO-22). Use --language typescript for an OAuth resource server.`,
+              "validate-language"
+            );
+            return;
+          }
 
           // MCPFO-22: OAuth resource-server validation. stdio servers MUST
           // NOT implement authorization per spec (they get credentials from
@@ -658,18 +701,43 @@ export function registerGenerateCommand(program: Command): void {
               return;
             }
             const plugin = plugins[0];
-            wiring = plugin.getServerWiring();
-            const additions = getPluginProjectAdditions(plugins, pluginConfigs);
-            extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
-            extraDependencies = additions.dependencies;
+            // MCPFO-60.3: plugin wiring is per-target. TypeScript wraps per tool
+            // (getServerWiring + getPluginProjectAdditions); Python wraps the
+            // shared dispatch once (plugin.python + getPythonPluginProjectAdditions),
+            // failing loudly if the plugin has no Python contribution.
+            try {
+              if (language === "python") {
+                if (!plugin.python) {
+                  fail(
+                    `Plugin "${plugin.id}" has no Python-target support — it can't be used with --language python. Use --language typescript, or drop --plugin ${plugin.id}.`,
+                    "emit"
+                  );
+                  return;
+                }
+                wiring = {
+                  importStatement: plugin.python.importStatement,
+                  wrapFunctionName: plugin.python.wrapFunctionName,
+                };
+                const additions = getPythonPluginProjectAdditions(plugins, pluginConfigs);
+                extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
+                extraDependencies = additions.dependencies;
+              } else {
+                wiring = plugin.getServerWiring();
+                const additions = getPluginProjectAdditions(plugins, pluginConfigs);
+                extraFiles = Object.fromEntries(additions.files.map((f) => [f.path, f.content]));
+                extraDependencies = additions.dependencies;
+              }
+            } catch (err) {
+              fail(err instanceof Error ? err.message : String(err), "emit");
+              return;
+            }
           }
 
-          // MCPFO-60.0: dispatch emission through a language target rather
-          // than calling the TypeScript emitter directly. --language is not a
-          // CLI flag yet (arrives with the real Python emitter, MCPFO-60.3),
-          // so this is fixed to "typescript" — the seam exists, the surface
-          // doesn't change, and behavior is byte-for-byte identical.
-          const language: TargetLanguage = "typescript";
+          // MCPFO-60.0/60.3: dispatch emission through the language target
+          // resolved from --language (validated above), rather than calling a
+          // language's emitter directly. --language typescript (default) is
+          // byte-for-byte the prior behavior; --language python emits the
+          // Python project (MCPFO-60.3).
           const target = getEmitTarget(language);
           const project = target.emitProject({
             serverName,
@@ -693,17 +761,24 @@ export function registerGenerateCommand(program: Command): void {
             await writeFile(full, content, "utf-8");
           }
 
-          // Write LICENSE + package.json's `license` field (ARCHITECTURE.md
-          // section 27). Done unconditionally (default "mit"); --license none warns.
+          // Write LICENSE + (TypeScript only) package.json's `license` field
+          // (ARCHITECTURE.md section 27). Done unconditionally (default "mit");
+          // --license none warns. The Python target has no package.json — its
+          // LICENSE file is still written, but the manifest license-field
+          // mutation is TS-specific (a pyproject license field is a follow-up).
           if (license !== "none") {
             const author = opts.author?.trim() || (await resolveGitAuthorName()) || "the project author";
             const licenseText = getLicenseText(license, author, new Date().getFullYear());
             if (licenseText) await writeFile(path.join(outputDir, "LICENSE"), licenseText, "utf-8");
-            const pkgPath = path.join(outputDir, "package.json");
-            const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
-            pkg.license = getPackageJsonLicenseField(license);
-            await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-            step(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
+            if (language === "typescript") {
+              const pkgPath = path.join(outputDir, "package.json");
+              const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+              pkg.license = getPackageJsonLicenseField(license);
+              await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+              step(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file + package.json)`);
+            } else {
+              step(`✅ Licensed as ${getPackageJsonLicenseField(license)} (LICENSE file)`);
+            }
           } else {
             warn(
               `⚠️  Generated with --license none — no LICENSE file written. Consider adding one before distributing this server (see ARCHITECTURE.md section 27).`
@@ -715,10 +790,19 @@ export function registerGenerateCommand(program: Command): void {
           const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
           const architectureSuffix = architecture === "code-mode" ? " [code-mode: execute_code + typed client, Deno-sandboxed]" : "";
           const toolCountLabel = architecture === "code-mode" ? `1 tool (execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
-          step(`✅ Generated ${toolCountLabel}${curationSuffix} in ${outputDir}${transportSuffix} (@modelcontextprotocol/server, stateless, protocol 2025-11-25)${architectureSuffix}${pluginSuffix}`);
+          // The SDK/runtime blurb differs per target language (MCPFO-60.3).
+          const runtimeLabel =
+            language === "python"
+              ? "official mcp Python SDK, stateless"
+              : "@modelcontextprotocol/server, stateless, protocol 2025-11-25";
+          step(`✅ Generated ${toolCountLabel}${curationSuffix} in ${outputDir}${transportSuffix} (${runtimeLabel})${architectureSuffix}${pluginSuffix}`);
 
+          // Next-steps differ per language: Python is a venv + pip flow, not npm.
+          const httpRunArgs = transport === "streamable-http" ? ` --transport streamable-http --port ${port}` : "";
           const nextSteps =
-            architecture === "code-mode"
+            language === "python"
+              ? `cd ${opts.out} && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python server.py${httpRunArgs}`
+              : architecture === "code-mode"
               ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && npm start`
               : `cd ${opts.out} && npm install && npm run build && npm start`;
 
@@ -728,7 +812,16 @@ export function registerGenerateCommand(program: Command): void {
           // generation outcome itself) but before the final next-steps
           // output, which is adjusted below to reflect what's left to do.
           let installError: string | undefined;
-          if (opts.install) {
+          if (opts.install && language === "python") {
+            // --install runs npm install + npm run build, which is meaningless
+            // for a Python project. The Python run/prepare lifecycle (venv +
+            // pip) is its own ticket (MCPFO-60.36) — until then, --install is
+            // rejected for --language python rather than silently doing nothing
+            // or running npm in a directory with no package.json.
+            warn(
+              `⚠️  --install is not supported with --language python yet (the Python venv/pip prepare lifecycle is tracked as MCPFO-60.36). Skipping; follow the printed Next steps to set it up manually.`
+            );
+          } else if (opts.install) {
             step("📦 Installing dependencies and building (--install)...");
             try {
               await runInstallAndBuild(outputDir);
@@ -739,7 +832,7 @@ export function registerGenerateCommand(program: Command): void {
             }
           }
 
-          const readyToRun = opts.install && !installError;
+          const readyToRun = opts.install && language === "typescript" && !installError;
           const finalNextSteps = readyToRun
             ? architecture === "code-mode"
               ? `cd ${opts.out} && (install Deno if needed: https://deno.com/) && npm start`
@@ -755,6 +848,7 @@ export function registerGenerateCommand(program: Command): void {
               transport,
               port: transport === "streamable-http" ? port : null,
               architecture,
+              language,
               license: license !== "none" ? getPackageJsonLicenseField(license) : null,
               plugins: plugins.map((p) => p.id),
               nextSteps: finalNextSteps,

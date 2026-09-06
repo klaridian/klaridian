@@ -1,0 +1,58 @@
+---
+title: Target language
+description: Generate the server in TypeScript (default) or Python.
+---
+
+klaridian generates the MCP server in TypeScript by default. Pass `--language python` to generate a Python server instead. Both languages produce the same tools, the same annotations, and the same observability behavior from the same OpenAPI spec—the choice is about the runtime you want to deploy and maintain.
+
+## TypeScript (the default)
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server
+```
+
+The generated project uses the official `@modelcontextprotocol/server` SDK. Run it with `npm install && npm run build && npm start`, or let klaridian prepare it for you with `--install`.
+
+## Python
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --language python
+```
+
+The generated project uses the official `mcp` Python SDK. It ships with a `requirements.txt`, a `pyproject.toml`, and a `server.py` entry point. Set it up and run it with:
+
+```bash
+cd ./my-server
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+export KLARIDIAN_BASE_URL=https://api.example.com
+python server.py
+```
+
+For the network transport, add the flags to both the generate command and the run command:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --language python --transport streamable-http --port 3000
+
+python server.py --transport streamable-http --port 3000
+```
+
+## What's the same across both languages
+
+- **Tools.** One tool per OpenAPI operation, with identical names and input schemas.
+- **Annotations.** Read-only, destructive, idempotent, and open-world hints are computed the same way and appear the same way on the wire.
+- **Curation.** `--include-tags`, `--exclude-tags`, path and method filters all work the same—they act on the spec before either language emits.
+- **Plugins.** The `otel`, `posthog`, `amplitude`, and `mixpanel` plugins all support both languages. Each ships as readable, vendored instrumentation source in the language you chose.
+- **Environment contract.** Both servers read `KLARIDIAN_BASE_URL` for the upstream host and `KLARIDIAN_AUTH_TOKEN` for a Bearer token.
+- **Conformance.** An unknown tool returns a JSON-RPC `-32602` protocol error; invalid arguments return a tool-error result the model can read and react to.
+
+## What the Python target doesn't support yet
+
+These are TypeScript-only for now:
+
+- **`--architecture code-mode`.** The Python code-mode target is planned separately.
+- **OAuth (`--oauth-*`).** The Python resource-server support is a later addition.
+- **`--install`.** The Python prepare step (virtual environment plus `pip install`) is planned separately. Follow the printed next steps to set the project up by hand.
+
+klaridian fails with a clear message if you combine `--language python` with one of these, rather than generating a server that silently drops the feature.

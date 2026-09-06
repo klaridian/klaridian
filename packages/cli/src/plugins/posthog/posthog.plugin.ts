@@ -15,6 +15,10 @@
 // The vendored instrumentation file is assembled from the shared
 // product-analytics template (ARCHITECTURE.md section 58); only this
 // provider's SDK-specific pieces (import/init/flush/capture) live here.
+//
+// MCPFO-60.3: the `python` contribution mirrors all of the above for the Python
+// target, using the official posthog Python SDK, assembled from the shared
+// Python analytics template.
 
 import type {
   ObservabilityPlugin,
@@ -23,6 +27,7 @@ import type {
   TemplateContribution,
 } from "../plugin.interface.js";
 import { buildProductAnalyticsInstrumentationFile } from "../shared/product-analytics-template.js";
+import { buildPythonProductAnalyticsInstrumentationFile } from "../shared/product-analytics-python-template.js";
 
 const CONFIG_SCHEMA: PluginConfigField[] = [
   {
@@ -72,6 +77,42 @@ process.on("SIGTERM", () => posthog.shutdown().finally(() => process.exit(0)));`
   });
 }
 
+function generatePythonInstrumentationFile(config: ResolvedPluginConfig): string {
+  return buildPythonProductAnalyticsInstrumentationFile({
+    pluginId: "posthog",
+    stdioSafetyLines: [
+      "The posthog Python SDK logs via the standard `logging` module (never",
+      "prints to stdout), so it is safe alongside the stdio MCP transport for",
+      "the same reason the TS posthog-node plugin is — nothing here writes to",
+      "the JSON-RPC stdout stream (see spikes/001-otel-mechanic/FINDINGS.md).",
+    ],
+    importStatement: `from posthog import Posthog`,
+    credentialEnvVar: "POSTHOG_API_KEY",
+    credentialDescription: "your PostHog project API key",
+    credentialConstName: "API_KEY",
+    initStatements: `API_HOST = os.environ.get("POSTHOG_API_HOST") or ${JSON.stringify(config.apiHost)}
+
+posthog = Posthog(API_KEY, host=API_HOST)`,
+    // posthog Python batches and flushes on interpreter exit via its own
+    // atexit hook, but register an explicit flush too so a short-lived stdio
+    // server doesn't drop the final batch.
+    flushHandlers: `import atexit
+
+atexit.register(posthog.flush)`,
+    identityConstName: "distinct_id",
+    captureStatement: ({ identityConst, success }) =>
+      `posthog.capture(
+                distinct_id=${identityConst},
+                event="mcp tool called",
+                properties={
+                    "tool_name": tool_name,
+                    "duration_ms": int((time.monotonic() - started_at) * 1000),
+                    "success": ${success ? "True" : "False"},${success ? "" : '\n                    "error_message": str(err),'}
+                },
+            )`,
+  });
+}
+
 export const posthogPlugin: ObservabilityPlugin = {
   id: "posthog",
   name: "PostHog (product observability)",
@@ -97,5 +138,23 @@ export const posthogPlugin: ObservabilityPlugin = {
       importStatement: `import { wrapPostHogTool } from "./instrumentation/posthog.js";`,
       wrapFunctionName: "wrapPostHogTool",
     };
+  },
+
+  python: {
+    getTemplateContributions(config: ResolvedPluginConfig): TemplateContribution[] {
+      return [
+        {
+          path: "instrumentation/posthog.py",
+          content: generatePythonInstrumentationFile(config),
+        },
+      ];
+    },
+    getDependencies(): Record<string, string> {
+      return {
+        posthog: ">=3.0",
+      };
+    },
+    importStatement: `from instrumentation.posthog import wrap_dispatch`,
+    wrapFunctionName: "wrap_dispatch",
   },
 };

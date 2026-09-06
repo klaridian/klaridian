@@ -72,6 +72,14 @@ See [Architecture](/docs/how-to/code-mode) for the full guide.
 |---|---|
 | `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
 
+### Target language
+
+See [Target language](/docs/how-to/target-language) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--language <lang>` | Target language for the generated server: typescript (default) or python |
+
 ### Plugins
 
 See [Plugins](/docs/how-to/plugins) for the full guide.

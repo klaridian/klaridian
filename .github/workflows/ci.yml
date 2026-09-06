@@ -18,6 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install Python (MCPFO-60.3 -- emit-python-e2e tests pip-install + spawn a generated Python MCP server)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Install Deno (MCPFO-30 -- execute_code sandbox E2E tests spawn a real deno subprocess)
         uses: denoland/setup-deno@v2
         with:

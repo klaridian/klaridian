@@ -212,7 +212,7 @@ This is where real design judgment is needed, not just plumbing:
 - No manual tool-definition input format (OpenAPI only).
 - No auth UX beyond "read from env vars."
 - No support for OpenAPI specs with severe structural issues—fail with a clear message instead of guessing.
-- No multi-language output (TypeScript/Node only; Python templates are a future "if there's demand" item).
+- No multi-language output at the time this section was first written—**reversed in section 60** (Sep 6, 2026): `--language typescript|python` with full plugin/curation/code-mode parity, as a forcing function to keep the tool-data IR honestly language-neutral, not because Python demand materialized. See section 60 for the design (conformance adapter, plugin-dispatch-boundary abstraction) and build order.
 
 ---
 
@@ -1281,5 +1281,49 @@ Prompted directly by a maintainer UX question: the docs (`running-the-server.mdx
 **Docs updated:** `running-the-server.mdx` now leads with an explicit decide/prepare/run table (frequency + network column) before the command lifecycle, and documents `--install` as fusing steps 1 and 2 without changing what either does. `cli-reference.mdx` regenerated (`npm run docs:gen`) to include the new flag under a new "Lifecycle" doc group.
 
 **What this does not change:** `start` (section 56) is untouched—still refuses to manage install/build, still hands off stdio unconditionally. `generate`'s default (no `--install`) behavior is unchanged—still emits files only, still no network. This is purely an additive, opt-in fusion of two already-existing steps.
+
+## 60. Multi-language output—guardrail reversed, `--language` design (Sep 6, 2026)
+
+**Decision, superseding section 8's guardrail:** section 8 said "No multi-language output (TypeScript/Node only; Python templates are a future 'if there's demand' item)." That's reversed here—**not** because Python demand materialized (it hasn't; this contradicts the section-8 rationale on its own terms, and is recorded as a deliberate exception, not a retraction of the "wait for demand" principle for future targets). The reason is different and forcing-function-shaped: maintaining a second real emitter from day one is the mechanism to keep the tool-data IR (`openapi-mcp-generator`'s `getToolsFromOpenApi()` output, consumed by `packages/cli/src/emit/*`) honestly language-neutral, rather than accumulating invisible TypeScript-specific assumptions that only surface once a real second target is attempted later, at higher cost. Full parity from launch (`otel` + `posthog`/`amplitude`/`mixpanel` + curation + code-mode, both languages)—not a "Python gets less" compromise—so the forcing function actually forces: a partial Python target would let the harder plugin/code-mode paths keep their TS-only assumptions unexamined.
+
+**Preceded by a real spike, not a hunch:** `spikes/059-python-emit-target/` fed the exact same tool-data IR into a throwaway Python emitter (official `mcp==2.1.1` SDK), and ran the same E2E discipline section 9/AGENTS.md mandates for TS—real `pip install`, real subprocess spawn, real JSON-RPC over stdio, including a live network call. Verdict: VALIDATED, with 2 concrete, previously-invisible design assumptions surfaced. Both are addressed below before any production Python code is written (per the maintainer's explicit ordering: design first, code second).
+
+### 60.1 Finding 1: unknown-tool protocol conformance is not free per-SDK—the conformance adapter
+
+TS's SDK v2 `registerTool()` boundary gives an unknown-tool call the native JSON-RPC `-32602` error automatically ("no conformance patch needed", per the `emit-e2e.test.ts` comment). The spike's naive Python `on_call_tool` handler (`raise ValueError(...)`) instead produced a generic `code: 0`—not spec-conformant, and NOT something obvious from reading the IR; it's an artifact of how each SDK's dispatch layer surfaces handler exceptions.
+
+**Design response:** klaridian's emitter contract gains an explicit **per-target conformance adapter**—a small, target-specific module (`emit/conformance/typescript.ts`, `emit/conformance/python.ts`) whose job is *only* to guarantee spec-mandated JSON-RPC error shapes that the underlying SDK doesn't provide free: unknown-tool → `-32602`, invalid-arguments → `-32602`, internal-error → `-32603`, matching the exact codes/messages MCPFO-23's marketplace-conformance research already established for TS. Each emitter MUST route through its target's conformance adapter rather than hand-rolling exception raising per tool; a new emit-e2e test per target now explicitly exercises the unknown-tool path and asserts the wire-level code, not just "an error occurred" (closing exactly the gap the spike found by accident).
+
+### 60.2 Finding 2: no universal per-tool registration hook—the plugin contract moves up one layer
+
+The plugin-instrumentation design (section 48, wrapping at the `registerTool()` boundary) assumes a per-tool registration call exists to wrap. TS's SDK v2 has one; the Python SDK used in the spike (`mcp` 2.1.1) exposes only a single global `on_call_tool`/`on_list_tools` pair at the `Server` level—there's no per-tool hook at that layer to wrap the same way. The spike's server.py had to hand-roll a `TOOL_MAP` dispatch table to get equivalent behavior.
+
+**Design response:** the plugin contract (`getPluginProjectAdditions()` and its call site) is redefined one level up from "wrap the per-tool registration call" to **"wrap the tool-dispatch boundary"**—an abstraction each target's emitter satisfies in its own idiom:
+- TypeScript: wraps at `registerTool()` per tool (unchanged from section 48—this target already had the finer-grained hook and keeps using it).
+- Python: wraps the shared `on_call_tool` dispatch function once, looking up the tool in `TOOL_MAP` inside the wrapped call—coarser-grained, but semantically equivalent (every tool call still passes through instrumentation; the difference is *where* wrapping happens, not *whether* every call is covered).
+
+Each language's plugin contribution files (`src/instrumentation/<plugin>.ts` / `<plugin>.py`) keep the section-7 vendored-file rule (human-readable, no opaque runtime dependency)—that principle is IR/emitter-agnostic and unaffected by this section.
+
+### 60.3 What did NOT need to change
+
+The tool-data IR itself (name, `pathTemplate`, `executionParameters`, `requestBodyContentType`, `method`, `inputSchema`)—the actual data model `openapi-mcp-generator` produces and both emitters consume—needed **zero changes** to support a second target. This is the section-60 headline finding worth remembering: the coupling to TypeScript that existed lived entirely in the rendering/dispatch layer (sections 60.1/60.2), never in the data model. Curation (tag/path/method filters) and code-mode's typed-client generation both operate on this same IR upstream of the per-target emit step, so neither required IR changes either—only new Python-side renderers consuming the same filtered tool list.
+
+### 60.4 CLI surface: `--language`
+
+`generate` gains `--language <typescript|python>` (default `typescript`, so existing scripts/CI/docs referencing no-flag behavior keep working unchanged). Every other flag (`--plugin`, `--include-tags`/`--exclude-tags`, `--architecture code-mode`, `--install`, `--license`, etc.) applies identically regardless of target language—curation and plugin selection are IR-level concerns (section 60.3), not per-language ones. `--language` is documented in `cli-reference.mdx` under a new "Target language" doc group once implemented (generated file, per AGENTS.md—never hand-edited; `GENERATE_FLAG_DOC_GROUPS` in `generate.ts` gets the new group, then `npm run docs:gen`, which the `docs-flags-sync` CI gate will block on if the mdx isn't regenerated to match).
+
+### 60.5 Validation bar before this ships (not yet met—tracked, not done)
+
+Full parity means, per language, the exact same discipline section 9/AGENTS.md already holds TS to: real install (`npm install` / `pip install`) → real build/no-build-step-needed → real spawn → real JSON-RPC drive (`initialize`, `tools/list`, `tools/call` unknown *asserting the conformance-adapter code*, `tools/call` real) for stdio AND streamable-http transports, for a server generated with each plugin (`otel`, `posthog`, `amplitude`, `mixpanel`) and with `--architecture code-mode`. This is a materially larger CI/test surface than today (roughly 2× the E2E matrix)—tracked as its own build-order item below, not assumed free from the section-9 pattern just because it worked for one language.
+
+### 60.6 Build order (mirrors section 9's spike-first discipline, applied to the two design gaps above)
+
+1. Land the conformance-adapter abstraction (60.1) for TypeScript first, as a refactor with no behavior change—proves the abstraction is real before a second target depends on it. Existing 161-test suite must stay green.
+2. Land the plugin-contract abstraction (60.2) for TypeScript first, same no-behavior-change discipline, for the same reason.
+3. Only then build the real Python emitter (`emit/python/*`, mirroring `emit/*.ts`'s structure), reusing the now-shared IR consumption and the two adapters' Python-side implementations.
+4. Full E2E matrix (60.5) before calling any of this "done"—not a subset, given the maintainer's explicit "full parity, not a Python-gets-less compromise" decision.
+5. Public-facing changes (README, landing page hero copy, `content/docs/index.mdx`, per-plugin how-to pages, `PLAN.md` status) land only after step 4 is green—launch messaging should describe what ships, not what's in progress.
+
+**Explicitly not addressed by this section:** which specific docs/landing copy changes are needed (tracked separately, see the parallel discussion recorded in session history around Sep 6, 2026); Plane ticket breakdown/sequencing (to be opened as MCPFO-* tickets mirroring 60.6's five steps, pending maintainer review of this design before implementation starts).
 
 

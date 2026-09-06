@@ -1,0 +1,729 @@
+{
+  "initialize": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "capabilities": {
+        "experimental": {},
+        "tools": {
+          "listChanged": false
+        }
+      },
+      "protocolVersion": "2025-11-25",
+      "serverInfo": {
+        "name": "petstore-py-spike",
+        "version": "0.0.1"
+      }
+    }
+  },
+  "tools_list": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "tools": [
+        {
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "requestBody": {
+                "required": [
+                  "name",
+                  "photoUrls"
+                ],
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number",
+                        "format": "int64"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "photoUrls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number",
+                          "format": "int64"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "pet status in the store",
+                    "enum": [
+                      "available",
+                      "pending",
+                      "sold"
+                    ]
+                  }
+                },
+                "description": "Update an existent pet in the store"
+              }
+            },
+            "required": [
+              "requestBody"
+            ],
+            "type": "object"
+          },
+          "name": "updatePet",
+          "title": "Update an existing pet by Id."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "requestBody": {
+                "required": [
+                  "name",
+                  "photoUrls"
+                ],
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number",
+                        "format": "int64"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "photoUrls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number",
+                          "format": "int64"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "pet status in the store",
+                    "enum": [
+                      "available",
+                      "pending",
+                      "sold"
+                    ]
+                  }
+                },
+                "description": "Create a new pet in the store"
+              }
+            },
+            "required": [
+              "requestBody"
+            ],
+            "type": "object"
+          },
+          "name": "addPet",
+          "title": "Add a new pet to the store."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "status": {
+                "type": "string",
+                "default": "available",
+                "enum": [
+                  "available",
+                  "pending",
+                  "sold"
+                ],
+                "description": "Status values that need to be considered for filter"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "type": "object"
+          },
+          "name": "findPetsByStatus",
+          "title": "Multiple status values can be provided with comma separated strings."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Tags to filter by"
+              }
+            },
+            "required": [
+              "tags"
+            ],
+            "type": "object"
+          },
+          "name": "findPetsByTags",
+          "title": "Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "petId": {
+                "type": "number",
+                "format": "int64",
+                "description": "ID of pet to return"
+              }
+            },
+            "required": [
+              "petId"
+            ],
+            "type": "object"
+          },
+          "name": "getPetById",
+          "title": "Returns a single pet."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "petId": {
+                "type": "number",
+                "format": "int64",
+                "description": "ID of pet that needs to be updated"
+              },
+              "name": {
+                "type": "string",
+                "description": "Name of pet that needs to be updated"
+              },
+              "status": {
+                "type": "string",
+                "description": "Status of pet that needs to be updated"
+              }
+            },
+            "required": [
+              "petId"
+            ],
+            "type": "object"
+          },
+          "name": "updatePetWithForm",
+          "title": "Updates a pet resource based on the form data."
+        },
+        {
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "api_key": {
+                "type": "string"
+              },
+              "petId": {
+                "type": "number",
+                "format": "int64",
+                "description": "Pet id to delete"
+              }
+            },
+            "required": [
+              "petId"
+            ],
+            "type": "object"
+          },
+          "name": "deletePet",
+          "title": "Delete a pet."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "petId": {
+                "type": "number",
+                "format": "int64",
+                "description": "ID of pet to update"
+              },
+              "additionalMetadata": {
+                "type": "string",
+                "description": "Additional Metadata"
+              },
+              "requestBody": {
+                "type": "string",
+                "description": "Request body (content type: application/octet-stream)"
+              }
+            },
+            "required": [
+              "petId"
+            ],
+            "type": "object"
+          },
+          "name": "uploadFile",
+          "title": "Upload image of the pet."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "getInventory",
+          "title": "Returns a map of status codes to quantities."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "requestBody": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "petId": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "format": "int32"
+                  },
+                  "shipDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Order Status",
+                    "enum": [
+                      "placed",
+                      "approved",
+                      "delivered"
+                    ]
+                  },
+                  "complete": {
+                    "type": "boolean"
+                  }
+                },
+                "description": "The JSON request body."
+              }
+            },
+            "type": "object"
+          },
+          "name": "placeOrder",
+          "title": "Place a new order in the store."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "orderId": {
+                "type": "number",
+                "format": "int64",
+                "description": "ID of order that needs to be fetched"
+              }
+            },
+            "required": [
+              "orderId"
+            ],
+            "type": "object"
+          },
+          "name": "getOrderById",
+          "title": "For valid response try integer IDs with value <= 5 or > 10. Other values will generate exceptions."
+        },
+        {
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "orderId": {
+                "type": "number",
+                "format": "int64",
+                "description": "ID of the order that needs to be deleted"
+              }
+            },
+            "required": [
+              "orderId"
+            ],
+            "type": "object"
+          },
+          "name": "deleteOrder",
+          "title": "For valid response try integer IDs with value < 1000. Anything above 1000 or non-integers will generate API errors."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "requestBody": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "userStatus": {
+                    "type": "number",
+                    "description": "User Status",
+                    "format": "int32"
+                  }
+                },
+                "description": "Created user object"
+              }
+            },
+            "type": "object"
+          },
+          "name": "createUser",
+          "title": "This can only be done by the logged in user."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "requestBody": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number",
+                      "format": "int64"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string"
+                    },
+                    "userStatus": {
+                      "type": "number",
+                      "description": "User Status",
+                      "format": "int32"
+                    }
+                  }
+                },
+                "description": "The JSON request body."
+              }
+            },
+            "type": "object"
+          },
+          "name": "createUsersWithListInput",
+          "title": "Creates list of users with given input array."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "username": {
+                "type": "string",
+                "description": "The user name for login"
+              },
+              "password": {
+                "type": "string",
+                "description": "The password for login in clear text"
+              }
+            },
+            "type": "object"
+          },
+          "name": "loginUser",
+          "title": "Log into the system."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "logoutUser",
+          "title": "Log user out of the system."
+        },
+        {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "username": {
+                "type": "string",
+                "description": "The name that needs to be fetched. Use user1 for testing"
+              }
+            },
+            "required": [
+              "username"
+            ],
+            "type": "object"
+          },
+          "name": "getUserByName",
+          "title": "Get user detail based on username."
+        },
+        {
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "username": {
+                "type": "string",
+                "description": "name that need to be deleted"
+              },
+              "requestBody": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number",
+                    "format": "int64"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "userStatus": {
+                    "type": "number",
+                    "description": "User Status",
+                    "format": "int32"
+                  }
+                },
+                "description": "Update an existent user in the store"
+              }
+            },
+            "required": [
+              "username"
+            ],
+            "type": "object"
+          },
+          "name": "updateUser",
+          "title": "This can only be done by the logged in user."
+        },
+        {
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+          },
+          "description": "",
+          "inputSchema": {
+            "properties": {
+              "username": {
+                "type": "string",
+                "description": "The name that needs to be deleted"
+              }
+            },
+            "required": [
+              "username"
+            ],
+            "type": "object"
+          },
+          "name": "deleteUser",
+          "title": "This can only be done by the logged in user."
+        }
+      ]
+    }
+  },
+  "unknown_tool": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": 0,
+      "message": "Unknown tool: noSuchTool"
+    }
+  },
+  "call_get_pet": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "content": [
+        {
+          "text": "Server error '500 Internal Server Error' for url 'https://petstore3.swagger.io/api/v3/pet/1'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  }
+}

@@ -1,0 +1,37 @@
+---
+title: Mixpanel
+description: See which tools agents actually use, in Mixpanel.
+---
+
+## Enable it
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --plugin mixpanel
+```
+
+Every tool call sends a Mixpanel event with the tool name, how long it took, and whether it succeeded. This tells you which tools get used—OpenTelemetry tells you if a call is slow or broken, but not whether anyone's calling it.
+
+## Configure it
+
+```bash
+MIXPANEL_TOKEN=... \
+node dist/src/index.js
+```
+
+`MIXPANEL_TOKEN` is your Mixpanel project token and is the only required setting.
+
+## Why this is a separate plugin from OTel
+
+Tracing has one open standard—OpenTelemetry—so one `otel` plugin works with every backend. Product analytics doesn't have that: PostHog, Amplitude, and Mixpanel each need their own integration. `mixpanel` works the same way as `posthog` and `amplitude`.
+
+## One plugin at a time
+
+Today you can pick one plugin per server—`otel`, or one of the analytics plugins, not both together. Combining an engineering plugin and a product plugin on the same server is planned, not built yet.
+
+## No flush on exit needed
+
+Unlike PostHog and Amplitude, the Mixpanel plugin adds no shutdown flush handler. The Mixpanel SDK sends each event over HTTP immediately rather than batching client-side, so there's no in-memory queue to lose when a short-lived server exits. This is a real behavior difference, not an omission.
+
+## Python and TypeScript
+
+The `mixpanel` plugin supports both target languages. With `--language python` it ships a vendored `instrumentation/mixpanel.py` built on the Mixpanel Python SDK; the default TypeScript target ships `src/instrumentation/mixpanel.ts` on the `mixpanel-node` package. Both wrap tool dispatch the same way and read the same `MIXPANEL_TOKEN` environment variable.

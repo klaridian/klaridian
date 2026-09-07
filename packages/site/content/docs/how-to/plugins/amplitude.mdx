@@ -1,0 +1,34 @@
+---
+title: Amplitude
+description: See which tools agents actually use, in Amplitude.
+---
+
+## Enable it
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --plugin amplitude
+```
+
+Every tool call sends an Amplitude event with the tool name, how long it took, and whether it succeeded. This tells you which tools get used—OpenTelemetry tells you if a call is slow or broken, but not whether anyone's calling it.
+
+## Configure it
+
+```bash
+AMPLITUDE_API_KEY=... \
+AMPLITUDE_SERVER_ZONE=US \
+node dist/src/index.js
+```
+
+`AMPLITUDE_API_KEY` is your Amplitude project API key and is required. `AMPLITUDE_SERVER_ZONE` picks the data region—`US` or `EU`—and defaults to the value you chose at generation time (`US` unless you set it otherwise).
+
+## Why this is a separate plugin from OTel
+
+Tracing has one open standard—OpenTelemetry—so one `otel` plugin works with every backend. Product analytics doesn't have that: PostHog, Amplitude, and Mixpanel each need their own integration. `amplitude` works the same way as `posthog` and `mixpanel`.
+
+## One plugin at a time
+
+Today you can pick one plugin per server—`otel`, or one of the analytics plugins, not both together. Combining an engineering plugin and a product plugin on the same server is planned, not built yet.
+
+## Python and TypeScript
+
+The `amplitude` plugin supports both target languages. With `--language python` it ships a vendored `instrumentation/amplitude.py` built on the Amplitude Python SDK; the default TypeScript target ships `src/instrumentation/amplitude.ts` on `@amplitude/analytics-node`. Both wrap tool dispatch the same way and read the same `AMPLITUDE_API_KEY` and `AMPLITUDE_SERVER_ZONE` environment variables.

@@ -1,4 +1,4 @@
 {
   "title": "Plugins",
-  "pages": ["otel", "posthog"]
+  "pages": ["otel", "posthog", "amplitude", "mixpanel"]
 }

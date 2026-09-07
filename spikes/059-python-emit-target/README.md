@@ -120,7 +120,7 @@ the comparison is directly market-relevant, not academic.
    contract.** Things like unknown-tool error codes, error-vs-exception
    shape, and other spec-mandated JSON-RPC details are NOT guaranteed free per
    target SDK — track them as an explicit checklist per emitter (mirroring
-   what `docs/research/2026-09-02-mcp-server-best-practices.md` /
+   what `2026-09-02-mcp-server-best-practices.md` (private `klaridian-strategy` repo) /
    MCPFO-23 already do for TS) rather than assuming "if it worked in TS it'll
    work anywhere."
 4. **This spike is sufficient evidence — do not build a production Python

@@ -31,3 +31,7 @@ scaffold
 scaffolded
 scaffolding
 sanitization
+OAuth
+venv
+pyproject
+vendored

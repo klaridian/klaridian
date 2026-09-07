@@ -15,6 +15,8 @@ cd my-server && npm start
 
 That's the common path for most people. `klaridian start ./my-server` works the same as `npm start` above, if you'd rather run it from outside the project directory. Everything below explains what's happening under the hood — read on if you're wiring this into CI, want to review the generated project before installing anything, or are curious why `--install` and `klaridian start` don't do the same thing.
 
+Generating a Python server (`--language python`)? The lifecycle is the same three steps, but the prepare and run commands are Python's — see [Python](#python) below. `klaridian start` launches either language.
+
 ## The lifecycle
 
 A klaridian project moves through three steps, at three different frequencies, with one hard rule: **running the server must never touch the network.**
@@ -22,10 +24,12 @@ A klaridian project moves through three steps, at three different frequencies, w
 | Step | What it does | How often | Touches the network? |
 |---|---|---|---|
 | **Generate** | `klaridian generate` — decides everything about the server (spec, curation, architecture, plugins, transport, auth) and writes the project | Once per project (or again when a real decision changes) | No, unless you pass `--install` |
-| **Prepare** | `npm install && npm run build` — turns the written project into a runnable bundle | Once per generate, until you generate again | Yes — installing dependencies |
-| **Run** | `npm start` or `klaridian start` — starts the server | Every restart, every deploy | Never |
+| **Prepare** | TypeScript: `npm install && npm run build`; Python: `python -m venv .venv && pip install -r requirements.txt` — turns the written project into a runnable form | Once per generate, until you generate again | Yes — installing dependencies |
+| **Run** | `klaridian start` (or the language's own `npm start` / `python server.py`) — starts the server | Every restart, every deploy | Never |
 
-`--install` (used in the quick start above) runs the prepare step automatically right after generate finishes, so you go from spec to a ready-to-run project in one command instead of three. It's opt-in — a bare `generate` still does nothing but write files, which matters if you're scripting this, running it in CI, or want to look at the generated code before installing anything. Without `--install`, do it by hand:
+The table's Prepare and Run commands are the TypeScript ones by default; the [Python](#python) section below shows the venv/pip equivalents. Everything else — the three steps, the frequencies, and the network rule — is identical across both languages.
+
+`--install` (used in the quick start above) runs the prepare step automatically right after generate finishes, so you go from spec to a ready-to-run project in one command instead of three. It's opt-in — a bare `generate` still does nothing but write files, which matters if you're scripting this, running it in CI, or want to look at the generated code before installing anything. `--install` is a TypeScript-only convenience today; for a Python project, run the prepare step by hand (see [Python](#python)). Without `--install`, do it by hand:
 
 ```bash
 npx klaridian generate --spec ./api.yaml --out ./my-server --base-url https://api.example.com
@@ -42,14 +46,40 @@ Either way, once the project is built, restarting it is always just `npm start` 
 npx klaridian start ./my-server
 ```
 
-It takes **no generation flags** — no `--spec`, `--architecture`, `--plugin`, or anything else. Everything those flags would configure is already baked into `./my-server` by the `generate` that produced it. If you want a different architecture, a different plugin, or a different spec, run `klaridian generate` again (optionally into the same `--out` with `--force`) — don't look for a flag on `start`, there isn't one and there won't be.
+It takes **no generation flags** — no `--spec`, `--architecture`, `--plugin`, `--language`, or anything else. Everything those flags would configure is already baked into `./my-server` by the `generate` that produced it. If you want a different architecture, a different plugin, a different language, or a different spec, run `klaridian generate` again (optionally into the same `--out` with `--force`) — don't look for a flag on `start`, there isn't one and there won't be.
+
+`start` launches whichever language the project was generated in: a TypeScript project runs through `npm start`, a Python project through the project's own `.venv` interpreter on `server.py`. You don't tell it which — it reads the project. Either way it passes no transport or port flags: those were chosen at generation time and are baked into the project, so a bare launch reproduces the generated server exactly.
 
 Two checks run before handing off to the server:
 
-- **Is this a klaridian project?** `start` looks for a `package.json` with a `start` script and a `server.json` (only `generate` emits that). If either is missing, it fails with a clear message instead of a confusing Node error.
-- **Has it been built?** `start` checks that the project's `main` entry (`dist/server.bundle.js` by default) exists. If not, it tells you to run `npm install && npm run build` (or generate again with `--install`), rather than failing with a generic `MODULE_NOT_FOUND`. `start` deliberately never runs either command itself — see the network rule above.
+- **Is this a klaridian project?** `start` looks for a `package.json` with a `start` script and a `server.json` (TypeScript), or a `pyproject.toml` and a `server.py` (Python) — the pairs only `generate` emits. If neither matches, it fails with a clear message instead of a confusing runtime error.
+- **Has it been prepared?** For TypeScript, `start` checks that the built entry (`dist/server.bundle.js` by default) exists; if not, it tells you to run `npm install && npm run build` (or generate again with `--install`). For Python, it checks that the project's `.venv` exists; if not, it points you at the `python -m venv .venv && … && pip install -r requirements.txt` steps `generate` printed. Either way it fails with an actionable message rather than a generic `MODULE_NOT_FOUND` or `ModuleNotFoundError`. `start` deliberately never runs the prepare step itself — see the network rule above.
 
-Once those pass, `start` hands stdin/stdout/stderr straight to the generated server (`npm start`, inherited I/O) — this matters for `stdio`-transport servers, where nothing may sit between the MCP client and the server on that stream.
+Once those pass, `start` hands stdin/stdout/stderr straight to the generated server (inherited I/O) — this matters for `stdio`-transport servers, where nothing may sit between the MCP client and the server on that stream.
+
+## Python
+
+A Python project (`--language python`) follows the same three steps, with Python's own prepare and run commands. Generate it, prepare it once, then run it — the same generate-once, run-many shape as TypeScript:
+
+```bash
+# Generate (writes files only — no network, same as TypeScript)
+npx klaridian generate --spec ./api.yaml --out ./my-server --base-url https://api.example.com --language python
+
+# Prepare, once (the venv + pip equivalent of npm install && npm run build)
+cd my-server
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+
+# Run — and every restart
+klaridian start .
+```
+
+`klaridian start` launches the Python server through the project's own `.venv` interpreter, so activating the virtual environment first isn't required for `start` — it finds `.venv` on its own. If you'd rather run it directly, `python server.py` (with the venv active) does the same thing.
+
+Two things are TypeScript-only for now, and `generate` tells you so rather than silently doing nothing:
+
+- **`--install`.** The Python prepare step (create the venv, `pip install`) is a manual step today — run the three prepare commands above. `klaridian start` still refuses to run them for you, exactly as it refuses `npm install` for TypeScript: preparing touches the network, and running must not.
+- **`--architecture code-mode` and OAuth (`--oauth-*`).** Not yet supported for Python — see [Target language](/docs/how-to/target-language) for the current parity list.
 
 ## Configuring a running server
 

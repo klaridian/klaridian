@@ -15,6 +15,14 @@
 // hand would not catch a real drift between `start`'s assumptions
 // (package.json shape, server.json presence, dist/server.bundle.js path)
 // and what `generate` actually emits.
+//
+// `start` is language-neutral (ARCHITECTURE.md section 62): it launches a
+// TypeScript project with `npm start` and a Python one with the project's
+// `.venv` interpreter on server.py. The Python tests below mirror the
+// TypeScript ones marker-for-marker (detect the project, gate on the prepare
+// step, then a real launch over JSON-RPC) so a drift between `start`'s Python
+// assumptions (pyproject.toml/server.py presence, .venv layout) and what
+// `generate --language python` emits is caught the same way.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -22,19 +30,36 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
+const PETSTORE_BASE_URL = "https://petstore3.swagger.io/api/v3";
 
 /** Generates a real project into a fresh temp dir; returns its path. Caller owns cleanup. */
-async function generateProject(name: string): Promise<string> {
+async function generateProject(name: string, extraArgs: string[] = []): Promise<string> {
   const outDir = await mkdtemp(path.join(tmpdir(), `klaridian-start-${name}-`));
   await execFileAsync("node", [
     CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
-    "--name", name, "--base-url", "https://petstore3.swagger.io/api/v3", "--license", "none",
+    "--name", name, "--base-url", PETSTORE_BASE_URL, "--license", "none",
+    ...extraArgs,
   ]);
   return outDir;
+}
+
+/** Resolve a usable Python 3.10+ interpreter, or throw loudly (no silent skip) — same discipline as emit-python-e2e.test.ts. */
+function resolvePython(): string {
+  for (const candidate of ["python3.11", "python3", "python"]) {
+    try {
+      const v = execFileSync(candidate, ["--version"], { encoding: "utf-8" });
+      const m = v.match(/Python (\d+)\.(\d+)/);
+      if (m && (Number(m[1]) > 3 || (Number(m[1]) === 3 && Number(m[2]) >= 10))) return candidate;
+    } catch {
+      /* try next */
+    }
+  }
+  throw new Error("No Python >=3.10 interpreter found on PATH (tried python3.11, python3, python).");
 }
 
 test(
@@ -182,3 +207,125 @@ async function rename(from: string, to: string): Promise<void> {
   const { rename: fsRename } = await import("node:fs/promises");
   await fsRename(from, to);
 }
+
+// --- Python target (ARCHITECTURE.md section 62: start is language-neutral) ---
+
+test(
+  "klaridian start <dir>: fails loudly (validate-project) when pyproject.toml exists but server.py is missing",
+  { timeout: 30_000 },
+  async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "klaridian-start-pynoserver-"));
+    try {
+      await writeFile(path.join(dir, "pyproject.toml"), "[project]\nname = \"x\"\n");
+      let caught: unknown;
+      try {
+        await execFileAsync("node", [CLI_ENTRYPOINT, "start", dir, "--json"]);
+      } catch (err) {
+        caught = err;
+      }
+      assert.ok(caught, "expected a non-zero exit");
+      const parsed = JSON.parse((caught as { stdout: string }).stdout);
+      assert.equal(parsed.success, false);
+      assert.equal(parsed.stage, "validate-project");
+      assert.match(parsed.error, /No server\.py/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "klaridian start <dir>: fails loudly (validate-built) on a real generated Python project with no .venv yet",
+  { timeout: 60_000 },
+  async () => {
+    const dir = await generateProject("pynovenv", ["--language", "python"]);
+    try {
+      let caught: unknown;
+      try {
+        await execFileAsync("node", [CLI_ENTRYPOINT, "start", dir, "--json"]);
+      } catch (err) {
+        caught = err;
+      }
+      assert.ok(caught, "expected a non-zero exit");
+      const parsed = JSON.parse((caught as { stdout: string }).stdout);
+      assert.equal(parsed.success, false);
+      assert.equal(parsed.stage, "validate-built");
+      assert.match(parsed.error, /No Python virtual environment/);
+      assert.match(parsed.error, /python -m venv \.venv/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "klaridian start <dir>: launches a real prepared Python project and serves real MCP traffic over stdio",
+  { timeout: 300_000 },
+  async () => {
+    const py = resolvePython();
+    const dir = await generateProject("pyrealstart", ["--language", "python"]);
+    try {
+      // Prepare step (the Python peer of npm install + npm run build): create
+      // the venv and install requirements.txt, exactly as `generate`'s Next
+      // steps and the emitted README instruct.
+      await execFileAsync(py, ["-m", "venv", ".venv"], { cwd: dir, timeout: 120_000 });
+      const venvPy = path.join(dir, ".venv", "bin", "python");
+      await execFileAsync(venvPy, ["-m", "pip", "install", "-q", "-r", "requirements.txt"], {
+        cwd: dir,
+        timeout: 180_000,
+      });
+
+      const { spawn } = await import("node:child_process");
+      const child = spawn("node", [CLI_ENTRYPOINT, "start", dir], {
+        env: { ...process.env, KLARIDIAN_BASE_URL: PETSTORE_BASE_URL },
+      });
+
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d) => (stdout += d.toString()));
+      child.stderr.on("data", (d) => (stderr += d.toString()));
+
+      const parsedIds = (): number[] =>
+        stdout
+          .split("\n")
+          .filter((l) => l.trim().startsWith("{"))
+          .map((l) => {
+            try {
+              return JSON.parse(l).id;
+            } catch {
+              return undefined;
+            }
+          })
+          .filter((id): id is number => typeof id === "number");
+
+      const waitFor = async (predicate: () => boolean, timeoutMs: number): Promise<void> => {
+        const start = Date.now();
+        while (!predicate()) {
+          if (Date.now() - start > timeoutMs) return;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      };
+
+      const send = (msg: unknown) => child.stdin.write(JSON.stringify(msg) + "\n");
+      send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "start-test", version: "0" } } });
+      await waitFor(() => parsedIds().includes(1), 20_000);
+      send({ jsonrpc: "2.0", method: "notifications/initialized" });
+      send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+      await waitFor(() => parsedIds().includes(2), 20_000);
+      child.kill();
+      await new Promise((r) => setTimeout(r, 200)); // let stdio flush after kill
+
+      const lines = stdout.split("\n").filter((l) => l.trim().startsWith("{"));
+      const messages = lines.map((l) => JSON.parse(l));
+      const initResult = messages.find((m) => m.id === 1);
+      const listResult = messages.find((m) => m.id === 2);
+
+      assert.ok(initResult?.result?.protocolVersion, `initialize responded correctly (stdout: ${stdout.slice(0, 500)})`);
+      assert.ok(Array.isArray(listResult?.result?.tools), `tools/list responded correctly (stdout: ${stdout.slice(0, 500)})`);
+      assert.equal(listResult.result.tools.length, 19, "real Petstore tool count");
+      assert.equal(stderr.trim(), "", "no stderr noise (no crash, no corrupted-stdio warnings)");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+);

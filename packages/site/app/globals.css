@@ -80,3 +80,22 @@ html, body {
   background: #fff;
   padding: 1px 5px;
 }
+
+/* Body copy reads large because the whole site is JetBrains Mono: a
+   monospace face at 16px has wider advance width and a taller x-height
+   than a proportional face at the same size, so the docs prose looks a
+   size bigger than it measures. Nudge the content text (and the oversized
+   Fumadocs lede) down so it reads like a normal 16px docs body. The MDX
+   body is wrapped in a .prose div under #nd-page; the prev/next pager
+   cards sit outside it, so scoping to .prose leaves them untouched.
+   Headings keep the preset scale. */
+#nd-page .prose p,
+#nd-page .prose li,
+#nd-page .prose td {
+  font-size: 15px;
+  line-height: 1.7;
+}
+/* The lede/description is Fumadocs' text-lg (18px) — trim to 16px */
+#nd-page p.text-lg {
+  font-size: 16px;
+}

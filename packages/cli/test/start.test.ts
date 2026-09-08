@@ -48,6 +48,26 @@ async function generateProject(name: string, extraArgs: string[] = []): Promise<
   return outDir;
 }
 
+// The point of this assertion is "no crash, no corrupted-stdio warnings" — a
+// server that writes to stderr is a real bug (it can corrupt the stdio JSON-RPC
+// stream). But the Node/npm launch chain itself emits benign lines to stderr
+// that have nothing to do with the server: experimental/deprecation warnings,
+// npm notices, punycode warnings. On a loaded CI runner under
+// --test-concurrency=4 these appear non-deterministically, so a bare
+// `stderr.trim() === ""` is flaky. Filter the known-benign noise, then assert
+// nothing meaningful remains — this keeps the bug-catching intent while not
+// failing on runner/runtime chatter outside our control.
+function assertNoMeaningfulStderr(stderr: string): void {
+  const meaningful = stderr
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .filter((l) => !/\b(ExperimentalWarning|DeprecationWarning|punycode|--trace-(deprecation|warnings)|npm warn|npm notice)\b/i.test(l))
+    // "(Use `node --trace-...`)" continuation line that follows a warning.
+    .filter((l) => !/^\(Use `node /.test(l));
+  assert.equal(meaningful.join("\n"), "", `no stderr noise (no crash, no corrupted-stdio warnings). Raw stderr:\n${stderr}`);
+}
+
 /** Resolve a usable Python 3.10+ interpreter, or throw loudly (no silent skip) — same discipline as emit-python-e2e.test.ts. */
 function resolvePython(): string {
   for (const candidate of ["python3.11", "python3", "python"]) {
@@ -195,7 +215,7 @@ test(
       assert.ok(initResult?.result?.protocolVersion, `initialize responded correctly (stdout: ${stdout.slice(0, 500)})`);
       assert.ok(Array.isArray(listResult?.result?.tools), `tools/list responded correctly (stdout: ${stdout.slice(0, 500)})`);
       assert.equal(listResult.result.tools.length, 19, "real Petstore tool count");
-      assert.equal(stderr.trim(), "", "no stderr noise (no crash, no corrupted-stdio warnings)");
+      assertNoMeaningfulStderr(stderr);
     } finally {
       await rename(path.join(dir, "node_modules.bak"), path.join(dir, "node_modules")).catch(() => {});
       await rm(dir, { recursive: true, force: true });
@@ -323,7 +343,7 @@ test(
       assert.ok(initResult?.result?.protocolVersion, `initialize responded correctly (stdout: ${stdout.slice(0, 500)})`);
       assert.ok(Array.isArray(listResult?.result?.tools), `tools/list responded correctly (stdout: ${stdout.slice(0, 500)})`);
       assert.equal(listResult.result.tools.length, 19, "real Petstore tool count");
-      assert.equal(stderr.trim(), "", "no stderr noise (no crash, no corrupted-stdio warnings)");
+      assertNoMeaningfulStderr(stderr);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

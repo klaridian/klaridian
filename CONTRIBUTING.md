@@ -40,14 +40,14 @@ pytest tests/
 
 ## Releases
 
-Versioning follows [semantic versioning](https://semver.org). The project is pre-1.0, so the public API and CLI flags may still change between minor versions; breaking changes bump the minor (`0.x`), and the `1.0.0` line is reserved for the first release with a stability commitment. Versioning is manual for now (no automated changelog tooling yet—revisit if release frequency picks up):
+Versioning follows [semantic versioning](https://semver.org). The project is pre-1.0, so the public API and CLI flags may still change between minor versions; breaking changes bump the minor (`0.x`), and the `1.0.0` line is reserved for the first release with a stability commitment. A release is **triggered by pushing a version tag** — `.github/workflows/release.yml` does the rest (no manual `npm publish`):
 
-1. Bump the relevant `package.json`/`pyproject.toml` version(s).
-2. `git tag vX.Y.Z && git push origin vX.Y.Z`
-3. Create a GitHub Release from the tag (Releases → Draft a new release → pick the tag), with notes describing what changed. GitHub can auto-generate a first draft from merged PRs/commits since the last tag—edit for clarity before publishing.
-4. Publish the npm package from `packages/cli` (`npm publish --access public`). The npm account requires two-factor authentication, so publishing prompts for a one-time code (or uses a granular token with 2FA-bypass for automation).
+1. Bump the version in **all three** places the release gate checks: `packages/cli/package.json`, `packaging/pypi/pyproject.toml`, and `packaging/pypi/src/klaridian/__init__.py` (a mismatch fails the release loudly).
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. The workflow gates on the real test suite, then publishes in parallel: the **npm** package (`packages/cli`, via OIDC Trusted Publishing, provenance attached) and the **PyPI** wheels — the CLI compiled to a standalone binary per platform (`bun build --compile`) and wrapped in platform-tagged wheels, so `pip install klaridian` needs zero Node (ARCHITECTURE.md §64). Both use OIDC, so there are no stored tokens.
+4. After both publish, it cuts a **GitHub Release** from the tag with auto-generated notes, attaching the bare per-platform binaries as assets (the Homebrew tap formula downloads these).
 
-The `klaridian` CLI is published on npm (`npm i -g klaridian`, or run it with `npx klaridian`). The Python `klaridian-posthog-middleware` package is not published to PyPI yet.
+The `klaridian` CLI is published on npm (`npm i -g klaridian`, or `npx klaridian`) and on PyPI (`pip install klaridian` / `uv tool install klaridian` / `pipx install klaridian`). A Homebrew tap serving the same binary is rendered from `packaging/homebrew/klaridian.rb` (see `render-formula.sh`). The Python `klaridian-posthog-middleware` package is a separate FastMCP add-on and is not published to PyPI.
 
 ## Code of Conduct
 

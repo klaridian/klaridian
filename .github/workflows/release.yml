@@ -5,12 +5,14 @@ name: Release
 # §Releases). The flow: gate on the real CI, then publish the npm CLI via
 # OIDC Trusted Publishing (no stored tokens), then cut a GitHub Release.
 #
-# npm-only by design: the klaridian CLI is the published artifact. The Python
-# side of klaridian is the `--language python` generator target (which emits a
-# project built on the OFFICIAL mcp SDK and ships INSIDE this CLI), not a
-# separate PyPI package — packages/python-posthog-middleware is a FastMCP
-# add-on that is deliberately NOT published (see ARCHITECTURE.md §23 and the
-# Sep 2026 decision to keep klaridian on the official SDK, not FastMCP).
+# Multi-channel by design (ARCHITECTURE.md §64): the SAME TypeScript CLI is the
+# published artifact everywhere. npm gets the Node package; PyPI gets the CLI
+# compiled to a standalone binary (bun build --compile, spike MCPFO-69) wrapped
+# in platform-tagged wheels — so `pip install klaridian` needs zero Node. The
+# `--language python` generator target is the OUTPUT users emit (built on the
+# official mcp SDK, ships INSIDE this CLI); it is NOT what PyPI publishes.
+# packages/python-posthog-middleware is a FastMCP add-on deliberately NOT
+# published (see ARCHITECTURE.md §23).
 on:
   push:
     tags:
@@ -49,6 +51,18 @@ jobs:
             echo "::error::Tag ${{ steps.tag.outputs.version }} != packages/cli/package.json $PKG"
             exit 1
           fi
+
+      - name: PyPI shim version matches the tag
+        run: |
+          VER="${{ steps.tag.outputs.version }}"
+          PY_TOML=$(grep -m1 '^version = ' packaging/pypi/pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          PY_INIT=$(grep -m1 '__version__ = ' packaging/pypi/src/klaridian/__init__.py | sed -E 's/.*"(.*)".*/\1/')
+          for got in "$PY_TOML" "$PY_INIT"; do
+            if [ "$got" != "$VER" ]; then
+              echo "::error::PyPI shim version $got != tag $VER (update packaging/pypi/pyproject.toml and __init__.py)"
+              exit 1
+            fi
+          done
 
       - uses: actions/setup-node@v4
         with:
@@ -96,19 +110,187 @@ jobs:
         run: npm publish --access public
 
   # ---------------------------------------------------------------------------
+  # Cross-compile the CLI to a standalone binary per platform (bun --compile),
+  # then wrap each in a platform-tagged wheel. The spike (MCPFO-69) proved the
+  # host target only; this matrix proves each target compiles AND is embedded
+  # in a wheel. Linux/Windows binaries can't be executed on the macOS/Linux
+  # runners that build other legs, so the run-the-binary assertion happens on
+  # the matching runner OS where possible (macos + linux); the wheel-embed and
+  # byte-identical-output checks run everywhere.
+  # ---------------------------------------------------------------------------
+  build-wheels:
+    name: Build wheel (${{ matrix.wheel_plat }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            bun_target: bun-darwin-arm64
+            wheel_plat: macosx_11_0_arm64
+            can_run: true
+          - runner: macos-13
+            bun_target: bun-darwin-x64
+            wheel_plat: macosx_10_12_x86_64
+            can_run: true
+          - runner: ubuntu-latest
+            bun_target: bun-linux-x64
+            wheel_plat: manylinux2014_x86_64
+            can_run: true
+          - runner: ubuntu-24.04-arm
+            bun_target: bun-linux-arm64
+            wheel_plat: manylinux2014_aarch64
+            can_run: true
+          - runner: windows-latest
+            bun_target: bun-windows-x64
+            wheel_plat: win_amd64
+            can_run: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the CLI (tsc)
+        working-directory: packages/cli
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Compile standalone binary (bun --compile)
+        shell: bash
+        run: |
+          mkdir -p dist/binary
+          EXT=""
+          if [ "${{ matrix.wheel_plat }}" = "win_amd64" ]; then EXT=".exe"; fi
+          bun build packages/cli/dist/src/index.js --compile \
+            --target=${{ matrix.bun_target }} \
+            --outfile "dist/binary/klaridian$EXT"
+          ls -lh dist/binary/
+
+      # Guard the byte-identical-output invariant the spike established: on a
+      # runner that can execute the freshly compiled binary, generate a server
+      # from it and from node, and require an identical tree (diff exit 0).
+      - name: Assert binary output == node output
+        if: ${{ matrix.can_run }}
+        shell: bash
+        run: |
+          BIN="dist/binary/klaridian"
+          COMMON="generate --spec examples/petstore/openapi.json --name parity-check --language python --base-url https://petstore3.swagger.io/api/v3"
+          "$BIN" $COMMON --out /tmp/out-bin
+          node packages/cli/dist/src/index.js $COMMON --out /tmp/out-node
+          diff -r /tmp/out-bin /tmp/out-node
+          echo "byte-identical: OK"
+
+      - name: Build platform-tagged wheel
+        shell: bash
+        env:
+          KLARIDIAN_WHEEL_PLAT: ${{ matrix.wheel_plat }}
+          KLARIDIAN_BINARY: ${{ github.workspace }}/dist/binary/klaridian${{ matrix.wheel_plat == 'win_amd64' && '.exe' || '' }}
+        run: |
+          python -m pip install --upgrade pip build hatchling
+          python -m build --wheel --outdir dist/wheels packaging/pypi
+          ls -lh dist/wheels/
+
+      # End-to-end proof on runners that can run the binary: install the wheel
+      # into a clean venv with Node absent and generate a server.
+      - name: Install wheel + generate with zero Node
+        if: ${{ matrix.can_run }}
+        shell: bash
+        run: |
+          python -m venv /tmp/wheelcheck
+          /tmp/wheelcheck/bin/pip install dist/wheels/*.whl
+          /tmp/wheelcheck/bin/klaridian --version
+          /tmp/wheelcheck/bin/klaridian generate \
+            --spec examples/petstore/openapi.json --out /tmp/wheelgen \
+            --name wheel-e2e --language python \
+            --base-url https://petstore3.swagger.io/api/v3
+          test -f /tmp/wheelgen/server.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.wheel_plat }}
+          path: dist/wheels/*.whl
+          if-no-files-found: error
+
+      # Also publish the bare binary as an artifact, renamed to the
+      # os-arch convention the Homebrew formula downloads
+      # (klaridian-<os>-<arch>). github-release attaches these to the Release.
+      - name: Stage bare binary for release assets
+        shell: bash
+        run: |
+          mkdir -p dist/assets
+          case "${{ matrix.bun_target }}" in
+            bun-darwin-arm64) NAME=klaridian-darwin-arm64 ;;
+            bun-darwin-x64)   NAME=klaridian-darwin-x64 ;;
+            bun-linux-x64)    NAME=klaridian-linux-x64 ;;
+            bun-linux-arm64)  NAME=klaridian-linux-arm64 ;;
+            bun-windows-x64)  NAME=klaridian-windows-x64.exe ;;
+          esac
+          SRC="dist/binary/klaridian"
+          if [ "${{ matrix.wheel_plat }}" = "win_amd64" ]; then SRC="dist/binary/klaridian.exe"; fi
+          cp "$SRC" "dist/assets/$NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.wheel_plat }}
+          path: dist/assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish every platform wheel to PyPI via OIDC Trusted Publishing (no stored
+  # token — reactivates the previously-dormant PyPI Trusted-Publisher
+  # registration, this time for binary wheels). Runs only after all matrix legs
+  # succeed, so PyPI never gets a partial platform set.
+  # ---------------------------------------------------------------------------
+  publish-pypi:
+    name: Publish wheels to PyPI
+    needs: [verify, build-wheels]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+      - name: List wheels to publish
+        run: ls -lh dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  # ---------------------------------------------------------------------------
   # GitHub Release from the tag, with auto-generated notes. Runs only after
   # the publish succeeds so the release never points at a version that failed
   # to ship.
   # ---------------------------------------------------------------------------
   github-release:
     name: GitHub Release
-    needs: publish-npm
+    needs: [publish-npm, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: release-assets
+          merge-multiple: true
       - name: Create release
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --generate-notes --verify-tag release-assets/*
         env:
           GH_TOKEN: ${{ github.token }}

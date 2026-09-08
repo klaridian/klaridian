@@ -1,0 +1,5 @@
+# Build artifacts — never committed. The binary is dropped in per-platform by
+# CI (or build-wheel.sh) via the hatchling hook; it is not source.
+.buildenv/
+src/klaridian/_binary/
+*.whl

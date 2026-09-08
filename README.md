@@ -1,12 +1,14 @@
 # klaridian
 
 [![CI](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MCP protocol](https://img.shields.io/badge/MCP-2025--11--25-8A2BE2.svg)](https://modelcontextprotocol.io)
 
 ![klaridian: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
 
 > Generate MCP servers with engineering + product observability built in—no manual instrumentation.
 
-**Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec, optionally instrumented with OpenTelemetry and/or PostHog, with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
+**Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec—in TypeScript or Python—optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
 **Contents:** [What is this?](#what-is-this) · [Why](#why) · [Quickstart](#quickstart) · [Repository layout](#repository-layout) · [Status & roadmap](#status--roadmap) · [Running the tests](#running-the-tests) · [Development environment](#development-environment) · [License](#license) · [Contributing](#contributing)
 
@@ -47,6 +49,24 @@ cd /tmp/my-generated-server
 npm install && npm run build
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces   # optional, has a default
 npm start
+```
+
+Prefer Python? Add `--language python` to emit an official `mcp` Python SDK project instead—same tools, same annotations, same instrumentation:
+
+```bash
+node dist/src/index.js generate \
+  --spec ../../examples/petstore/openapi.json \
+  --out /tmp/my-generated-server \
+  --base-url https://petstore3.swagger.io/api/v3 \
+  --plugin otel \
+  --language python
+
+# Then run the generated Python server:
+cd /tmp/my-generated-server
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+export KLARIDIAN_BASE_URL=https://petstore3.swagger.io/api/v3
+python server.py
 ```
 
 Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--include-tags`/`--exclude-tags`/`--exclude-operation-ids` (tag-based) or `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` (regex/HTTP-method, tag-independent—works even on specs with zero OpenAPI tags), or `--interactive`, to curate which operations become tools—see [ARCHITECTURE.md section 40](ARCHITECTURE.md#40-mcpfo-8-phase-1-implemented--tag-independent-structural-curation-sep-3-2026) for details.
@@ -97,7 +117,9 @@ Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry / PostHog 
 
 ### Multi-language support
 
-[`packages/python-posthog-middleware/`](packages/python-posthog-middleware/) ships `PostHogMiddleware`, a native FastMCP middleware (not a generator, not a patch) that attaches product-observability event capture to any FastMCP server via `mcp.add_middleware(PostHogMiddleware(...))`. Deliberately doesn't ship an `otel`-equivalent for Python—FastMCP already has that natively. See [ARCHITECTURE.md section 23](ARCHITECTURE.md#23-multi-language-expansion-pythonfastmcp-via-a-native-middleware-aug-30-2026).
+klaridian emits the generated server in **TypeScript (default) or Python**—pass `--language python` to get an official [`mcp`](https://pypi.org/project/mcp/) Python SDK project (`requirements.txt`, `pyproject.toml`, `server.py`) built from the same tool-data IR. Both languages produce identical tools, annotations, curation, and plugin instrumentation (`otel`, `posthog`, `amplitude`, `mixpanel`); the language choice is about the runtime you deploy, not the feature set. A few flags are still TypeScript-only for now (`--architecture code-mode`, `--oauth-*`, `--install`)—klaridian fails loudly rather than silently dropping them. See [ARCHITECTURE.md section 60](ARCHITECTURE.md) (guardrail reversed, `--language` design) and [section 61](ARCHITECTURE.md) (the Python emit-target build).
+
+Separately, [`packages/python-posthog-middleware/`](packages/python-posthog-middleware/) ships `PostHogMiddleware`, a native FastMCP middleware (not a generator, not a patch) that attaches product-observability event capture to any *hand-written* FastMCP server via `mcp.add_middleware(PostHogMiddleware(...))`. Deliberately doesn't ship an `otel`-equivalent for Python—FastMCP already has that natively. See [ARCHITECTURE.md section 23](ARCHITECTURE.md#23-multi-language-expansion-pythonfastmcp-via-a-native-middleware-aug-30-2026).
 
 ### Competitive positioning
 

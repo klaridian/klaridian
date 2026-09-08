@@ -33,8 +33,9 @@ export default function Home() {
             MCP server from your API spec.
           </h1>
           <p className="text-sm max-w-[480px] mx-auto mb-9 text-[#333]">
-            OpenAPI in, a stateless TypeScript MCP server out — engineering
-            observability and product analytics wired in from the start.
+            OpenAPI in, a stateless MCP server out — TypeScript or Python, with
+            engineering observability and product analytics wired in from the
+            start.
           </p>
           <a
             href="#install"
@@ -59,7 +60,7 @@ export default function Home() {
             },
             {
               title: "Open by default",
-              body: "MIT-licensed generator, plain readable TypeScript output. Read it before you trust it with real credentials.",
+              body: "MIT-licensed generator, plain readable TypeScript or Python output. Read it before you trust it with real credentials.",
             },
           ].map((b) => (
             <div key={b.title}>

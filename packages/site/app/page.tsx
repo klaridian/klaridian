@@ -15,7 +15,7 @@ export default function Home() {
               docs
             </Link>
             <a
-              href="https://github.com/ricardocvasconcelos/klaridian"
+              href="https://github.com/klaridian/klaridian"
               className="hover:border-b-2 hover:border-[var(--klaridian-accent)]"
             >
               github
@@ -89,7 +89,7 @@ export default function Home() {
               Read the docs
             </Link>
             <a
-              href="https://github.com/ricardocvasconcelos/klaridian"
+              href="https://github.com/klaridian/klaridian"
               className="underline decoration-[var(--klaridian-accent)] underline-offset-4 mx-2.5"
             >
               View on GitHub

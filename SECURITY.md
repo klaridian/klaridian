@@ -4,7 +4,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Instead, report it privately via [GitHub Security Advisories](https://github.com/ricardocvasconcelos/klaridian/security/advisories/new) for this repository. You should receive an acknowledgment within a few days.
+Instead, report it privately via [GitHub Security Advisories](https://github.com/klaridian/klaridian/security/advisories/new) for this repository. You should receive an acknowledgment within a few days.
 
 Please include:
 - A description of the vulnerability and its potential impact

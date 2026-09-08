@@ -29,8 +29,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://klaridian.dev"
-Repository = "https://github.com/ricardocvasconcelos/klaridian"
-Issues = "https://github.com/ricardocvasconcelos/klaridian/issues"
+Repository = "https://github.com/klaridian/klaridian"
+Issues = "https://github.com/klaridian/klaridian/issues"
 
 [project.optional-dependencies]
 dev = [

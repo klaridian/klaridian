@@ -22,7 +22,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://klaridian.dev"
-Repository = "https://github.com/ricardocvasconcelos/klaridian"
+Repository = "https://github.com/klaridian/klaridian"
 
 # The console script points at the shim, which execs the embedded binary.
 [project.scripts]

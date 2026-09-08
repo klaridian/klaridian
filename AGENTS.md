@@ -6,7 +6,7 @@ Guidance for AI agents (Claude Code, Hermes, or others) working in this reposito
 
 `klaridian` generates [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec, with observability plugins (starting with OpenTelemetry) wired in automatically. Read [PLAN.md](PLAN.md) for the business/strategy context and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design before making non-trivial changes—both are kept up to date as living documents, not one-off planning artifacts.
 
-**This is Ricardo's personal project** (github.com/ricardocvasconcelos/klaridian).
+**This is Ricardo's project** (github.com/klaridian/klaridian, under the `klaridian` GitHub org he owns).
 
 **Architecture pivot (Aug 30, 2026, ARCHITECTURE.md section 16):** klaridian no longer parses OpenAPI or hand-rolls a mapper (sections 9-15, kept as historical reference—don't resurrect it). OpenAPI parsing / tool-data extraction is delegated to [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator)'s `getToolsFromOpenApi()`.
 

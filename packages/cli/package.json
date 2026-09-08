@@ -18,11 +18,11 @@
   "homepage": "https://klaridian.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ricardocvasconcelos/klaridian.git",
+    "url": "git+https://github.com/klaridian/klaridian.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/ricardocvasconcelos/klaridian/issues"
+    "url": "https://github.com/klaridian/klaridian/issues"
   },
   "author": "Ricardo Vasconcelos",
   "type": "module",

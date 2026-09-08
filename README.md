@@ -1,6 +1,6 @@
 # klaridian
 
-[![CI](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml/badge.svg)](https://github.com/ricardocvasconcelos/klaridian/actions/workflows/ci.yml)
+[![CI](https://github.com/klaridian/klaridian/actions/workflows/ci.yml/badge.svg)](https://github.com/klaridian/klaridian/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MCP protocol](https://img.shields.io/badge/MCP-2025--11--25-8A2BE2.svg)](https://modelcontextprotocol.io)
 

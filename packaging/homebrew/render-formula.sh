@@ -13,7 +13,7 @@
 set -euo pipefail
 
 VERSION="${1:?usage: render-formula.sh <version>}"
-REPO="ricardocvasconcelos/klaridian"
+REPO="klaridian/klaridian"
 TMPL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/klaridian.rb"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

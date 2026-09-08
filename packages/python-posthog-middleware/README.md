@@ -1,8 +1,8 @@
 # klaridian-posthog-middleware
 
-Product-observability middleware for [FastMCP](https://gofastmcp.com) servers—the Python counterpart to [klaridian](https://github.com/ricardocvasconcelos/klaridian)'s TypeScript `posthog` plugin.
+Product-observability middleware for [FastMCP](https://gofastmcp.com) servers—the Python counterpart to [klaridian](https://github.com/klaridian/klaridian)'s TypeScript `posthog` plugin.
 
-## Why this exists (see [klaridian ARCHITECTURE.md](https://github.com/ricardocvasconcelos/klaridian/blob/main/ARCHITECTURE.md) sections 21-23 for the full reasoning)
+## Why this exists (see [klaridian ARCHITECTURE.md](https://github.com/klaridian/klaridian/blob/main/ARCHITECTURE.md) sections 21-23 for the full reasoning)
 
 FastMCP already ships native, zero-config OpenTelemetry (engineering observability) since v3.0/4.0—there's no gap to fill there. But FastMCP has **no product-observability equivalent**: no per-tool-call event capture for adoption/usage-pattern analysis. This package fills exactly that one gap, as a FastMCP-native middleware—**not** a code generator, **not** a fork of FastMCP, **not** a competing OpenAPI→MCP tool. It attaches to *any* FastMCP server (hand-written, generated via `from_openapi()`, or generated via a third-party tool like `mcp-generator-3.x`) with one line.
 

@@ -1,18 +1,47 @@
 {
-  "name": "@klaridian/cli",
+  "name": "klaridian",
   "version": "0.0.1",
   "private": true,
   "license": "MIT",
   "description": "Generate MCP servers with built-in observability from an OpenAPI spec.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "openapi",
+    "swagger",
+    "code-generator",
+    "opentelemetry",
+    "observability",
+    "posthog",
+    "cli",
+    "ai-agents"
+  ],
+  "homepage": "https://klaridian.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ricardocvasconcelos/klaridian.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/ricardocvasconcelos/klaridian/issues"
+  },
+  "author": "Ricardo Vasconcelos",
   "type": "module",
   "bin": {
     "klaridian": "./dist/src/index.js"
+  },
+  "files": [
+    "dist/src"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.json && node --test --test-concurrency=4 dist/test/*.test.js",
     "docs:gen": "npm run build --silent && node scripts/generate-cli-docs.mjs",
-    "docs:check": "npm run docs:gen --silent && git diff --exit-code -- ../site/content/docs/reference/cli-reference.mdx"
+    "docs:check": "npm run docs:gen --silent && git diff --exit-code -- ../site/content/docs/reference/cli-reference.mdx",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@amplitude/analytics-node": "^1.5.71",

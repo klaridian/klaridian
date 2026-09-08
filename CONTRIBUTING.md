@@ -46,7 +46,7 @@ Versioning is manual for now (no automated changelog tooling yet—revisit if re
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 3. Create a GitHub Release from the tag (Releases → Draft a new release → pick the tag), with notes describing what changed. GitHub can auto-generate a first draft from merged PRs/commits since the last tag—edit for clarity before publishing.
 
-Packages (`@klaridian/cli` on npm, `klaridian-posthog-middleware` on PyPI) are not published yet—both are marked private/pre-release until that's decided.
+Packages (`klaridian` on npm, `klaridian-posthog-middleware` on PyPI) are not published yet—both are marked private/pre-release until that's decided.
 
 ## Code of Conduct
 

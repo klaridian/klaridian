@@ -2,9 +2,15 @@ name: Release
 
 # Fires only on a pushed version tag (vX.Y.Z), never on a normal push to
 # main — a tag is the explicit "this is a release" signal (CONTRIBUTING
-# §Releases). The flow: gate on the real CI, then publish the npm CLI and
-# the PyPI middleware via OIDC Trusted Publishing (no stored tokens), then
-# cut a GitHub Release from the tag.
+# §Releases). The flow: gate on the real CI, then publish the npm CLI via
+# OIDC Trusted Publishing (no stored tokens), then cut a GitHub Release.
+#
+# npm-only by design: the klaridian CLI is the published artifact. The Python
+# side of klaridian is the `--language python` generator target (which emits a
+# project built on the OFFICIAL mcp SDK and ships INSIDE this CLI), not a
+# separate PyPI package — packages/python-posthog-middleware is a FastMCP
+# add-on that is deliberately NOT published (see ARCHITECTURE.md §23 and the
+# Sep 2026 decision to keep klaridian on the official SDK, not FastMCP).
 on:
   push:
     tags:
@@ -16,10 +22,10 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Gate: the tag's version must match what's in the manifests, and the full
-  # existing test suite must pass, BEFORE anything is published. A mismatch
-  # (tag v0.2.0 but package.json still 0.1.0) fails loudly here rather than
-  # shipping a mislabeled artifact.
+  # Gate: the tag's version must match packages/cli/package.json, and the full
+  # existing test suite must pass, BEFORE publishing. A mismatch (tag v0.2.0
+  # but package.json still 0.1.0) fails loudly here rather than shipping a
+  # mislabeled artifact.
   # ---------------------------------------------------------------------------
   verify:
     name: Verify tag + tests
@@ -44,14 +50,6 @@ jobs:
             exit 1
           fi
 
-      - name: Tag matches packages/python-posthog-middleware/pyproject.toml
-        run: |
-          PY=$(grep -E '^version = ' packages/python-posthog-middleware/pyproject.toml | head -1 | sed -E 's/version = "(.*)"/\1/')
-          if [ "$PY" != "${{ steps.tag.outputs.version }}" ]; then
-            echo "::error::Tag ${{ steps.tag.outputs.version }} != pyproject.toml $PY"
-            exit 1
-          fi
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -67,13 +65,6 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm test
-
-      - name: Python middleware tests
-        working-directory: packages/python-posthog-middleware
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pytest tests/
 
   # ---------------------------------------------------------------------------
   # npm publish via OIDC Trusted Publishing. No NODE_AUTH_TOKEN: the registry
@@ -105,40 +96,13 @@ jobs:
         run: npm publish --access public
 
   # ---------------------------------------------------------------------------
-  # PyPI publish via OIDC Trusted Publishing (pypa/gh-action-pypi-publish).
-  # No API token: PyPI is configured to trust this repo + workflow + env.
-  # ---------------------------------------------------------------------------
-  publish-pypi:
-    name: Publish middleware to PyPI
-    needs: verify
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Build sdist + wheel
-        working-directory: packages/python-posthog-middleware
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
-      - name: Publish to PyPI (OIDC)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: packages/python-posthog-middleware/dist
-
-  # ---------------------------------------------------------------------------
   # GitHub Release from the tag, with auto-generated notes. Runs only after
-  # both publishes succeed so the release never points at a version that
-  # failed to ship.
+  # the publish succeeds so the release never points at a version that failed
+  # to ship.
   # ---------------------------------------------------------------------------
   github-release:
     name: GitHub Release
-    needs: [publish-npm, publish-pypi]
+    needs: publish-npm
     runs-on: ubuntu-latest
     permissions:
       contents: write

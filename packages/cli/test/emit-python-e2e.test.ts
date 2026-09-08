@@ -170,14 +170,10 @@ test(
       });
       let exitedEarly = false;
       proc.on("exit", () => { exitedEarly = true; });
+      // Drain stderr so the child never blocks on a full pipe (uvicorn runs at
+      // log_level="error", so this is near-silent after startup).
+      proc.stderr!.on("data", () => {});
       try {
-        await new Promise<void>((resolve, reject) => {
-          const to = setTimeout(() => reject(new Error("server did not start")), 20000);
-          proc.stderr!.on("data", (c: Buffer) => {
-            if (c.toString().includes("streamable-http")) { clearTimeout(to); resolve(); }
-          });
-        });
-
         const url = `http://127.0.0.1:${PORT}/mcp`;
         const headers = {
           "Content-Type": "application/json",
@@ -190,6 +186,29 @@ test(
           const line = text.split("\n").map((l) => l.replace(/^data:\s*/, "").trim()).find((l) => l.startsWith("{"));
           return line ? JSON.parse(line) : null;
         };
+
+        // Readiness is connection-based, NOT log-based: server.py prints its
+        // startup line to stderr BEFORE uvicorn binds the socket, so the log is
+        // not proof the port accepts requests. Poll the real endpoint until it
+        // answers (ECONNREFUSED is expected in the gap between the print and the
+        // bind), bailing immediately if the process dies. This is the fix for a
+        // "fetch failed" flake that showed up under load / on slower interpreters.
+        await (async () => {
+          const deadline = Date.now() + 20000;
+          let lastErr: unknown;
+          while (Date.now() < deadline) {
+            if (exitedEarly) throw new Error("server exited before it became ready");
+            try {
+              await post({ jsonrpc: "2.0", id: 0, method: "initialize",
+                params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "probe", version: "1.0.0" } } });
+              return;
+            } catch (e) {
+              lastErr = e;
+              await new Promise((r) => setTimeout(r, 150));
+            }
+          }
+          throw new Error(`server did not become ready within 20s: ${String(lastErr)}`);
+        })();
 
         const r1 = await post({ jsonrpc: "2.0", id: 1, method: "initialize",
           params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });

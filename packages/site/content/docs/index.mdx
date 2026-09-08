@@ -20,6 +20,8 @@ klaridian is a CLI today. There's no library mode yet (no `import`/`require`)—
 - A stateless TypeScript server, ready to run
 - OpenTelemetry tracing already wired in, if you passed `--plugin otel`
 
+Got a Swagger 2.0 spec? Pass it the same way—klaridian detects it and converts it to OpenAPI 3.0 before generating, so you don't have to convert it yourself.
+
 ## Two ways to generate
 
 By default, klaridian makes one MCP tool per API operation. This works well for small and medium specs.

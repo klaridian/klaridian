@@ -8,7 +8,7 @@
 
 > Generate MCP servers with engineering + product observability built in—no manual instrumentation.
 
-**Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec—in TypeScript or Python—optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
+**Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec (Swagger 2.0 specs are automatically converted to OpenAPI 3.0)—in TypeScript or Python—optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
 **Contents:** [What is this?](#what-is-this) · [Why](#why) · [Quickstart](#quickstart) · [Repository layout](#repository-layout) · [Status & roadmap](#status--roadmap) · [Running the tests](#running-the-tests) · [Development environment](#development-environment) · [License](#license) · [Contributing](#contributing)
 

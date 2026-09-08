@@ -1,7 +1,6 @@
 {
   "name": "klaridian",
   "version": "0.0.1",
-  "private": true,
   "license": "MIT",
   "description": "Generate MCP servers with built-in observability from an OpenAPI spec.",
   "keywords": [
@@ -28,7 +27,7 @@
   "author": "Ricardo Vasconcelos",
   "type": "module",
   "bin": {
-    "klaridian": "./dist/src/index.js"
+    "klaridian": "dist/src/index.js"
   },
   "files": [
     "dist/src"

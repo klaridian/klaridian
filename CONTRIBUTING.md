@@ -40,13 +40,14 @@ pytest tests/
 
 ## Releases
 
-Versioning is manual for now (no automated changelog tooling yet—revisit if release frequency picks up):
+Versioning follows [semantic versioning](https://semver.org). The project is pre-1.0, so the public API and CLI flags may still change between minor versions; breaking changes bump the minor (`0.x`), and the `1.0.0` line is reserved for the first release with a stability commitment. Versioning is manual for now (no automated changelog tooling yet—revisit if release frequency picks up):
 
 1. Bump the relevant `package.json`/`pyproject.toml` version(s).
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 3. Create a GitHub Release from the tag (Releases → Draft a new release → pick the tag), with notes describing what changed. GitHub can auto-generate a first draft from merged PRs/commits since the last tag—edit for clarity before publishing.
+4. Publish the npm package from `packages/cli` (`npm publish --access public`). The npm account requires two-factor authentication, so publishing prompts for a one-time code (or uses a granular token with 2FA-bypass for automation).
 
-Packages (`klaridian` on npm, `klaridian-posthog-middleware` on PyPI) are not published yet—both are marked private/pre-release until that's decided.
+The `klaridian` CLI is published on npm (`npm i -g klaridian`, or run it with `npx klaridian`). The Python `klaridian-posthog-middleware` package is not published to PyPI yet.
 
 ## Code of Conduct
 

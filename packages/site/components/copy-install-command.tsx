@@ -3,9 +3,26 @@
 import { useState } from "react";
 
 const CHANNELS = [
-  { label: "npm", cmd: "npm install -g klaridian" },
-  { label: "pip", cmd: "pip install klaridian" },
-  { label: "brew", cmd: "brew install klaridian/klaridian/klaridian" },
+  {
+    label: "npx",
+    cmd: "npx klaridian generate --spec ./api.yaml --out ./server",
+    note: "# Node.js · run once, nothing installed — recommended for a generator",
+  },
+  {
+    label: "npm",
+    cmd: "npm install -g klaridian",
+    note: "# Node.js · installs the klaridian command globally",
+  },
+  {
+    label: "pip",
+    cmd: "pip install klaridian",
+    note: "# prebuilt native binary · no Node.js required",
+  },
+  {
+    label: "brew",
+    cmd: "brew tap klaridian/klaridian && brew install klaridian",
+    note: "# prebuilt native binary · no Node.js required",
+  },
 ];
 
 export function CopyInstallCommand() {
@@ -55,9 +72,7 @@ export function CopyInstallCommand() {
         <span className="text-[var(--klaridian-accent)]">$</span> {current.cmd}
         {"\n"}
         <span className="text-[#888] text-xs block mt-2.5">
-          {active === 0
-            ? "# Node.js · or run once with: npx klaridian generate ..."
-            : "# prebuilt native binary · no Node.js required"}
+          {current.note}
         </span>
       </pre>
     </div>

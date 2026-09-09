@@ -33,14 +33,18 @@ Building an MCP server today means writing the server, then manually wiring up t
 klaridian is one CLI, distributed on every major channel. Pick whichever fits your toolchain—all deliver the same generator:
 
 ```bash
-# npm (Node.js)
-npm install -g klaridian        # or run without installing: npx klaridian ...
+# npx (Node.js) — run once, nothing installed; recommended for a generator
+npx klaridian generate --spec ./api.yaml --out ./my-server
+
+# npm (Node.js) — install the klaridian command globally
+npm install -g klaridian
 
 # PyPI (prebuilt native binary — no Node.js, no virtualenv, nothing to compile)
 pip install klaridian           # or: uv tool install klaridian / pipx install klaridian
 
 # Homebrew (macOS + Linux, prebuilt native binary — no Node.js)
-brew install klaridian/klaridian/klaridian
+brew tap klaridian/klaridian
+brew install klaridian
 ```
 
 The PyPI and Homebrew channels ship a **standalone native binary** (compiled with `bun --compile`, byte-identical output to the Node build), so they run with zero Node.js on the machine—the same pattern [ruff](https://pypi.org/project/ruff/) and [uv](https://pypi.org/project/uv/) use. Prebuilt binaries cover **macOS (arm64, x64), Linux (arm64, x64), and Windows (x64)**.

@@ -5,19 +5,21 @@ description: Install the klaridian CLI from npm, PyPI, or Homebrew, or download 
 
 klaridian is a single CLI, published on every major channel. Each channel delivers the same generator, so pick whichever fits your toolchain.
 
-## npm (Node.js)
+## npm / npx (Node.js)
 
-```bash
-npm install -g klaridian
-```
-
-Or run it once without installing:
+Because klaridian is a generator you typically run a handful of times per project, the lightest option is `npx` — it runs the latest version without installing anything:
 
 ```bash
 npx klaridian generate --spec ./api.yaml --out ./my-server --plugin otel
 ```
 
-The npm package runs on Node.js. If you'd rather not depend on Node, use the PyPI or Homebrew channels below — they ship a self-contained native binary.
+If you reach for it often, install the `klaridian` command globally instead:
+
+```bash
+npm install -g klaridian
+```
+
+Both run on Node.js. If you'd rather not depend on Node, use the PyPI or Homebrew channels below — they ship a self-contained native binary.
 
 ## PyPI (native binary, no Node.js)
 
@@ -37,10 +39,11 @@ This package ships a **prebuilt native binary** — no Node.js, no virtualenv, n
 ## Homebrew (macOS and Linux, native binary)
 
 ```bash
-brew install klaridian/klaridian/klaridian
+brew tap klaridian/klaridian
+brew install klaridian
 ```
 
-The formula downloads the prebuilt binary from the GitHub Release — it doesn't depend on Node.js and doesn't build from source, so the install is instant.
+The tap registers klaridian's formula repository once; after that, `brew install klaridian` (and later `brew upgrade klaridian`) works by short name. The formula downloads the prebuilt binary from the GitHub Release — it doesn't depend on Node.js and doesn't build from source, so the install is instant.
 
 ## Direct binary download
 
@@ -65,7 +68,7 @@ Swap the asset name for your platform:
 
 ## Which channel should I pick?
 
-- Already on Node.js, or scripting with `npx`? Use **npm**.
+- Already on Node.js? Run it with **`npx`**, or install globally with **npm**.
 - Want a zero-dependency binary in a Python or mixed toolchain? Use **PyPI**.
 - On macOS or Linux and managing tools with Homebrew? Use **Homebrew**.
 - Pinning a specific version in CI, or air-gapped? Use the **direct binary download**.

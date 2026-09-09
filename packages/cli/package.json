@@ -1,6 +1,6 @@
 {
   "name": "klaridian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "description": "Generate MCP servers with built-in observability from an OpenAPI spec.",
   "keywords": [

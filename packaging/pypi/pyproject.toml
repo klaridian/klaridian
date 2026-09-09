@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "klaridian"
-version = "0.1.0"
+version = "0.1.1"
 description = "Generate MCP servers from an OpenAPI spec, with observability and tool curation — native binary, no Node required."
 readme = "README.md"
 requires-python = ">=3.8"

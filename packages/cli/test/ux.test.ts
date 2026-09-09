@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
@@ -376,5 +376,20 @@ test(
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }
+  }
+);
+
+test(
+  "--version reports the package.json version (not a drifted hardcoded literal)",
+  { timeout: 30_000 },
+  async () => {
+    // Regression guard for the 0.1.0 release bug: index.ts had `.version("0.0.1")`
+    // hardcoded, so the shipped binary reported 0.0.1 while the package was 0.1.0,
+    // and nothing tested it. The version now comes from package.json; this asserts
+    // the two never diverge again (across node AND, by construction, the compiled binary).
+    const pkgPath = path.resolve(__dirname, "../../package.json");
+    const pkg = JSON.parse(await readFile(pkgPath, "utf-8")) as { version: string };
+    const result = await execFileAsync("node", [CLI_ENTRYPOINT, "--version"]);
+    assert.equal(result.stdout.trim(), pkg.version);
   }
 );

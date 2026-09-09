@@ -14,4 +14,4 @@ One source of truth (the TypeScript CLI), multiple distribution channels
 __all__ = ["__version__"]
 
 # Kept in sync with packages/cli/package.json by the release tag gate.
-__version__ = "0.1.0"
+__version__ = "0.1.1"

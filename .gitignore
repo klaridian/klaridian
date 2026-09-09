@@ -19,3 +19,7 @@ __pycache__/
 !.github/vale/styles/config/vocabularies/klaridian/
 !.github/vale/styles/config/vocabularies/klaridian/accept.txt
 .vercel
+
+# Generated from the root README.md by packages/cli/scripts/generate-readme.mjs
+# (prepack) so the npm package ships a README. Derived artifact — do not commit.
+packages/cli/README.md

@@ -7,8 +7,40 @@ on:
     branches: [main]
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Detect WHAT changed so a docs-only change doesn't pay for the heavy E2E
+  # suite and the Python middleware pytest run (which build/install/spawn real
+  # servers). A commit that only touches prose, the landing page, or the docs
+  # site has nothing those jobs can regress -- and the release workflow is
+  # tag-only, so nothing is rebuilt or republished on a docs push regardless
+  # (ARCHITECTURE.md §69). Vale (docs-style) still runs on docs changes; the
+  # generated cli-reference gate (docs-flags-sync) still runs when CLI code
+  # changes. .github/workflows/ci.yml is included in each code filter so a
+  # change to CI itself always re-exercises the full suite.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.filter.outputs.cli }}
+      pymw: ${{ steps.filter.outputs.pymw }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cli:
+              - 'packages/cli/**'
+              - '.github/workflows/ci.yml'
+            pymw:
+              - 'packages/python-posthog-middleware/**'
+              - '.github/workflows/ci.yml'
+
   cli:
     name: CLI (Node)
+    needs: changes
+    if: ${{ needs.changes.outputs.cli == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,6 +65,8 @@ jobs:
 
   python-posthog-middleware:
     name: Python PostHog middleware
+    needs: changes
+    if: ${{ needs.changes.outputs.pymw == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,7 +90,8 @@ jobs:
     # annotated check without failing the build -- author/reviewer
     # discipline for now, not yet a hard gate. Flip continue-on-error to
     # false once the backlog of any newly-introduced violations is clean
-    # on a few consecutive PRs.
+    # on a few consecutive PRs. Runs unconditionally: prose lives across
+    # the repo, so a docs-only change is exactly when this matters most.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +120,8 @@ jobs:
 
   docs-flags-sync:
     name: CLI flags <-> docs sync (blocking)
+    needs: changes
+    if: ${{ needs.changes.outputs.cli == 'true' }}
     runs-on: ubuntu-latest
     # BLOCKING, unlike docs-style above: packages/site/content/docs/cli-reference.mdx
     # is generated from the live `klaridian generate` Command
@@ -93,7 +130,8 @@ jobs:
     # committed file doesn't match -- the exact drift (documented flags
     # that don't exist, real flags never documented) that motivated
     # building this generator in the first place. Fix locally with
-    # `npm run docs:gen` (packages/cli) and commit the result.
+    # `npm run docs:gen` (packages/cli) and commit the result. Gated on the
+    # cli filter: the generated file can only drift when CLI code changes.
     defaults:
       run:
         working-directory: packages/cli

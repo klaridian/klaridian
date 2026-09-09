@@ -1,0 +1,85 @@
+---
+title: Installation
+description: Install the klaridian CLI from npm, PyPI, or Homebrew, or download a prebuilt binary.
+---
+
+klaridian is a single CLI, published on every major channel. Each channel delivers the same generator, so pick whichever fits your toolchain.
+
+## npm (Node.js)
+
+```bash
+npm install -g klaridian
+```
+
+Or run it once without installing:
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server --plugin otel
+```
+
+The npm package runs on Node.js. If you'd rather not depend on Node, use the PyPI or Homebrew channels below — they ship a self-contained native binary.
+
+## PyPI (native binary, no Node.js)
+
+```bash
+pip install klaridian
+```
+
+`uv` and `pipx` work too:
+
+```bash
+uv tool install klaridian
+pipx install klaridian
+```
+
+This package ships a **prebuilt native binary** — no Node.js, no virtualenv, nothing to compile. It's the same CLI published to npm, compiled to a standalone executable and distributed as a platform-specific wheel (the pattern [ruff](https://pypi.org/project/ruff/) and [uv](https://pypi.org/project/uv/) use).
+
+## Homebrew (macOS and Linux, native binary)
+
+```bash
+brew install klaridian/klaridian/klaridian
+```
+
+The formula downloads the prebuilt binary from the GitHub Release — it doesn't depend on Node.js and doesn't build from source, so the install is instant.
+
+## Direct binary download
+
+Every [GitHub Release](https://github.com/klaridian/klaridian/releases/latest) attaches one bare binary per platform. Download the one for your system, mark it executable, and run it:
+
+```bash
+curl -fsSL -o klaridian \
+  https://github.com/klaridian/klaridian/releases/latest/download/klaridian-darwin-arm64
+chmod +x klaridian
+./klaridian --version
+```
+
+Swap the asset name for your platform:
+
+| Platform | Asset |
+| --- | --- |
+| macOS (Apple Silicon) | `klaridian-darwin-arm64` |
+| macOS (Intel) | `klaridian-darwin-x64` |
+| Linux (arm64) | `klaridian-linux-arm64` |
+| Linux (x64) | `klaridian-linux-x64` |
+| Windows (x64) | `klaridian-windows-x64.exe` |
+
+## Which channel should I pick?
+
+- Already on Node.js, or scripting with `npx`? Use **npm**.
+- Want a zero-dependency binary in a Python or mixed toolchain? Use **PyPI**.
+- On macOS or Linux and managing tools with Homebrew? Use **Homebrew**.
+- Pinning a specific version in CI, or air-gapped? Use the **direct binary download**.
+
+The PyPI, Homebrew, and direct-download binaries are compiled with `bun --compile` and produce byte-identical output to the Node build, so the generated servers are the same whichever channel you install from.
+
+## Verify the install
+
+```bash
+klaridian --version
+```
+
+## Next steps
+
+- [Getting started](/docs) — generate your first server
+- [Curating the tool surface](/docs/how-to/curation)
+- [CLI reference](/docs/reference/cli-reference) — every flag

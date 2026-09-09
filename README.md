@@ -8,9 +8,9 @@
 
 > Generate MCP servers with engineering + product observability built in—no manual instrumentation.
 
-**Status:** Working v0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec (Swagger 2.0 specs are automatically converted to OpenAPI 3.0)—in TypeScript or Python—optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
+**Status:** Published v0.1. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec (Swagger 2.0 specs are automatically converted to OpenAPI 3.0)—in TypeScript or Python—optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. The CLI ships on **npm, PyPI, and Homebrew**, with prebuilt native binaries for macOS, Linux, and Windows (no Node.js required). See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
-**Contents:** [What is this?](#what-is-this) · [Why](#why) · [Quickstart](#quickstart) · [Repository layout](#repository-layout) · [Status & roadmap](#status--roadmap) · [Running the tests](#running-the-tests) · [Development environment](#development-environment) · [License](#license) · [Contributing](#contributing)
+**Contents:** [What is this?](#what-is-this) · [Why](#why) · [Install](#install) · [Quickstart](#quickstart) · [Repository layout](#repository-layout) · [Status & roadmap](#status--roadmap) · [Running the tests](#running-the-tests) · [Development environment](#development-environment) · [License](#license) · [Contributing](#contributing)
 
 ## What is this?
 
@@ -28,16 +28,41 @@ OpenAPI parsing / tool-data extraction is handled by [`openapi-mcp-generator`](h
 
 Building an MCP server today means writing the server, then manually wiring up tracing and analytics—repetitive work every MCP server author does from scratch. Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own, but those let an agent *query* those platforms—they don't instrument a *new* server you're building. `klaridian` closes that gap.
 
-## Quickstart
+## Install
+
+klaridian is one CLI, distributed on every major channel. Pick whichever fits your toolchain—all deliver the same generator:
 
 ```bash
-cd packages/cli
-npm install
-npm run build
+# npm (Node.js)
+npm install -g klaridian        # or run without installing: npx klaridian ...
 
+# PyPI (prebuilt native binary — no Node.js, no virtualenv, nothing to compile)
+pip install klaridian           # or: uv tool install klaridian / pipx install klaridian
+
+# Homebrew (macOS + Linux, prebuilt native binary — no Node.js)
+brew install klaridian/klaridian/klaridian
+```
+
+The PyPI and Homebrew channels ship a **standalone native binary** (compiled with `bun --compile`, byte-identical output to the Node build), so they run with zero Node.js on the machine—the same pattern [ruff](https://pypi.org/project/ruff/) and [uv](https://pypi.org/project/uv/) use. Prebuilt binaries cover **macOS (arm64, x64), Linux (arm64, x64), and Windows (x64)**.
+
+Prefer to grab the raw binary directly? Every [GitHub Release](https://github.com/klaridian/klaridian/releases/latest) attaches one asset per platform (`klaridian-darwin-arm64`, `klaridian-darwin-x64`, `klaridian-linux-arm64`, `klaridian-linux-x64`, `klaridian-windows-x64.exe`)—download it, `chmod +x`, and run:
+
+```bash
+curl -fsSL -o klaridian \
+  https://github.com/klaridian/klaridian/releases/latest/download/klaridian-darwin-arm64
+chmod +x klaridian && ./klaridian --version
+```
+
+To build from source instead, see [Development environment](#development-environment).
+
+## Quickstart
+
+Once klaridian is on your PATH (or via `npx klaridian`), generate a server from an OpenAPI spec:
+
+```bash
 # Generate an MCP server from an OpenAPI spec, with OTel instrumentation:
-node dist/src/index.js generate \
-  --spec ../../examples/petstore/openapi.json \
+klaridian generate \
+  --spec ./openapi.json \
   --out /tmp/my-generated-server \
   --name my-petstore-server \
   --base-url https://petstore3.swagger.io/api/v3 \
@@ -54,8 +79,8 @@ npm start
 Prefer Python? Add `--language python` to emit an official `mcp` Python SDK project instead—same tools, same annotations, same instrumentation:
 
 ```bash
-node dist/src/index.js generate \
-  --spec ../../examples/petstore/openapi.json \
+klaridian generate \
+  --spec ./openapi.json \
   --out /tmp/my-generated-server \
   --base-url https://petstore3.swagger.io/api/v3 \
   --plugin otel \
@@ -97,7 +122,7 @@ klaridian/
 
 ## Status & roadmap
 
-Working v0: OpenAPI → MCP server generation, a tested OpenTelemetry / PostHog instrumentation layer, and generation-time tool curation. The generator emits a stateless `@modelcontextprotocol/server` (SDK v2, protocol 2025-11-25) project directly from tool data—the legacy v1 pipeline (which delegated to `openapi-mcp-generator`'s code generator and textually patched its output) was removed in the MCPFO-21 cutover, [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history, including the original hand-rolled OpenAPI mapper and the v1 delegation model (both superseded, kept for context).
+Published v0.1: OpenAPI → MCP server generation, a tested OpenTelemetry / PostHog instrumentation layer, and generation-time tool curation. The CLI is distributed on npm, PyPI, and Homebrew, with prebuilt native binaries for macOS, Linux, and Windows (no Node.js required)—see [Install](#install) and [ARCHITECTURE.md section 64](ARCHITECTURE.md#64-distribution-reaches-the-python-ecosystem-through-a-compiled-binary-not-a-second-generator-sep-8-2026). The generator emits a stateless `@modelcontextprotocol/server` (SDK v2, protocol 2025-11-25) project directly from tool data—the legacy v1 pipeline (which delegated to `openapi-mcp-generator`'s code generator and textually patched its output) was removed in the MCPFO-21 cutover, [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026). See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history, including the original hand-rolled OpenAPI mapper and the v1 delegation model (both superseded, kept for context).
 
 ### What's always on
 
@@ -127,7 +152,7 @@ FastMCP (the dominant Python MCP framework) ships native, zero-config OpenTeleme
 
 ### Next up
 
-Decide whether to publish the Python package to PyPI; ongoing differentiation work (see [ARCHITECTURE.md section 22](ARCHITECTURE.md#22-differentiation-paths-under-consideration-aug-30-2026)).
+The CLI now ships on PyPI (prebuilt wheels) and Homebrew alongside npm—that distribution work is done ([ARCHITECTURE.md section 64](ARCHITECTURE.md#64-distribution-reaches-the-python-ecosystem-through-a-compiled-binary-not-a-second-generator-sep-8-2026) and [section 66](ARCHITECTURE.md)). Ongoing differentiation work continues (see [ARCHITECTURE.md section 22](ARCHITECTURE.md#22-differentiation-paths-under-consideration-aug-30-2026)).
 
 See [PLAN.md](PLAN.md) for:
 - The full problem statement and validated market gap

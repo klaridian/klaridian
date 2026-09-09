@@ -5,11 +5,13 @@ description: Generate your first MCP server from an OpenAPI spec.
 
 ## Install
 
-You don't need to install anything. Run the generator with `npx`:
+The fastest path is `npx` — no install step:
 
 ```bash
 npx klaridian generate --spec ./api.yaml --out ./my-server --plugin otel
 ```
+
+Prefer a permanent install, or want a native binary with no Node.js? klaridian also ships on npm, PyPI, and Homebrew, with prebuilt binaries for macOS, Linux, and Windows — see [Installation](/docs/how-to/installation) for every option.
 
 klaridian is a CLI today. There's no library mode yet (no `import`/`require`)—that's tracked separately, not built.
 
@@ -17,7 +19,7 @@ klaridian is a CLI today. There's no library mode yet (no `import`/`require`)—
 
 - One MCP tool per operation in your OpenAPI spec
 - Tool names match your spec's `operationId`s exactly
-- A stateless TypeScript server, ready to run
+- A stateless server in TypeScript (default) or Python (`--language python`), ready to run
 - OpenTelemetry tracing already wired in, if you passed `--plugin otel`
 
 Got a Swagger 2.0 spec? Pass it the same way—klaridian detects it and converts it to OpenAPI 3.0 before generating, so you don't have to convert it yourself.

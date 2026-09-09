@@ -79,9 +79,19 @@ export default function Home() {
       {/* Quick install — the one prominent code block */}
       <section id="install" className="py-[60px]">
         <div className="max-w-[860px] mx-auto px-5 text-center">
-          <h2 className="text-xl font-extrabold mb-7">Quick install</h2>
+          <h2 className="text-xl font-extrabold mb-3">Quick install</h2>
+          <p className="text-xs max-w-[440px] mx-auto mb-7 text-[#444]">
+            One CLI on npm, PyPI, and Homebrew — prebuilt native binaries for
+            macOS, Linux, and Windows, no Node.js required.
+          </p>
           <CopyInstallCommand />
           <div className="text-xs mt-5">
+            <Link
+              href="/docs/how-to/installation"
+              className="underline decoration-[var(--klaridian-accent)] underline-offset-4 mx-2.5"
+            >
+              All install options
+            </Link>
             <Link
               href="/docs"
               className="underline decoration-[var(--klaridian-accent)] underline-offset-4 mx-2.5"

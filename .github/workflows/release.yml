@@ -107,7 +107,19 @@ jobs:
           npm run build
       - name: Publish (OIDC, provenance)
         working-directory: packages/cli
-        run: npm publish --access public
+        run: |
+          # Idempotent publish: npm refuses to republish an existing version,
+          # so on a re-triggered release of the SAME tag (e.g. v0.1.0 after a
+          # downstream leg like a retired runner stalled the first run) a bare
+          # `npm publish` would fail and block github-release. Skip cleanly if
+          # the version is already on the registry; the artifact is immutable
+          # and identical either way. verify remains the single test gate.
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "klaridian@$VERSION" version >/dev/null 2>&1; then
+            echo "klaridian@$VERSION already published — skipping publish (idempotent re-run)."
+          else
+            npm publish --access public
+          fi
 
   # ---------------------------------------------------------------------------
   # Cross-compile the CLI to a standalone binary per platform (bun --compile),
@@ -129,7 +141,14 @@ jobs:
             bun_target: bun-darwin-arm64
             wheel_plat: macosx_11_0_arm64
             can_run: true
-          - runner: macos-13
+          # macos-13 (Intel) was retired by GitHub on 2025-12-04 — a job
+          # requesting it queues forever (never provisions), which is what
+          # stalled the first v0.1.0 release for ~8h. macos-15-intel is the
+          # official x86_64 replacement label (available until Aug 2027).
+          # Durable follow-up (MCPFO-70, ARCHITECTURE.md §68): cross-compile
+          # this target on macos-14 arm64 with --target=bun-darwin-x64 +
+          # can_run:false to drop the scarce, sunsetting Intel runner entirely.
+          - runner: macos-15-intel
             bun_target: bun-darwin-x64
             wheel_plat: macosx_10_12_x86_64
             can_run: true

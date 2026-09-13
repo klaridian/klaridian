@@ -325,7 +325,7 @@ const KLARIDIAN_SPEC = {
       post: {
         operationId: "createThing",
         summary: "Create a thing",
-        "x-klaridian": { readOnly: false, destructive: true, openWorld: false, expose: true },
+        "x-klaridian": { readOnly: false, destructive: true, openWorld: false, expose: true, title: "Add a thing" },
         responses: { "200": { description: "ok" } },
       },
       // GET the author hides from the tool surface via x-klaridian.expose.
@@ -396,12 +396,19 @@ test(
       assert.match(createBlock, /destructiveHint: true/);
       assert.match(createBlock, /openWorldHint: false/);
       assert.match(createBlock, /readOnlyHint: false/);
+      // Title precedence (MCPFO-77): x-klaridian.title wins over the summary.
+      assert.match(createBlock, /title: "Add a thing"/, "x-klaridian.title beats summary");
+      assert.doesNotMatch(createBlock, /title: "Create a thing"/);
 
       // getThing block: only openWorld was set → readOnly stays the GET default.
       // (The sibling object x-mcp said readOnly:false and is correctly ignored.)
       const getBlock = src.slice(src.indexOf('"getThing"'));
       assert.match(getBlock, /readOnlyHint: true/, "unset x-klaridian.readOnly falls back to GET default");
       assert.match(getBlock, /openWorldHint: false/, "author override applied");
+      // Title precedence: no x-klaridian.title → the OpenAPI summary is used,
+      // NOT the humanized operationId ("Get Thing").
+      assert.match(getBlock, /title: "Get a thing"/, "summary used as title when no x-klaridian.title");
+      assert.doesNotMatch(getBlock, /title: "Get Thing"/);
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }

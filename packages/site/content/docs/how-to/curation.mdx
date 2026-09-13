@@ -82,7 +82,24 @@ paths:
         readOnly: true       # a POST that only reads
 ```
 
-Each hint is optional and overrides the method-derived default **for that hint alone**—anything you leave out keeps its default. Recognised keys: `readOnly`, `destructive`, `openWorld`, and `expose`.
+Each hint is optional and overrides the method-derived default **for that hint alone**—anything you leave out keeps its default. Recognised keys: `readOnly`, `destructive`, `openWorld`, `expose`, and `title`.
+
+### Set the tool title
+
+By default a tool's display title is the operation's `summary`, falling back to a humanized version of its `operationId` (`listBooks` → "List Books"). Set `title` on `x-klaridian` to override both:
+
+```yaml
+paths:
+  /books/{id}:
+    delete:
+      operationId: deleteBook
+      summary: Delete a book
+      x-klaridian:
+        destructive: true
+        title: Remove a book from the catalog   # wins over the summary
+```
+
+Title precedence is `x-klaridian.title` → the OpenAPI `summary` → the humanized `operationId`. The tool's `name` (what the agent calls) is always the `operationId`—only the human-facing title changes.
 
 A ready-to-generate example lives at [`examples/annotated/openapi.json`](https://github.com/klaridian/klaridian/blob/main/examples/annotated/openapi.json) in the repository.
 

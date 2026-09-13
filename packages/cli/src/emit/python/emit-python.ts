@@ -124,7 +124,7 @@ function emitToolsModule(tools: ToolIR[]): string {
   const registry = entries
     .map(({ tool, fn }) => {
       const ann = resolveAnnotations(tool);
-      const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
+      const title = titleForTool(tool);
       return `    {
         "name": ${pyStr(tool.name)},
         "title": ${pyStr(title)},

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { annotationsForMethod, titleForTool, resolveAnnotations } from "../src/emit/emit-tool.js";
 import {
   parseKlaridianAnnotations,
-  extractKlaridianByOperationId,
+  extractOperationMetaByOperationId,
   prepareSpecForEngine,
   type ToolIR,
 } from "../src/emit/ir.js";
@@ -61,13 +61,33 @@ test("PATCH → write, non-idempotent, non-destructive (partial update)", () => 
   assert.equal(a.destructiveHint, false);
 });
 
-test("titleForTool humanizes camelCase and snake_case operation names", () => {
+test("titleForTool: precedence is x-klaridian.title → summary → humanized operationId", () => {
+  // 3. fallback: humanized operationId when nothing else is present
   assert.equal(titleForTool({ name: "getPetById", operationId: "getPetById" } as any), "Get Pet By Id");
-  assert.equal(titleForTool({ name: "find_pets_by_status", operationId: "find_pets_by_status" } as any), "Find Pets By Status");
-});
-
-test("titleForTool prefers a summary when the tool carries one", () => {
-  assert.equal(titleForTool({ name: "getPetById", summary: "Find pet by ID" } as any), "Find pet by ID");
+  assert.equal(
+    titleForTool({ name: "find_pets_by_status", operationId: "find_pets_by_status" } as any),
+    "Find Pets By Status"
+  );
+  // 2. summary beats the operationId fallback
+  assert.equal(
+    titleForTool({ name: "getPetById", operationId: "getPetById", summary: "Find pet by ID" } as any),
+    "Find pet by ID"
+  );
+  // 1. x-klaridian.title beats both summary and operationId
+  assert.equal(
+    titleForTool({
+      name: "getPetById",
+      operationId: "getPetById",
+      summary: "Find pet by ID",
+      klaridian: { title: "Look up a pet" },
+    } as any),
+    "Look up a pet"
+  );
+  // an empty/blank x-klaridian.title is ignored, falling through to summary
+  assert.equal(
+    titleForTool({ name: "getPetById", summary: "Find pet by ID", klaridian: { title: "  " } } as any),
+    "Find pet by ID"
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -106,6 +126,13 @@ test("parseKlaridianAnnotations: unknown/non-boolean keys are dropped; empty/non
   assert.equal(parseKlaridianAnnotations(null), undefined);
 });
 
+test("parseKlaridianAnnotations: title is read when a non-empty string; blank/non-string dropped", () => {
+  assert.deepEqual(parseKlaridianAnnotations({ title: "Look up a pet" }), { title: "Look up a pet" });
+  assert.deepEqual(parseKlaridianAnnotations({ title: "  spaced  " }), { title: "spaced" });
+  assert.equal(parseKlaridianAnnotations({ title: "   " }), undefined); // blank → nothing usable
+  assert.equal(parseKlaridianAnnotations({ title: 42 }), undefined); // non-string dropped
+});
+
 test("resolveAnnotations: no x-klaridian → identical to method-derived defaults", () => {
   assert.deepEqual(resolveAnnotations(toolIR({ method: "post" })), annotationsForMethod("post"));
 });
@@ -131,20 +158,28 @@ test("resolveAnnotations: an absent x-klaridian key falls back to that one hint'
   assert.equal(a.idempotentHint, true); // still the GET default
 });
 
-test("extractKlaridianByOperationId: collects x-klaridian keyed by operationId", () => {
+test("extractOperationMetaByOperationId: collects summary + x-klaridian keyed by operationId", () => {
   const doc: any = {
     openapi: "3.0.0",
     info: { title: "t", version: "1" },
     paths: {
-      "/a": { get: { operationId: "aGet", "x-klaridian": { readOnly: true, expose: true } } },
-      "/b": { post: { operationId: "bPost", "x-mcp": false } }, // boolean x-mcp → not ours
-      "/c": { get: { operationId: "cGet" } }, // no x-klaridian
+      "/a": {
+        get: {
+          operationId: "aGet",
+          summary: "List things",
+          "x-klaridian": { readOnly: true, expose: true },
+        },
+      },
+      "/b": { post: { operationId: "bPost", "x-mcp": false } }, // boolean x-mcp → not ours, no summary
+      "/c": { get: { operationId: "cGet", summary: "Only a summary" } }, // summary, no x-klaridian
+      "/d": { get: { operationId: "dGet" } }, // neither → omitted
     },
   };
-  const map = extractKlaridianByOperationId(doc);
-  assert.deepEqual(map.get("aGet"), { readOnly: true, expose: true });
+  const map = extractOperationMetaByOperationId(doc);
+  assert.deepEqual(map.get("aGet"), { summary: "List things", klaridian: { readOnly: true, expose: true } });
+  assert.deepEqual(map.get("cGet"), { summary: "Only a summary" });
   assert.equal(map.has("bPost"), false);
-  assert.equal(map.has("cGet"), false);
+  assert.equal(map.has("dGet"), false);
 });
 
 test("prepareSpecForEngine: x-klaridian.expose:false → x-mcp:false; object x-mcp collapsed; input untouched", () => {

@@ -46,6 +46,9 @@ export interface KlaridianAnnotations {
   openWorld?: boolean;
   /** `false` hides the operation from the tool surface. Missing = exposed. */
   expose?: boolean;
+  /** Explicit human-readable tool title; top of the title precedence chain
+   *  (`x-klaridian.title` → OpenAPI `summary` → humanized operationId). */
+  title?: string;
 }
 
 /** The vendor-extension key klaridian reads for per-operation annotations. */
@@ -81,19 +84,32 @@ export function parseKlaridianAnnotations(raw: unknown): KlaridianAnnotations | 
   if (destructive !== undefined) result.destructive = destructive;
   if (openWorld !== undefined) result.openWorld = openWorld;
   if (expose !== undefined) result.expose = expose;
+  if (typeof obj.title === "string" && obj.title.trim()) result.title = obj.title.trim();
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** Per-operation metadata klaridian recovers from the raw spec because the
+ *  `openapi-mcp-generator` engine drops it: the OpenAPI `summary` and the
+ *  `x-klaridian` annotations. Both feed the emitter (title + tool hints). */
+export interface OperationMeta {
+  /** OpenAPI operation `summary`, if the author wrote one. */
+  summary?: string;
+  /** Parsed `x-klaridian` annotations, if present + usable. */
+  klaridian?: KlaridianAnnotations;
+}
+
 /**
- * Walk a parsed OpenAPI document and collect the `x-klaridian` annotations keyed
- * by operationId. Only operation-level `x-klaridian` is read. Operations without
- * an operationId or without a usable `x-klaridian` are omitted — a caller looking
- * one up gets undefined and keeps the method-derived defaults.
+ * Walk a parsed OpenAPI document and collect per-operation metadata keyed by
+ * operationId: the `summary` and `x-klaridian` annotations. The engine
+ * (`getToolsFromOpenApi`) carries neither onto `McpToolDefinition`, so klaridian
+ * recovers them here and threads them onto ToolIR via the adapter. Operations
+ * with no operationId, or with neither a summary nor a usable `x-klaridian`, are
+ * omitted — a caller looking one up gets undefined and keeps the defaults.
  */
-export function extractKlaridianByOperationId(
+export function extractOperationMetaByOperationId(
   doc: OpenAPIV3.Document
-): Map<string, KlaridianAnnotations> {
-  const map = new Map<string, KlaridianAnnotations>();
+): Map<string, OperationMeta> {
+  const map = new Map<string, OperationMeta>();
   const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
   for (const pathItem of Object.values(doc.paths ?? {})) {
     if (!pathItem || typeof pathItem !== "object") continue;
@@ -102,8 +118,11 @@ export function extractKlaridianByOperationId(
       if (!op || typeof op !== "object") continue;
       const operationId = op.operationId;
       if (!operationId) continue;
-      const parsed = parseKlaridianAnnotations((op as Record<string, unknown>)[KLARIDIAN_EXTENSION]);
-      if (parsed) map.set(operationId, parsed);
+      const meta: OperationMeta = {};
+      if (typeof op.summary === "string" && op.summary.trim()) meta.summary = op.summary.trim();
+      const klaridian = parseKlaridianAnnotations((op as Record<string, unknown>)[KLARIDIAN_EXTENSION]);
+      if (klaridian) meta.klaridian = klaridian;
+      if (meta.summary || meta.klaridian) map.set(operationId, meta);
     }
   }
   return map;
@@ -166,15 +185,14 @@ export interface ToolIRExecutionParameter {
  * klaridian's own per-tool IR. The rest of the codebase imports THIS, never
  * `McpToolDefinition` from openapi-mcp-generator.
  *
- * Field provenance (all currently sourced from `getToolsFromOpenApi()`):
+ * Field provenance:
  *   - name, description, method, pathTemplate, inputSchema, executionParameters,
  *     requestBodyContentType, securityRequirements, operationId, tags, deprecated
  *     come straight from `McpToolDefinition`.
- *   - `summary` is NOT on `McpToolDefinition`; `titleForTool()` already reads it
- *     optionally (falling back to operationId), so it is undefined today. It is
- *     declared here to capture the shape the code already expects — the adapter
- *     maps it faithfully (undefined in, undefined out), preserving behavior. A
- *     future ticket (MCPFO-77) can populate it from the OpenAPI summary.
+ *   - `summary` and `klaridian` are recovered from the raw spec (the engine drops
+ *     both) and threaded in via the adapter's `meta` arg — see
+ *     `extractOperationMetaByOperationId`. `summary` feeds the tool title
+ *     (MCPFO-77); `klaridian` feeds tool hints + title + expose (MCPFO-76).
  */
 export interface ToolIR {
   /** Unique tool name (already de-duplicated/sanitized upstream). */
@@ -199,8 +217,8 @@ export interface ToolIR {
   tags?: string[];
   /** Whether the operation is marked deprecated in the spec (docs surface it). */
   deprecated?: boolean;
-  /** OpenAPI operation summary, if present. Undefined today; reserved for
-   *  summary-derived tool titles (MCPFO-77). */
+  /** OpenAPI operation summary, recovered from the raw spec. Top-but-one of the
+   *  title precedence chain (after `klaridian.title`, before the operationId). */
   summary?: string;
   /** Author-supplied `x-klaridian` annotations (MCPFO-76). Undefined when the
    *  operation carries no usable `x-klaridian` — the emitter then uses its
@@ -223,7 +241,7 @@ export interface ToolIR {
  */
 export function mapMcpToolDefinitionToIR(
   tool: McpToolDefinitionLike,
-  klaridian?: KlaridianAnnotations
+  meta?: OperationMeta
 ): ToolIR {
   return {
     name: tool.name,
@@ -240,9 +258,10 @@ export function mapMcpToolDefinitionToIR(
     operationId: tool.operationId,
     tags: tool.tags,
     deprecated: tool.deprecated,
-    // Not present on McpToolDefinition today; captured for faithful shape.
-    summary: (tool as { summary?: string }).summary,
-    klaridian,
+    // Recovered from the raw spec (the engine drops both): the OpenAPI summary
+    // feeds the tool title, and x-klaridian feeds hints + title + expose.
+    summary: meta?.summary,
+    klaridian: meta?.klaridian,
   };
 }
 

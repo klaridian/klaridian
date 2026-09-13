@@ -79,8 +79,8 @@
         "operationId": "deleteBook",
         "summary": "Delete a book",
         "tags": ["books"],
-        "description": "Permanently removes a book. Explicitly marked destructive so the agent warns before calling it.",
-        "x-klaridian": { "destructive": true },
+        "description": "Permanently removes a book. Explicitly marked destructive so the agent warns before calling it. `title` overrides the summary for the tool's display name.",
+        "x-klaridian": { "destructive": true, "title": "Remove a book from the catalog" },
         "parameters": [
           {
             "name": "id",

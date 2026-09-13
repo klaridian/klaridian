@@ -47,11 +47,20 @@ export function annotationsForMethod(method: string): {
 }
 
 /**
- * Human-readable tool title required by both marketplaces. Prefers an explicit
- * OpenAPI summary; otherwise humanizes the operation name (camelCase and
- * snake_case → "Title Case Words").
+ * Human-readable tool title required by both marketplaces. Precedence:
+ *   1. `x-klaridian.title` — the author's explicit override (MCPFO-76/77).
+ *   2. OpenAPI `summary` — the author's human label for the operation.
+ *   3. humanized operationId (camelCase / snake_case → "Title Case Words").
+ * The tool `name` is never affected — only the display title.
  */
-export function titleForTool(tool: { name: string; operationId?: string; summary?: string }): string {
+export function titleForTool(tool: {
+  name: string;
+  operationId?: string;
+  summary?: string;
+  klaridian?: { title?: string };
+}): string {
+  const explicit = (tool.klaridian?.title ?? "").trim();
+  if (explicit) return explicit;
   const summary = (tool.summary ?? "").trim();
   if (summary) return summary;
   const raw = tool.operationId || tool.name || "";
@@ -150,7 +159,7 @@ function emitHandlerBody(tool: ToolIR): string {
 export function emitToolBlock(tool: ToolIR, wrap?: { fn: string }): string {
   const zodSrc = jsonSchemaToZod(tool.inputSchema ?? { type: "object", properties: {} });
   const ann = resolveAnnotations(tool);
-  const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
+  const title = titleForTool(tool);
   const wiring = wrap ? { importStatement: "", wrapFunctionName: wrap.fn } : undefined;
   const handlerOpen = typescriptPluginDispatch.wrapHandlerOpen(tool.name, wiring);
   const handlerClose = typescriptPluginDispatch.wrapHandlerClose(wiring);

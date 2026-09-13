@@ -27,7 +27,7 @@ import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
-import { mapMcpToolDefinitionToIR, extractKlaridianByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
+import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -584,19 +584,20 @@ export function registerGenerateCommand(program: Command): void {
             specPath = convertedSpecPath;
           }
 
-          // MCPFO-76 (ARCHITECTURE.md §72): recover `x-klaridian` annotations
-          // and prepare the spec for the engine, ONCE up front so every
-          // downstream engine call (listOperations below, and generation)
-          // operates on the same document. `prepareSpecForEngine` (a) applies
-          // `x-klaridian.expose: false` as a native `x-mcp: false` exclusion and
-          // (b) collapses any third-party object `x-mcp` to a boolean so the
-          // engine's boolean-only reader stays quiet. The rich hints are
-          // recovered from the ORIGINAL doc and threaded onto each tool's IR
-          // below. Only writes a temp spec when preparation actually changed
-          // something, so the common path (no x-klaridian, no object x-mcp) is
-          // untouched.
+          // MCPFO-76/77 (ARCHITECTURE.md §72/§73): recover per-operation
+          // metadata — the OpenAPI `summary` and `x-klaridian` annotations — and
+          // prepare the spec for the engine, ONCE up front so every downstream
+          // engine call (listOperations below, and generation) operates on the
+          // same document. The engine drops both summary and x-klaridian, so we
+          // recover them from the ORIGINAL doc and thread them onto each tool's
+          // IR below (summary → title, x-klaridian → hints/title/expose).
+          // `prepareSpecForEngine` (a) applies `x-klaridian.expose: false` as a
+          // native `x-mcp: false` exclusion and (b) collapses any third-party
+          // object `x-mcp` to a boolean so the engine's boolean-only reader stays
+          // quiet. Only writes a temp spec when preparation actually changed
+          // something, so the common path is untouched.
           const originalDoc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
-          const klaridianByOperationId = extractKlaridianByOperationId(originalDoc);
+          const metaByOperationId = extractOperationMetaByOperationId(originalDoc);
           const preparedDoc = prepareSpecForEngine(originalDoc);
           if (JSON.stringify(preparedDoc) !== JSON.stringify(originalDoc)) {
             const { dir, specPath: preparedPath } = await writeTempSpec(
@@ -687,12 +688,12 @@ export function registerGenerateCommand(program: Command): void {
           // on the codebase depends on klaridian's own ToolIR, never
           // openapi-mcp-generator's McpToolDefinition. Swapping the frontend
           // engine later means replacing only this mapping + the curation.ts
-          // call site, not every emitter. The x-klaridian hints recovered above
-          // are threaded onto each tool here (MCPFO-76); operations the author
-          // set `expose: false` on were already dropped by the engine via the
-          // spec-preparation step.
+          // call site, not every emitter. The recovered per-operation metadata
+          // (summary + x-klaridian) is threaded onto each tool here (MCPFO-76/77);
+          // operations the author set `expose: false` on were already dropped by
+          // the engine via the spec-preparation step.
           const tools: ToolIR[] = rawTools.map((t) =>
-            mapMcpToolDefinitionToIR(t, klaridianByOperationId.get(t.operationId))
+            mapMcpToolDefinitionToIR(t, metaByOperationId.get(t.operationId))
           );
           if (tools.length === 0) {
             fail(

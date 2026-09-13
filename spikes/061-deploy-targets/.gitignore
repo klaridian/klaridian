@@ -1,0 +1,9 @@
+# Spike is throwaway; never commit installed deps, build output, or venvs.
+server/node_modules/
+server/dist/
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.wrangler/
+**/dist-worker/
+*.log

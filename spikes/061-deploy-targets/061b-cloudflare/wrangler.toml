@@ -1,0 +1,13 @@
+# EMITTED ARTIFACT (spike): what `klaridian deploy --target cloudflare` would write.
+name = "klaridian-deploy-demo"
+main = "worker.ts"
+compatibility_date = "2025-09-01"
+# nodejs_compat lets the MCP SDK's node-ish internals resolve on workerd.
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+KLARIDIAN_BASE_URL = "https://petstore3.swagger.io/api/v3"
+# On Workers, the public hostname is *.workers.dev / a custom domain, so the
+# server's Host-header allow-list must include it (see FINDINGS). Passed as a
+# var here; the emitted worker reads KLARIDIAN_ALLOWED_HOSTS from env.
+KLARIDIAN_ALLOWED_HOSTS = "klaridian-deploy-demo.workers.dev"

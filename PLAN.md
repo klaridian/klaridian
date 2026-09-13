@@ -282,6 +282,23 @@ A fresh, deep competitive-analysis pass (`2026-09-06-competitive-analysis-review
 
 **Unchanged and reaffirmed by this review:** the open-core model (section 3), the no-CLI-telemetry decision (section 3), and the standalone-generator/vendored-instrumentation architecture (section 14). Nothing here contradicts prior decisions—it sharpens the "why us" narrative (trust/sovereignty over feature novelty) and adds a documentation/positioning workstream that wasn't previously tracked.
 
+## 17. Deploy story: emit + shell-out, and the OSS-first target ordering is docker → cloudflare → fly (Sep 13, 2026)
+
+Raised directly: "should klaridian have a deploy?" Decided **yes—but as an "emit artifacts + shell out to the platform's native CLI" story, not a hand-rolled deploy engine**, and sequenced deliberately. This is the strategy/positioning half; the technical mechanics and the §55 reopening are in ARCHITECTURE.md §78. Both cite **Plane: MCPFO-86**, validated by `spikes/061-deploy-targets/`.
+
+**Why a deploy story at all (open-core fit).** `generate` produces an MCP server but leaves the "last mile" (where it runs) to the user. A deploy story closes the loop, and—more to the point for the business model—the *managed runtime* is the natural anchor for the paid tier and the only place the observability plugins prove their value in production. The open-core split: the CLI emits deploy artifacts + shells out to `wrangler`/`flyctl` (free, vendor-neutral); a managed klaridian runtime is the paid layer (section 4, Phase 1, still gated on demand—NOT built here).
+
+**Why NOT a deploy engine.** Reimplementing infra (auth, secrets, TLS, per-platform APIs) competes with `wrangler`/`flyctl`/`vercel` at their own core and loses. The value is emitting correct, minimal, platform-native config + a shell-out, plus (paid) a managed runtime with observability wired in—not the `deploy` verb itself, which `git push` + a Dockerfile already commoditize.
+
+**The target ordering flips under an OSS lens—decided docker → cloudflare → fly.** The technical "best first" answer (Fly, universal container) is NOT the OSS-adoption-best answer. For an open-source project the first-target criteria are (1) time-to-first-success without a credit card, (2) contributors can validate in CI without the maintainer's secrets, (3) vendor-neutral over lock-in. Against those:
+- **`--target docker` first**—the true baseline. A portable Dockerfile is the most OSS-native artifact there is: vendor-neutral, universal (TS *and* Python), no account wall, validated by a plain `docker build`. The user carries it anywhere (Fly, Render, Railway, Cloud Run, self-host).
+- **`--target cloudflare` second**—the adoption flywheel. Real free tier with **no credit card**, one-command public URL for a README/demo, and `wrangler deploy --dry-run` is a **zero-account CI gate** a forking contributor can run without any secret. TS-only, but that's exactly the audience that wants edge.
+- **`--target fly` third**—a named convenience over the same Dockerfile. Fly's signup asks for a card (a trial barrier), and meaningful validation needs Docker or a login, so it's a worse *first* despite being the best *universal* target.
+
+**Lock-in honesty.** Leading with vendor targets risks looking like funneling users to a commercial platform. Mitigated structurally: the emitter also produces the neutral Dockerfile, and the *generated server itself* is standard, portable MCP—only the throwaway deploy config is platform-specific, never the server code.
+
+**Sequencing (when, not just what).** Don't build deploy until (a) `generate` is loved and (b) the observability plugins have a runtime to prove value—otherwise it's building on sand right after v0.1.1. This is v0.3–0.4 territory. The Python-can't-target-Workers limitation is a non-issue: nobody choosing `--language python` also wants edge; they deploy to containers, which `--target docker`/`fly` cover. `--target cloudflare` on a Python project must fail loudly (fail-loud contract).
+
 
 
 

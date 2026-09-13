@@ -14,6 +14,7 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { emitDockerArtifacts } from "../src/emit/deploy/emit-docker.js";
 import { emitCloudflareArtifacts } from "../src/emit/deploy/emit-cloudflare.js";
+import { emitFlyArtifacts } from "../src/emit/deploy/emit-fly.js";
 import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -206,6 +207,65 @@ test(
       }
       assert.equal(payload!.success, false);
       assert.equal(payload!.stage, "validate-language");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// --- Fly target (MCPFO-86 step 4, final) ---
+
+test("fly: emits the Docker artifacts plus a fly.toml that builds from the Dockerfile", () => {
+  const files = emitFlyArtifacts({ language: "typescript", port: 3000, appName: "my-server" });
+  assert.ok(files["Dockerfile"], "reuses the Docker target's Dockerfile");
+  assert.ok(files[".dockerignore"], "reuses the Docker target's .dockerignore");
+  const toml = files["fly.toml"];
+  assert.match(toml, /app = "my-server"/, "app name from the project");
+  assert.match(toml, /dockerfile = "Dockerfile"/, "builds from the emitted Dockerfile");
+  assert.match(toml, /internal_port = 3000/, "internal_port matches the generated port");
+  assert.match(toml, /force_https = true/, "serves over https");
+  assert.match(toml, /KLARIDIAN_ALLOWED_HOSTS = "my-server\.fly\.dev"/, "presets the fly.dev host");
+  assert.match(toml, /KLARIDIAN_BIND_HOST = "0\.0\.0\.0"/, "binds all interfaces in the container");
+});
+
+test("fly: works for the Python target (a container is language-neutral)", () => {
+  const files = emitFlyArtifacts({ language: "python", port: 8080, appName: "py-server" });
+  assert.match(files["Dockerfile"], /FROM python:3\.12-slim/, "Python container base");
+  assert.match(files["fly.toml"], /internal_port = 8080/, "internal_port matches the generated Python port");
+});
+
+test("fly: app name is normalized to a valid fly app name", () => {
+  const files = emitFlyArtifacts({ language: "typescript", port: 3000, appName: "My Server!" });
+  assert.match(files["fly.toml"], /app = "my-server"/, "normalized to lowercase alphanumeric + hyphens");
+});
+
+test(
+  "deploy --target fly: emits Dockerfile + fly.toml for a real TS streamable-http project",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-fly-"));
+    try {
+      await execFileAsync("node", [
+        CLI_ENTRYPOINT, "generate",
+        "--spec", PETSTORE_SPEC_PATH,
+        "--out", outputDir,
+        "--name", "fly-e2e",
+        "--base-url", "https://petstore3.swagger.io/api/v3",
+        "--transport", "streamable-http",
+        "--port", "3000",
+        "--license", "none",
+      ]);
+
+      const result = await execFileAsync("node", [CLI_ENTRYPOINT, "deploy", outputDir, "--target", "fly", "--json"]);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.success, true);
+      assert.equal(payload.target, "fly");
+      assert.deepEqual(payload.files.sort(), [".dockerignore", "Dockerfile", "fly.toml"]);
+
+      const toml = await readFile(path.join(outputDir, "fly.toml"), "utf-8");
+      assert.match(toml, /dockerfile = "Dockerfile"/);
+      assert.match(toml, /internal_port = 3000/);
+      assert.ok(await readFile(path.join(outputDir, "Dockerfile"), "utf-8"), "Dockerfile present alongside fly.toml");
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }

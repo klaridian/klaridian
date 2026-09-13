@@ -42,6 +42,23 @@ npx wrangler deploy
 
 `wrangler.toml` presets `KLARIDIAN_ALLOWED_HOSTS` to `<name>.workers.dev` — add your custom domain if you use one. This target is **TypeScript-only**: Cloudflare Workers runs JavaScript, so a Python project (or a `code-mode` server, which spawns a Deno sandbox) is refused — use `--target docker` for those.
 
+## Fly.io (one-command container deploy)
+
+```bash
+klaridian deploy ./my-server --target fly
+```
+
+This writes the Docker artifacts plus a `fly.toml`. Fly builds and runs the emitted `Dockerfile`, so this works for **both** TypeScript and Python projects. Deploy with Fly's CLI:
+
+```bash
+cd ./my-server
+fly launch --copy-config --no-deploy   # claims a unique app name, updates fly.toml
+fly secrets set KLARIDIAN_BASE_URL=https://api.example.com
+fly deploy
+```
+
+`fly.toml` presets `KLARIDIAN_ALLOWED_HOSTS` to `<app>.fly.dev`, sets `internal_port` to the generated port, `force_https`, and scale-to-zero (`min_machines_running = 0`) so an idle server costs nothing. Update the host if you attach a custom domain.
+
 ## Reaching the server once it's deployed
 
 The generated server reads its runtime configuration from the environment (see [Transports](/docs/how-to/transports) for the full table). Two matter most in a container:
@@ -53,9 +70,7 @@ The generated server reads its runtime configuration from the environment (see [
 
 | Flag | What it does |
 | --- | --- |
-| `--target <target>` | Which target to emit for: `docker` or `cloudflare`. |
+| `--target <target>` | Which target to emit for: `docker`, `cloudflare`, or `fly`. |
 | `--out <dir>` | Where to write the artifacts. Defaults to the project directory. |
 | `--force` | Overwrite existing artifacts instead of refusing. |
 | `--json` | Print a single machine-readable JSON result instead of human-readable lines. |
-
-A Fly target (a one-command container deploy over the same Dockerfile) is planned on top of this same emit + shell-out model.

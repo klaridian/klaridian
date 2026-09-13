@@ -26,9 +26,10 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { createCliOutput } from "../cli-output.js";
 import { emitDockerArtifacts, type DeployLanguage } from "../emit/deploy/emit-docker.js";
 import { emitCloudflareArtifacts } from "../emit/deploy/emit-cloudflare.js";
+import { emitFlyArtifacts } from "../emit/deploy/emit-fly.js";
 
-/** Deploy targets shipped so far. fly is a tracked follow-up (§78). */
-const SUPPORTED_TARGETS = ["docker", "cloudflare"] as const;
+/** Deploy targets. docker (portable), cloudflare (edge, TS-only), fly (container). */
+const SUPPORTED_TARGETS = ["docker", "cloudflare", "fly"] as const;
 type DeployTarget = (typeof SUPPORTED_TARGETS)[number];
 
 /**
@@ -230,6 +231,13 @@ export function registerDeployCommand(program: Command): void {
             return;
           }
           artifacts = emitCloudflareArtifacts({ serverName: await serverNameFor(detected, dir), hasAuth: detected.hasAuth });
+        } else if (opts.target === "fly") {
+          // Fly runs a container — works for both languages (unlike cloudflare).
+          artifacts = emitFlyArtifacts({
+            language: detected.language,
+            port: detected.port,
+            appName: await serverNameFor(detected, dir),
+          });
         } else {
           artifacts = emitDockerArtifacts({ language: detected.language, port: detected.port });
         }
@@ -252,16 +260,25 @@ export function registerDeployCommand(program: Command): void {
           step(`Wrote ${path.join(outDir, name)}`);
         }
 
-        const nextSteps =
-          opts.target === "cloudflare"
-            ? "Next: validate with `npx wrangler deploy --dry-run` (no account needed), " +
-              "set KLARIDIAN_BASE_URL in wrangler.toml, then `npx wrangler deploy`. " +
-              "KLARIDIAN_ALLOWED_HOSTS is preset to <name>.workers.dev — add your custom domain if you use one."
-            : "Next: build and run locally with `docker build -t my-server " +
-              `${path.relative(process.cwd(), outDir) || "."}` +
-              "` then `docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=<api> my-server`. " +
-              "To deploy, hand the Dockerfile to your platform's CLI (for example `fly launch` / `fly deploy`). " +
-              "Set KLARIDIAN_ALLOWED_HOSTS to your public hostname so requests aren't rejected with 403.";
+        let nextSteps: string;
+        if (opts.target === "cloudflare") {
+          nextSteps =
+            "Next: validate with `npx wrangler deploy --dry-run` (no account needed), " +
+            "set KLARIDIAN_BASE_URL in wrangler.toml, then `npx wrangler deploy`. " +
+            "KLARIDIAN_ALLOWED_HOSTS is preset to <name>.workers.dev — add your custom domain if you use one.";
+        } else if (opts.target === "fly") {
+          nextSteps =
+            "Next: `fly launch --copy-config --no-deploy` to claim a unique app name (updates fly.toml), " +
+            "then `fly deploy`. Set your upstream API with `fly secrets set KLARIDIAN_BASE_URL=<api>`. " +
+            "KLARIDIAN_ALLOWED_HOSTS is preset to <app>.fly.dev — update it if you set a custom domain.";
+        } else {
+          nextSteps =
+            "Next: build and run locally with `docker build -t my-server " +
+            `${path.relative(process.cwd(), outDir) || "."}` +
+            "` then `docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=<api> my-server`. " +
+            "To deploy, hand the Dockerfile to your platform's CLI (for example `fly launch` / `fly deploy`). " +
+            "Set KLARIDIAN_ALLOWED_HOSTS to your public hostname so requests aren't rejected with 403.";
+        }
 
         if (opts.json) {
           process.stdout.write(

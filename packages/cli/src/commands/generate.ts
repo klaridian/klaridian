@@ -431,15 +431,8 @@ export function registerGenerateCommand(program: Command): void {
             );
             return;
           }
-          if (language === "python" && opts.oauthIssuer) {
-            fail(
-              `--language python does not support OAuth (--oauth-*) yet (post-launch follow-up, MCPFO-22). Use --language typescript for an OAuth resource server.`,
-              "validate-language"
-            );
-            return;
-          }
-
-          // MCPFO-22: OAuth resource-server validation. stdio servers MUST
+          // MCPFO-22 (TypeScript) + MCPFO-79 (Python): OAuth resource-server
+          // validation. stdio servers MUST
           // NOT implement authorization per spec (they get credentials from
           // their launching process's environment instead) — the flag
           // combination is rejected outright rather than silently ignored.

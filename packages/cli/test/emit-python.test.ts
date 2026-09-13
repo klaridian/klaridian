@@ -101,18 +101,71 @@ test("python target fails loudly on out-of-scope configurations", async () => {
     /code-mode/,
     "code-mode is MCPFO-60.35, not this ticket"
   );
+  // MCPFO-79: OAuth on stdio is rejected (a stdio server MUST NOT implement
+  // authorization per the MCP spec — it reads credentials from its environment).
   assert.throws(
     () =>
       pythonTarget.emitProject({
         serverName: "x",
         tools,
         baseUrl: "https://h",
-        transport: "streamable-http",
+        transport: "stdio",
         auth: { issuer: "https://i", jwksUri: "https://j", audience: "https://a" },
       }),
-    /OAuth/,
-    "OAuth is out of Python launch parity"
+    /streamable-http/,
+    "OAuth is streamable-http only"
   );
+});
+
+test("python target emits the OAuth resource-server auth module for streamable-http (MCPFO-79)", async () => {
+  const tools = await petstoreTools();
+  const files = pythonTarget.emitProject({
+    serverName: "petstore-py-oauth",
+    tools,
+    baseUrl: "https://petstore3.swagger.io/api/v3",
+    transport: "streamable-http",
+    port: 3000,
+    auth: {
+      issuer: "https://example-idp.test",
+      jwksUri: "https://example-idp.test/.well-known/jwks.json",
+      audience: "https://mcp.example.com/mcp",
+      requiredScopes: ["mcp:tools"],
+    },
+  });
+  // The vendored auth module ships, with the RFC surfaces the ticket names.
+  assert.ok(files["auth.py"], "auth.py emitted");
+  assert.match(files["auth.py"], /import jwt/, "uses PyJWT (the jose peer)");
+  assert.match(files["auth.py"], /PyJWKClient/, "JWKS-backed key resolution");
+  assert.match(files["auth.py"], /oauth-protected-resource/, "RFC 9728 PRM path");
+  assert.match(files["auth.py"], /audience=AUDIENCE/, "RFC 8707 audience validation");
+  assert.match(files["auth.py"], /require".*exp".*iss".*aud"/s, "requires exp/iss/aud");
+  assert.match(files["auth.py"], /insufficient_scope/, "required-scope enforcement -> 403");
+  assert.match(files["auth.py"], /www-authenticate/, "401 Bearer challenge");
+  // Defaults are baked in from the flags (overridable by env at runtime).
+  assert.match(files["auth.py"], /"https:\/\/example-idp\.test"/);
+  assert.match(files["auth.py"], /"https:\/\/mcp\.example\.com\/mcp"/);
+  // server.py wires the gate into the hand-written ASGI app before /mcp.
+  assert.match(files["server.py"], /^import auth$/m, "server imports auth");
+  assert.match(files["server.py"], /await auth\.authenticate\(scope, send\)/, "auth gate wired into ASGI app");
+  // Dependency + module listing only appear when OAuth is enabled.
+  assert.match(files["requirements.txt"], /pyjwt\[crypto\]/, "pyjwt pinned");
+  assert.match(files["pyproject.toml"], /pyjwt\[crypto\]/, "pyjwt in pyproject deps");
+  assert.match(files["pyproject.toml"], /py-modules = \["server", "tools", "conformance", "auth"\]/);
+});
+
+test("python target omits the auth module (and pyjwt) when OAuth is not configured", async () => {
+  const tools = await petstoreTools();
+  const files = pythonTarget.emitProject({
+    serverName: "petstore-py-noauth",
+    tools,
+    baseUrl: "https://petstore3.swagger.io/api/v3",
+    transport: "streamable-http",
+    port: 3000,
+  });
+  assert.equal(files["auth.py"], undefined, "no auth.py without OAuth");
+  assert.doesNotMatch(files["requirements.txt"], /pyjwt/, "no pyjwt without OAuth");
+  assert.doesNotMatch(files["server.py"], /import auth/, "no auth import without OAuth");
+  assert.match(files["pyproject.toml"], /py-modules = \["server", "tools", "conformance"\]/);
 });
 
 test("every shipped plugin has a Python contribution (launch parity)", () => {

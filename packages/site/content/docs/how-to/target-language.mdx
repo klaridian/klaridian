@@ -48,13 +48,13 @@ python server.py --transport streamable-http --port 3000
 - **Plugins.** The `otel`, `posthog`, `amplitude`, and `mixpanel` plugins all support both languages. Each ships as readable, vendored instrumentation source in the language you chose.
 - **Environment contract.** Both servers read `KLARIDIAN_BASE_URL` for the upstream host and `KLARIDIAN_AUTH_TOKEN` for a Bearer token.
 - **Conformance.** An unknown tool returns a JSON-RPC `-32602` protocol error; invalid arguments return a tool-error result the model can read and react to.
+- **OAuth.** `--oauth-*` generates a resource server that validates bearer tokens (JWKS signature, expiry, issuer, audience, required scopes) on `--transport streamable-http`. See [OAuth 2.1](/docs/how-to/oauth).
 
 ## What the Python target doesn't support yet
 
 These are TypeScript-only for now:
 
 - **`--architecture code-mode`.** The Python code-mode target is planned separately.
-- **OAuth (`--oauth-*`).** The Python resource-server support is a later addition.
 - **`--install`.** The Python prepare step (virtual environment plus `pip install`) is planned separately. Follow the printed next steps to set the project up by hand.
 
 klaridian fails with a clear message if you combine `--language python` with one of these, rather than generating a server that silently drops the feature.

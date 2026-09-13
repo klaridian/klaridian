@@ -7,7 +7,7 @@ description: Protect a remote server with an external identity provider.
 
 klaridian can generate a server that checks OAuth bearer tokens before running any tool call. It does **not** generate an OAuth server—that stays with your identity provider (Auth0, WorkOS, or similar). klaridian's generated server only ever validates tokens; it never issues them.
 
-This only works with `--transport streamable-http`. A `stdio` server takes its credentials from the environment, not from inbound tokens, so OAuth doesn't apply there.
+This works with both target languages (`--language typescript`, the default, and `--language python`) and only with `--transport streamable-http`. A `stdio` server takes its credentials from the environment, not from inbound tokens, so OAuth doesn't apply there.
 
 ## Set it up
 
@@ -29,3 +29,12 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
 ## What you still need to do
 
 Your identity provider—not klaridian—handles user login, consent, and issuing tokens. klaridian's job stops at generating a server that correctly validates whatever token it receives.
+
+## Language notes
+
+Both target languages validate tokens the same way—JWKS-backed signature, expiry, issuer, and audience (RFC 8707) checks, an RFC 9728 metadata document, and required-scope enforcement:
+
+- **TypeScript** uses the `jose` library and the SDK's bearer-auth helpers.
+- **Python** uses `PyJWT` (installed as `pyjwt[crypto]`). The generated project adds an `auth.py` module and pins the dependency only when you enable OAuth.
+
+Both read the same environment variables at runtime, so one build can point at different identity providers per deployment: `KLARIDIAN_OAUTH_ISSUER`, `KLARIDIAN_OAUTH_JWKS_URI`, `KLARIDIAN_OAUTH_AUDIENCE`, and `KLARIDIAN_OAUTH_REQUIRED_SCOPES` (comma-separated). The values you pass at generation time become the defaults.

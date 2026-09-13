@@ -25,7 +25,7 @@
 // consuming them is direct evidence the annotation/title logic is language-
 // neutral (spike 059's "ported 1:1" finding, now enforced by shared code).
 
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR } from "../ir.js";
 import type { EmitOptions, EmittedProject, PluginWiring } from "../emit-server.js";
 import { annotationsForMethod, titleForTool } from "../emit-tool.js";
 import { pythonConformanceAdapter } from "../conformance/python.js";
@@ -61,7 +61,7 @@ function pyJsonValue(value: unknown): string {
 }
 
 /** Emits one tool's async proxy function body (path/query/header/body/auth). */
-function emitToolProxy(tool: McpToolDefinition, fnName: string): string {
+function emitToolProxy(tool: ToolIR, fnName: string): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   const pathParams = params.filter((p) => p.in === "path");
   const queryParams = params.filter((p) => p.in === "query");
@@ -115,7 +115,7 @@ function emitToolProxy(tool: McpToolDefinition, fnName: string): string {
 }
 
 /** Emits tools.py — every proxy fn + the TOOLS metadata registry. */
-function emitToolsModule(tools: McpToolDefinition[]): string {
+function emitToolsModule(tools: ToolIR[]): string {
   const used = new Set<string>();
   const entries = tools.map((t) => ({ tool: t, fn: toPyIdentifier(t.name, used) }));
 

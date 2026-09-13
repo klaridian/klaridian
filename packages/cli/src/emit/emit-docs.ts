@@ -22,7 +22,7 @@
 // distinct future decision, not folded into this ticket's "done" scope —
 // see ARCHITECTURE.md section 47 for the parking-lot note.
 
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR } from "./ir.js";
 
 export interface OperationDoc {
   /** The generated client function name (matches emit-client.ts's naming). */
@@ -62,7 +62,7 @@ function summarizeSchemaFields(schema: JsonSchemaLike | boolean | undefined): st
  * provides no real `description`/`summary`. Deterministic, no network call,
  * no LLM — see this file's header for why that's the deliberate scope here.
  */
-function buildStructuralFallback(tool: McpToolDefinition): string {
+function buildStructuralFallback(tool: ToolIR): string {
   const parts: string[] = [`${tool.method.toUpperCase()} ${tool.pathTemplate}`];
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   if (params.length > 0) {
@@ -90,7 +90,7 @@ function buildStructuralFallback(tool: McpToolDefinition): string {
  * `tools` array (same order) — search_docs must point at real, importable
  * function names, not the raw OpenAPI operationId.
  */
-export function buildOperationDocs(tools: McpToolDefinition[], functionNames: string[]): OperationDoc[] {
+export function buildOperationDocs(tools: ToolIR[], functionNames: string[]): OperationDoc[] {
   return tools.map((tool, i) => {
     const description = (tool.description ?? "").trim();
     const hasRealDescription = description.length > 0;

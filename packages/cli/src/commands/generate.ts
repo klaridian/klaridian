@@ -27,6 +27,7 @@ import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
+import { mapMcpToolDefinitionToIR, type ToolIR } from "../emit/ir.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -650,10 +651,16 @@ export function registerGenerateCommand(program: Command): void {
           // we can report a tool count and catch spec problems before
           // committing to a full project generation — mirrors the old
           // mapping-warnings UX without re-implementing the mapping itself.
-          const tools = await getToolsFromOpenApi(generationSpecPath, {
+          const rawTools = await getToolsFromOpenApi(generationSpecPath, {
             baseUrl: opts.baseUrl,
             dereference: true,
           });
+          // The single adapter seam (MCPFO-71, ARCHITECTURE.md §70): from here
+          // on the codebase depends on klaridian's own ToolIR, never
+          // openapi-mcp-generator's McpToolDefinition. Swapping the frontend
+          // engine later means replacing only this mapping + the curation.ts
+          // call site, not every emitter.
+          const tools: ToolIR[] = rawTools.map(mapMcpToolDefinitionToIR);
           if (tools.length === 0) {
             fail(
               "No tools remain after curation — nothing to generate. Loosen --include-tags/--exclude-tags/--exclude-operation-ids.",
@@ -672,9 +679,10 @@ export function registerGenerateCommand(program: Command): void {
           const baseUrl = opts.baseUrl ?? "";
 
           // MCPFO-20: warn if neither --base-url nor the spec provides an
-          // absolute upstream host. tools[0].baseUrl is the resolved spec
-          // server URL (or the override, if given).
-          const specServerUrl = (tools[0] as { baseUrl?: string } | undefined)?.baseUrl;
+          // absolute upstream host. rawTools[0].baseUrl is the resolved spec
+          // server URL (or the override, if given) — read from the raw engine
+          // output, since baseUrl is engine metadata, not a per-tool IR field.
+          const specServerUrl = (rawTools[0] as { baseUrl?: string } | undefined)?.baseUrl;
           const baseUrlWarning = resolveBaseUrlWarning(opts.baseUrl, specServerUrl);
           if (baseUrlWarning) {
             warnings.push(baseUrlWarning);

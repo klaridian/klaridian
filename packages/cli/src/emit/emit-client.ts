@@ -22,7 +22,7 @@
 // map yet. Documented here rather than silently pretended away; mapping
 // response schemas is future scope, not blocking MCPFO-29.
 
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR } from "./ir.js";
 import { jsonSchemaToZod } from "json-schema-to-zod";
 
 /**
@@ -57,7 +57,7 @@ function capitalize(s: string): string {
   return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function emitFunctionBody(tool: McpToolDefinition, inputTypeName: string): string {
+function emitFunctionBody(tool: ToolIR, inputTypeName: string): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   const pathParams = params.filter((p) => p.in === "path");
   const queryParams = params.filter((p) => p.in === "query");
@@ -120,7 +120,7 @@ function emitFunctionBody(tool: McpToolDefinition, inputTypeName: string): strin
  * re-parse or re-filter anything; curation (MCPFO-8/9) already decided
  * which operations survive before this is called.
  */
-export function emitClientModule(tools: McpToolDefinition[]): string {
+export function emitClientModule(tools: ToolIR[]): string {
   const functionNames = dedupeFunctionNames(tools.map((t) => sanitizeFunctionName(t.operationId || t.name)));
 
   const blocks = tools.map((tool, i) => {

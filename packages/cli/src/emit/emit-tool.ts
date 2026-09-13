@@ -8,7 +8,7 @@
 // mapping below was validated end to end in spikes/021-sdk-v2-streamable-http
 // (README-021d): path/query/header params, JSON body, and Bearer auth.
 
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR } from "./ir.js";
 import { jsonSchemaToZod } from "json-schema-to-zod";
 import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
 
@@ -66,7 +66,7 @@ export function titleForTool(tool: { name: string; operationId?: string; summary
 }
 
 /** Emits the handler body that proxies to the upstream HTTP API. */
-function emitHandlerBody(tool: McpToolDefinition): string {
+function emitHandlerBody(tool: ToolIR): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   const pathParams = params.filter((p) => p.in === "path");
   const queryParams = params.filter((p) => p.in === "query");
@@ -119,7 +119,7 @@ function emitHandlerBody(tool: McpToolDefinition): string {
  * `wrap`, when provided, wraps the handler (plugin instrumentation) — e.g.
  * `wrapTool` from a vendored instrumentation file.
  */
-export function emitToolBlock(tool: McpToolDefinition, wrap?: { fn: string }): string {
+export function emitToolBlock(tool: ToolIR, wrap?: { fn: string }): string {
   const zodSrc = jsonSchemaToZod(tool.inputSchema ?? { type: "object", properties: {} });
   const ann = annotationsForMethod(tool.method || "get");
   const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });

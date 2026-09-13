@@ -16,7 +16,8 @@
 // test, see section 24). No fork, no patch to openapi-mcp-generator itself.
 
 import type { OpenAPIV3 } from "openapi-types";
-import { getToolsFromOpenApi, type McpToolDefinition } from "openapi-mcp-generator";
+import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { mapMcpToolDefinitionToIR, type ToolIR } from "../emit/ir.js";
 
 export interface CurationChoice {
   /** Tags to include; if non-empty, only operations with at least one of these tags survive (before excludeTags/excludeOperationIds are applied). */
@@ -54,7 +55,9 @@ export interface OperationSummary {
  * against real tag names before generation.
  */
 export async function listOperations(specPathOrUrl: string): Promise<OperationSummary[]> {
-  const tools: McpToolDefinition[] = await getToolsFromOpenApi(specPathOrUrl, { dereference: true });
+  const tools: ToolIR[] = (await getToolsFromOpenApi(specPathOrUrl, { dereference: true })).map(
+    mapMcpToolDefinitionToIR
+  );
   return tools.map((t) => ({
     operationId: t.operationId,
     tags: t.tags ?? [],

@@ -13,7 +13,7 @@
 // MCP tool per operation, unblocking MCPFO-29/30's generator code for real
 // use for the first time.
 
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR } from "./ir.js";
 import { emitToolBlock } from "./emit-tool.js";
 import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames } from "./emit-client.js";
 import { emitSandboxRunner, emitExecuteCodeToolBlock, extractApiHost } from "./emit-sandbox.js";
@@ -26,7 +26,7 @@ export type Architecture = "tools" | "code-mode";
 
 export interface EmitOptions {
   serverName: string;
-  tools: McpToolDefinition[];
+  tools: ToolIR[];
   baseUrl: string;
   transport?: Transport;
   port?: number;

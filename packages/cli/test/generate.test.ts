@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { execFileAsync, CLI_ENTRYPOINT, sendJsonRpc } from "./test-helpers.js";
@@ -304,6 +304,100 @@ test(
       await assert.rejects(import("node:fs/promises").then((fs) => fs.stat(path.join(outputDir, "node_modules"))));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// MCPFO-76 — object-form x-mcp: annotation overrides + expose:false exclusion,
+// with zero openapi-mcp-generator fallback warnings.
+// ---------------------------------------------------------------------------
+
+const XMCP_SPEC = {
+  openapi: "3.0.0",
+  info: { title: "xmcp-fixture", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  paths: {
+    "/things": {
+      // POST that the author marks destructive + closed-world via object x-mcp;
+      // method-derivation alone would give destructive:false, openWorld:true.
+      post: {
+        operationId: "createThing",
+        summary: "Create a thing",
+        "x-mcp": { readOnly: false, destructive: true, openWorld: false, expose: true },
+        responses: { "200": { description: "ok" } },
+      },
+      // GET the author hides from the tool surface.
+      get: {
+        operationId: "listThingsInternal",
+        summary: "List things (internal)",
+        "x-mcp": { readOnly: true, expose: false },
+        responses: { "200": { description: "ok" } },
+      },
+    },
+    "/things/{id}": {
+      // GET with a partial object: only openWorld set; readOnly must stay the
+      // GET default (true), proving per-hint fallback.
+      get: {
+        operationId: "getThing",
+        summary: "Get a thing",
+        "x-mcp": { openWorld: false },
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "ok" } },
+      },
+    },
+  },
+};
+
+test(
+  "generate: object-form x-mcp overrides annotations, honours expose:false, and emits no fallback warnings",
+  { timeout: 60_000 },
+  async () => {
+    const workDir = await mkdtemp(path.join(tmpdir(), "klaridian-xmcp-"));
+    const specPath = path.join(workDir, "spec.json");
+    const outputDir = path.join(workDir, "out");
+    try {
+      await writeFile(specPath, JSON.stringify(XMCP_SPEC), "utf-8");
+      const result = await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        specPath,
+        "--out",
+        outputDir,
+        "--name",
+        "xmcp-test",
+        "--base-url",
+        "https://api.example.com",
+        "--license",
+        "none",
+      ]);
+
+      // No openapi-mcp-generator fallback warnings: object x-mcp is normalized
+      // to boolean before the engine ever sees it.
+      assert.doesNotMatch(result.stderr, /Invalid x-mcp value/);
+
+      // expose:false dropped the internal GET; 2 tools remain, not 3.
+      assert.match(result.stderr, /Generated 2 tool\(s\)/);
+
+      const src = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      assert.match(src, /createThing/);
+      assert.match(src, /getThing/);
+      assert.doesNotMatch(src, /listThingsInternal/, "expose:false tool must not be emitted");
+
+      // createThing block: author's destructive:true + openWorld:false win over
+      // the POST-derived destructive:false / openWorld:true.
+      const createBlock = src.slice(src.indexOf('"createThing"'), src.indexOf('"getThing"'));
+      assert.match(createBlock, /destructiveHint: true/);
+      assert.match(createBlock, /openWorldHint: false/);
+      assert.match(createBlock, /readOnlyHint: false/);
+
+      // getThing block: only openWorld was set → readOnly stays the GET default.
+      const getBlock = src.slice(src.indexOf('"getThing"'));
+      assert.match(getBlock, /readOnlyHint: true/, "unset readOnly falls back to GET default");
+      assert.match(getBlock, /openWorldHint: false/, "author override applied");
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
     }
   }
 );

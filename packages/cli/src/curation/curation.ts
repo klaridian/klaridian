@@ -56,7 +56,7 @@ export interface OperationSummary {
  */
 export async function listOperations(specPathOrUrl: string): Promise<OperationSummary[]> {
   const tools: ToolIR[] = (await getToolsFromOpenApi(specPathOrUrl, { dereference: true })).map(
-    mapMcpToolDefinitionToIR
+    (t) => mapMcpToolDefinitionToIR(t)
   );
   return tools.map((t) => ({
     operationId: t.operationId,

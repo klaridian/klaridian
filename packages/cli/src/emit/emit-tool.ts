@@ -65,6 +65,34 @@ export function titleForTool(tool: { name: string; operationId?: string; summary
   return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
+/**
+ * Resolve the final tool annotations for a ToolIR: the HTTP-method-derived
+ * defaults (`annotationsForMethod`), with any author-supplied object-form
+ * `x-mcp` hints (MCPFO-76) overlaid PER HINT. An absent x-mcp key leaves that
+ * one hint at its method default — the author overrides only what they set,
+ * not the whole annotation.
+ *
+ * `idempotentHint` stays method-derived: the `x-mcp` object does not carry it,
+ * and inferring it from anything else would assert a contract the author never
+ * made. `title` is handled separately (titleForTool / MCPFO-77).
+ */
+export function resolveAnnotations(tool: ToolIR): {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+} {
+  const ann = annotationsForMethod(tool.method || "get");
+  const x = tool.xMcp;
+  if (!x) return ann;
+  return {
+    readOnlyHint: x.readOnly ?? ann.readOnlyHint,
+    destructiveHint: x.destructive ?? ann.destructiveHint,
+    idempotentHint: ann.idempotentHint,
+    openWorldHint: x.openWorld ?? ann.openWorldHint,
+  };
+}
+
 /** Emits the handler body that proxies to the upstream HTTP API. */
 function emitHandlerBody(tool: ToolIR): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
@@ -121,7 +149,7 @@ function emitHandlerBody(tool: ToolIR): string {
  */
 export function emitToolBlock(tool: ToolIR, wrap?: { fn: string }): string {
   const zodSrc = jsonSchemaToZod(tool.inputSchema ?? { type: "object", properties: {} });
-  const ann = annotationsForMethod(tool.method || "get");
+  const ann = resolveAnnotations(tool);
   const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
   const wiring = wrap ? { importStatement: "", wrapFunctionName: wrap.fn } : undefined;
   const handlerOpen = typescriptPluginDispatch.wrapHandlerOpen(tool.name, wiring);

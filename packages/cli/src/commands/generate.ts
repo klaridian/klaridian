@@ -27,7 +27,7 @@ import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
-import { mapMcpToolDefinitionToIR, type ToolIR } from "../emit/ir.js";
+import { mapMcpToolDefinitionToIR, extractXMcpByOperationId, normalizeXMcpObjectsToExpose, type ToolIR } from "../emit/ir.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -584,6 +584,34 @@ export function registerGenerateCommand(program: Command): void {
             specPath = convertedSpecPath;
           }
 
+          // MCPFO-76: recover object-form `x-mcp` annotations and normalize
+          // them for the engine, ONCE up front so every downstream engine call
+          // (listOperations below, and generation) operates on the same clean
+          // document. openapi-mcp-generator reads `x-mcp` only as a boolean — an
+          // object trips a `console.warn` per operation (the "~60 fallback
+          // warnings" noise) and its rich hints are discarded. So: recover each
+          // operation's object hints keyed by operationId, then rewrite every
+          // object `x-mcp` to its boolean `expose` (default true) in a temp spec
+          // that becomes `specPath`. This silences the warnings AND lets the
+          // engine own `expose: false` exclusion natively (exactly like a
+          // boolean `x-mcp: false` or a curation exclusion). Skipped entirely
+          // when the spec carries no object-form x-mcp, so the common path is
+          // unchanged.
+          const xMcpByOperationId = extractXMcpByOperationId(
+            (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document
+          );
+          if (xMcpByOperationId.size > 0) {
+            const normalizedDoc = normalizeXMcpObjectsToExpose(
+              (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document
+            );
+            const { dir, specPath: normalizedPath } = await writeTempSpec(
+              normalizedDoc,
+              "klaridian-xmcp-normalized-spec-"
+            );
+            tempSpecDirs.push(dir);
+            specPath = normalizedPath;
+          }
+
           // Tool curation (ARCHITECTURE.md section 24): list operations
           // once, up front, so both the interactive prompt and the
           // non-interactive flags can validate/resolve against the same
@@ -647,6 +675,11 @@ export function registerGenerateCommand(program: Command): void {
             generationSpecPath = curatedSpecPath;
           }
 
+          // MCPFO-76: object-form x-mcp was already recovered + normalized once
+          // up front (see the block after the Swagger2 conversion). The engine
+          // has already excluded `expose: false` operations natively; here we
+          // only thread the recovered hints onto each surviving tool's IR.
+
           // Quick pre-check with the same library's own tool extraction, so
           // we can report a tool count and catch spec problems before
           // committing to a full project generation — mirrors the old
@@ -659,8 +692,13 @@ export function registerGenerateCommand(program: Command): void {
           // on the codebase depends on klaridian's own ToolIR, never
           // openapi-mcp-generator's McpToolDefinition. Swapping the frontend
           // engine later means replacing only this mapping + the curation.ts
-          // call site, not every emitter.
-          const tools: ToolIR[] = rawTools.map(mapMcpToolDefinitionToIR);
+          // call site, not every emitter. The x-mcp object hints recovered
+          // above are threaded onto each tool here (MCPFO-76); operations the
+          // author set `expose: false` on were already dropped by the engine
+          // via the normalization step.
+          const tools: ToolIR[] = rawTools.map((t) =>
+            mapMcpToolDefinitionToIR(t, xMcpByOperationId.get(t.operationId))
+          );
           if (tools.length === 0) {
             fail(
               "No tools remain after curation — nothing to generate. Loosen --include-tags/--exclude-tags/--exclude-operation-ids.",

@@ -20,14 +20,14 @@
 //   requirements.txt  — pinned runtime deps.
 //   README.md         — how to install/run.
 //
-// Reuses annotationsForMethod() and titleForTool() from emit-tool.ts verbatim:
+// Reuses resolveAnnotations() and titleForTool() from emit-tool.ts verbatim:
 // they operate on the IR, not on any TS-specific rendering, so a second target
 // consuming them is direct evidence the annotation/title logic is language-
 // neutral (spike 059's "ported 1:1" finding, now enforced by shared code).
 
 import type { ToolIR } from "../ir.js";
 import type { EmitOptions, EmittedProject, PluginWiring } from "../emit-server.js";
-import { annotationsForMethod, titleForTool } from "../emit-tool.js";
+import { resolveAnnotations, titleForTool } from "../emit-tool.js";
 import { pythonConformanceAdapter } from "../conformance/python.js";
 import { emitDispatchWrap } from "../plugin-dispatch/python.js";
 
@@ -123,7 +123,7 @@ function emitToolsModule(tools: ToolIR[]): string {
 
   const registry = entries
     .map(({ tool, fn }) => {
-      const ann = annotationsForMethod(tool.method || "get");
+      const ann = resolveAnnotations(tool);
       const title = titleForTool(tool as { name: string; operationId?: string; summary?: string });
       return `    {
         "name": ${pyStr(tool.name)},

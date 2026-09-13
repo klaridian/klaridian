@@ -111,10 +111,32 @@ function emitToolProxy(tool: ToolIR, fnName: string): string {
   lines.push(`            ${pyStr(method)}, url, params=query, headers=headers,`);
   lines.push(`            content=${hasBody ? "content" : "None"}, timeout=30.0,`);
   lines.push(`        )`);
-  lines.push(`    return types.CallToolResult(`);
-  lines.push(`        content=[types.TextContent(type="text", text=resp.text)],`);
-  lines.push(`        is_error=not resp.is_success,`);
-  lines.push(`    )`);
+  if (tool.outputSchema) {
+    // MCPFO-33: this tool advertises an output_schema, so populate
+    // structured_content from the JSON body on success. The low-level Python
+    // SDK does not validate output (unlike the TS SDK), so this is purely
+    // additive — but we mirror the TS target's behaviour for parity: success +
+    // parseable JSON → structured_content; non-2xx → is_error; unparseable body
+    // → text-only success.
+    lines.push(`    if resp.is_success:`);
+    lines.push(`        try:`);
+    lines.push(`            structured = json.loads(resp.text)`);
+    lines.push(`        except ValueError:`);
+    lines.push(`            structured = None`);
+    lines.push(`        return types.CallToolResult(`);
+    lines.push(`            content=[types.TextContent(type="text", text=resp.text)],`);
+    lines.push(`            structured_content=structured if isinstance(structured, dict) else None,`);
+    lines.push(`        )`);
+    lines.push(`    return types.CallToolResult(`);
+    lines.push(`        content=[types.TextContent(type="text", text=resp.text)],`);
+    lines.push(`        is_error=True,`);
+    lines.push(`    )`);
+  } else {
+    lines.push(`    return types.CallToolResult(`);
+    lines.push(`        content=[types.TextContent(type="text", text=resp.text)],`);
+    lines.push(`        is_error=not resp.is_success,`);
+    lines.push(`    )`);
+  }
   return lines.join("\n");
 }
 
@@ -129,11 +151,16 @@ function emitToolsModule(tools: ToolIR[]): string {
     .map(({ tool, fn }) => {
       const ann = resolveAnnotations(tool);
       const title = titleForTool(tool);
+      // MCPFO-33: advertise the recovered success response schema as
+      // output_schema when present (JSON-object body — gate in response-schema.ts).
+      const outputSchemaLine = tool.outputSchema
+        ? `\n        "output_schema": ${pyJsonValue(tool.outputSchema)},`
+        : `\n        "output_schema": None,`;
       return `    {
         "name": ${pyStr(tool.name)},
         "title": ${pyStr(title)},
         "description": ${pyStr(tool.description ?? "")},
-        "input_schema": ${pyJsonValue(tool.inputSchema ?? { type: "object", properties: {} })},
+        "input_schema": ${pyJsonValue(tool.inputSchema ?? { type: "object", properties: {} })},${outputSchemaLine}
         "annotations": types.ToolAnnotations(
             read_only_hint=${ann.readOnlyHint ? "True" : "False"},
             destructive_hint=${ann.destructiveHint ? "True" : "False"},
@@ -406,6 +433,7 @@ async def on_list_tools(ctx, params):
                 title=e["title"],
                 description=e["description"],
                 input_schema=e["input_schema"],
+                output_schema=e["output_schema"],
                 annotations=e["annotations"],
             )
             for e in TOOLS

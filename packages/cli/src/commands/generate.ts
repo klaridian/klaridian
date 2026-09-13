@@ -28,6 +28,7 @@ import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../r
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
+import { extractOutputSchemasByOperationId } from "../emit/response-schema.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -591,6 +592,19 @@ export function registerGenerateCommand(program: Command): void {
           // something, so the common path is untouched.
           const originalDoc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
           const metaByOperationId = extractOperationMetaByOperationId(originalDoc);
+          // MCPFO-33 (ARCHITECTURE.md §83): recover each operation's success
+          // response schema with klaridian's OWN extraction — the embryo of the
+          // own-engine (§65/MCPFO-73), since openapi-mcp-generator carries no
+          // response data at all. Merge it onto the same per-operationId meta map
+          // threaded onto each tool's IR below (→ outputSchema/structuredContent).
+          // Extracted from the original spec by path (dereferenced internally),
+          // keyed by operationId, so it survives curation the same way.
+          const outputSchemas = await extractOutputSchemasByOperationId(specPath);
+          for (const [operationId, outputSchema] of outputSchemas) {
+            const existing = metaByOperationId.get(operationId);
+            if (existing) existing.outputSchema = outputSchema;
+            else metaByOperationId.set(operationId, { outputSchema });
+          }
           const preparedDoc = prepareSpecForEngine(originalDoc);
           if (JSON.stringify(preparedDoc) !== JSON.stringify(originalDoc)) {
             const { dir, specPath: preparedPath } = await writeTempSpec(

@@ -414,3 +414,144 @@ test(
     }
   }
 );
+
+// MCPFO-33 (ARCHITECTURE.md §83): a spec with an object 2xx body, an array 2xx
+// body, and a no-body operation — the three cases that decide whether a tool
+// gets an outputSchema.
+const OUTPUT_SCHEMA_SPEC = {
+  openapi: "3.0.3",
+  info: { title: "Output Schema E2E", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  paths: {
+    "/widgets/{id}": {
+      get: {
+        operationId: "getWidget",
+        summary: "Get a widget",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": {
+            description: "A widget",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Widget" } } },
+          },
+        },
+      },
+    },
+    "/widgets": {
+      get: {
+        operationId: "listWidgets",
+        summary: "List widgets",
+        responses: {
+          "200": {
+            description: "Array root — gated OUT of outputSchema",
+            content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Widget" } } } },
+          },
+        },
+      },
+    },
+    "/ping": {
+      get: { operationId: "ping", summary: "Health check", responses: { "204": { description: "No content" } } },
+    },
+  },
+  components: {
+    schemas: {
+      Widget: {
+        type: "object",
+        properties: { id: { type: "string" }, name: { type: "string" }, size: { type: "integer" } },
+        required: ["id", "name"],
+      },
+    },
+  },
+};
+
+test(
+  "generate: emits outputSchema only for object-body operations; a real server advertises it over stdio (MCPFO-33)",
+  { timeout: 180_000 },
+  async () => {
+    const workDir = await mkdtemp(path.join(tmpdir(), "klaridian-outschema-"));
+    const specPath = path.join(workDir, "spec.json");
+    const outputDir = path.join(workDir, "out");
+    try {
+      await writeFile(specPath, JSON.stringify(OUTPUT_SCHEMA_SPEC), "utf-8");
+      await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        specPath,
+        "--out",
+        outputDir,
+        "--name",
+        "outschema-test",
+        "--base-url",
+        "https://api.example.com",
+        "--license",
+        "none",
+      ]);
+
+      // Source-level: the object-body tools advertise outputSchema + populate
+      // structuredContent; the array/no-body tools do neither.
+      const src = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
+      const getBlock = src.slice(src.indexOf('"getWidget"'), src.indexOf('"listWidgets"'));
+      assert.match(getBlock, /outputSchema: z\.object/, "object 2xx → outputSchema advertised");
+      assert.match(getBlock, /const structuredContent = JSON\.parse\(text\)/);
+      const listBlock = src.slice(src.indexOf('"listWidgets"'), src.indexOf('"ping"'));
+      assert.doesNotMatch(listBlock, /outputSchema:/, "array 2xx → no outputSchema (gated)");
+      const pingBlock = src.slice(src.indexOf('"ping"'));
+      assert.doesNotMatch(pingBlock, /outputSchema:/, "no JSON body → no outputSchema");
+
+      // Real build + spawn + drive: the running server's tools/list must carry
+      // outputSchema for getWidget only. This is the end-to-end proof, not a
+      // string assertion.
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 120_000 });
+      await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 120_000 });
+
+      const proc = spawn("node", ["dist/index.js"], {
+        cwd: outputDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, KLARIDIAN_BASE_URL: "https://api.example.com" },
+      });
+      let stdoutBuf = "";
+      let stderrBuf = "";
+      proc.stdout!.on("data", (d) => (stdoutBuf += d.toString()));
+      proc.stderr!.on("data", (d) => (stderrBuf += d.toString()));
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          proc.kill();
+          reject(new Error(`Timed out. stderr: ${stderrBuf}`));
+        }, 20_000);
+        setTimeout(
+          () =>
+            sendJsonRpc(proc, {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "initialize",
+              params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "os-test", version: "0.0.1" } },
+            }),
+          300
+        );
+        setTimeout(() => sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), 800);
+        setTimeout(() => {
+          clearTimeout(timeout);
+          proc.kill("SIGTERM");
+          resolve();
+        }, 2500);
+      });
+      await new Promise((r) => setTimeout(r, 300));
+
+      const parsed = stdoutBuf
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l));
+      const listResponse = parsed.find((r) => r.id === 2);
+      assert.ok(listResponse, `no tools/list response. stderr: ${stderrBuf}`);
+      const byName = Object.fromEntries(listResponse.result.tools.map((t: { name: string; outputSchema?: unknown }) => [t.name, t.outputSchema]));
+      assert.ok(byName.getWidget, "getWidget advertises outputSchema on the wire");
+      assert.equal((byName.getWidget as { type?: string }).type, "object");
+      assert.equal(byName.listWidgets, undefined, "listWidgets (array body) has no outputSchema");
+      assert.equal(byName.ping, undefined, "ping (no body) has no outputSchema");
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  }
+);

@@ -10,6 +10,10 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Added
+
+- Structured tool output: when an OpenAPI operation's success response is a JSON object, the generated tool advertises a matching `outputSchema` and returns `structuredContent` (the parsed response body) alongside the text result. klaridian reads and dereferences the response schema from the spec itself (including `$ref`s into `components.schemas`). Array, primitive, and no-body responses stay text-only. TypeScript and Python targets at parity.
+
 ## [0.2.0] - 2026-09-13
 
 ### Added

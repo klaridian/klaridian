@@ -80,6 +80,49 @@ test("python target emits a complete, coherent project from real tool data", asy
   assert.match(files["requirements.txt"], /jsonschema/);
 });
 
+test("python target: outputSchema advertised + structured_content populated only when the IR carries one (MCPFO-33)", () => {
+  // Two hand-built ToolIRs: one WITH a recovered outputSchema (object body),
+  // one WITHOUT. Mirrors the TS emitToolBlock gating so parity is enforced.
+  const withSchema = {
+    name: "getWidget",
+    description: "Get a widget",
+    method: "get",
+    pathTemplate: "/widgets/{id}",
+    inputSchema: { type: "object", properties: { id: { type: "string" } } },
+    executionParameters: [{ name: "id", in: "path" }],
+    securityRequirements: [],
+    operationId: "getWidget",
+    outputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } },
+  };
+  const withoutSchema = {
+    name: "listWidgets",
+    description: "List widgets",
+    method: "get",
+    pathTemplate: "/widgets",
+    inputSchema: { type: "object", properties: {} },
+    executionParameters: [],
+    securityRequirements: [],
+    operationId: "listWidgets",
+  };
+  const files = pythonTarget.emitProject({
+    serverName: "widget-py",
+    tools: [withSchema, withoutSchema] as never,
+    baseUrl: "https://api.example.com",
+    transport: "stdio",
+  });
+  const toolsPy = files["tools.py"];
+  // The tool WITH a schema advertises output_schema (a real json.loads object)
+  // and its proxy populates structured_content on success.
+  assert.match(toolsPy, /"name": "getWidget"/);
+  assert.match(toolsPy, /"output_schema": json\.loads\(/);
+  assert.match(toolsPy, /structured_content=structured if isinstance\(structured, dict\) else None/);
+  // The tool WITHOUT a schema carries output_schema: None and no structured_content.
+  assert.match(toolsPy, /"name": "listWidgets"/);
+  assert.match(toolsPy, /"output_schema": None/);
+  // server.py's on_list_tools threads output_schema through to types.Tool.
+  assert.match(files["server.py"], /output_schema=e\["output_schema"\]/);
+});
+
 test("python target's streamable-http variant emits the ASGI app + uvicorn entry", async () => {
   const tools = await petstoreTools();
   const files = pythonTarget.emitProject({

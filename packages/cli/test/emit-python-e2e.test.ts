@@ -22,6 +22,10 @@ import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { pythonTarget } from "../src/emit/target.js";
+import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId } from "../src/emit/ir.js";
+import { extractOutputSchemasByOperationId } from "../src/emit/response-schema.js";
+import SwaggerParser from "@apidevtools/swagger-parser";
+import type { OpenAPIV3 } from "openapi-types";
 import { CONFORMANCE_CONTRACT } from "../src/emit/conformance/contract.js";
 
 const execFileAsync = promisify(execFile);
@@ -74,7 +78,6 @@ async function setupVenv(py: string, dir: string): Promise<string> {
 function sendJsonRpc(proc: ReturnType<typeof spawn>, msg: unknown) {
   proc.stdin!.write(JSON.stringify(msg) + "\n");
 }
-
 function readOneJsonRpcLine(proc: ReturnType<typeof spawn>): Promise<any> {
   return new Promise((resolve, reject) => {
     let buffer = "";
@@ -143,6 +146,108 @@ test(
         assert.ok(!invalidResp.error, "schema-invalid arguments are NOT a protocol error");
         assert.equal(invalidResp.result?.isError, true, "schema-invalid arguments are a tool-error result");
         assert.match(invalidResp.result?.content?.[0]?.text ?? "", /validation/i);
+      } finally {
+        proc.kill("SIGKILL");
+      }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// MCPFO-33: the emitted Python server advertises output_schema over the wire for
+// object-body operations only — the Python peer of the TS wire-level proof in
+// generate.test.ts. Emits from a small inline spec (object 2xx, array 2xx,
+// 204), threading the owned response-schema extraction exactly as generate.ts.
+const OUTPUT_SCHEMA_SPEC = {
+  openapi: "3.0.3",
+  info: { title: "Output Schema Py E2E", version: "1.0.0" },
+  servers: [{ url: "https://api.example.com" }],
+  paths: {
+    "/widgets/{id}": {
+      get: {
+        operationId: "getWidget",
+        summary: "Get a widget",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "A widget", content: { "application/json": { schema: { $ref: "#/components/schemas/Widget" } } } },
+        },
+      },
+    },
+    "/widgets": {
+      get: {
+        operationId: "listWidgets",
+        summary: "List widgets",
+        responses: {
+          "200": { description: "array root", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Widget" } } } } },
+        },
+      },
+    },
+    "/ping": { get: { operationId: "ping", summary: "Health", responses: { "204": { description: "no content" } } } },
+  },
+  components: {
+    schemas: {
+      Widget: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id"] },
+    },
+  },
+};
+
+test(
+  "python emit path: emitted server advertises output_schema over stdio for object-body tools only (MCPFO-33)",
+  { timeout: 300_000 },
+  async () => {
+    const py = resolvePython();
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-py-outschema-e2e-"));
+    try {
+      const specPath = path.join(outDir, "spec.json");
+      await mkdir(path.dirname(specPath), { recursive: true });
+      await writeFile(specPath, JSON.stringify(OUTPUT_SCHEMA_SPEC), "utf-8");
+
+      // Mirror generate.ts: raw tools -> IR, with recovered per-op meta + the
+      // owned output-schema extraction merged in.
+      const rawTools = await getToolsFromOpenApi(specPath, { baseUrl: "https://api.example.com", dereference: true });
+      const originalDoc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
+      const metaByOperationId = extractOperationMetaByOperationId(originalDoc);
+      const outputSchemas = await extractOutputSchemasByOperationId(specPath);
+      for (const [operationId, outputSchema] of outputSchemas) {
+        const existing = metaByOperationId.get(operationId);
+        if (existing) existing.outputSchema = outputSchema;
+        else metaByOperationId.set(operationId, { outputSchema });
+      }
+      const tools = rawTools.map((t) => mapMcpToolDefinitionToIR(t, metaByOperationId.get(t.operationId)));
+
+      const files = pythonTarget.emitProject({
+        serverName: "widget-py-e2e",
+        tools,
+        baseUrl: "https://api.example.com",
+        transport: "stdio",
+      });
+      for (const [rel, content] of Object.entries(files)) {
+        const full = path.join(outDir, rel);
+        await mkdir(path.dirname(full), { recursive: true });
+        await writeFile(full, content, "utf-8");
+      }
+
+      const venvPy = await setupVenv(py, outDir);
+      const proc = spawn(venvPy, ["server.py"], {
+        cwd: outDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, KLARIDIAN_BASE_URL: "https://api.example.com" },
+      });
+      try {
+        sendJsonRpc(proc, { jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });
+        await readOneJsonRpcLine(proc);
+        sendJsonRpc(proc, { jsonrpc: "2.0", method: "notifications/initialized" });
+        sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+        const listResp = await readOneJsonRpcLine(proc);
+        const byName = Object.fromEntries(
+          listResp.result.tools.map((t: any) => [t.name, t.outputSchema])
+        );
+        assert.ok(byName.getWidget, "getWidget advertises output_schema (camelCase outputSchema on the wire)");
+        assert.equal(byName.getWidget.type, "object");
+        assert.equal(byName.listWidgets, undefined, "array body → no output_schema");
+        assert.equal(byName.ping, undefined, "no JSON body → no output_schema");
       } finally {
         proc.kill("SIGKILL");
       }

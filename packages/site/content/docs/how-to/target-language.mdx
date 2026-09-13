@@ -43,6 +43,7 @@ python server.py --transport streamable-http --port 3000
 ## What's the same across both languages
 
 - **Tools.** One tool per OpenAPI operation, with identical names and input schemas.
+- **Output schemas.** When an operation's success response is a JSON object, the tool advertises a matching `outputSchema` and returns `structuredContent` alongside the text result. Identical in both languages. See [Output schemas](#output-schemas) below.
 - **Annotations.** Read-only, destructive, idempotent, and open-world hints are computed the same way and appear the same way on the wire.
 - **Curation.** `--include-tags`, `--exclude-tags`, path and method filters all work the same—they act on the spec before either language emits.
 - **Plugins.** The `otel`, `posthog`, `amplitude`, and `mixpanel` plugins all support both languages. Each ships as readable, vendored instrumentation source in the language you chose.
@@ -58,3 +59,19 @@ These are TypeScript-only for now:
 - **`--install`.** The Python prepare step (virtual environment plus `pip install`) is planned separately. Follow the printed next steps to set the project up by hand.
 
 klaridian fails with a clear message if you combine `--language python` with one of these, rather than generating a server that silently drops the feature.
+
+## Output schemas
+
+When an OpenAPI operation declares a **JSON object** success response, klaridian advertises it as the tool's `outputSchema` and the generated handler returns `structuredContent` (the parsed response body) next to the usual text result. A client can then consume a typed, structured result instead of re-parsing text. This works the same in TypeScript and Python, from the same spec.
+
+klaridian reads the response schema from the spec itself—including resolving `$ref`s into `components.schemas`—so you get the rich, named shape the API author wrote, not a guess.
+
+**When a tool gets an `outputSchema`:** the operation's success response (preferring `200`, then `201`, then any other `2xx`, then `default`) has an `application/json` body whose schema is a JSON object.
+
+**When it doesn't** (the tool stays text-only, exactly as before):
+
+- the success body is an array, a primitive, or a top-level `oneOf`/`anyOf`/`allOf` (ambiguous to honour faithfully);
+- the operation has no JSON success body (for example a `204 No Content` or a binary download);
+- the operation declares no success response schema at all.
+
+This is deliberate. The MCP spec requires an `outputSchema` root to be an object, and the TypeScript SDK validates a successful result's `structuredContent` against the advertised schema. klaridian only advertises a schema it can faithfully honour: on a successful call the handler attaches the parsed body; on an error response it returns a tool error (no structured content expected); and if a response body isn't valid JSON, it falls back to a plain text result. You get precise output typing where the spec supports it, and no spurious validation failures where it doesn't.

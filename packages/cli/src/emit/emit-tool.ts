@@ -147,7 +147,25 @@ function emitHandlerBody(tool: ToolIR): string {
   }
   lines.push(`      });`);
   lines.push(`      const text = await resp.text();`);
-  lines.push(`      return { content: [{ type: "text" as const, text }], isError: !resp.ok };`);
+  if (tool.outputSchema) {
+    // MCPFO-33: this tool advertises an outputSchema, so a SUCCESS result must
+    // carry structuredContent matching it or the SDK turns it into a soft
+    // tool-error. Parse the JSON body and attach it as structuredContent on the
+    // success path only; on !resp.ok we return isError (validation is skipped
+    // for error results), and if the body isn't parseable JSON we fall back to
+    // text-only (the SDK will soft-error only if the schema is genuinely unmet).
+    lines.push(`      if (resp.ok) {`);
+    lines.push(`        try {`);
+    lines.push(`          const structuredContent = JSON.parse(text) as Record<string, unknown>;`);
+    lines.push(`          return { content: [{ type: "text" as const, text }], structuredContent };`);
+    lines.push(`        } catch {`);
+    lines.push(`          return { content: [{ type: "text" as const, text }] };`);
+    lines.push(`        }`);
+    lines.push(`      }`);
+    lines.push(`      return { content: [{ type: "text" as const, text }], isError: true };`);
+  } else {
+    lines.push(`      return { content: [{ type: "text" as const, text }], isError: !resp.ok };`);
+  }
   return lines.join("\n");
 }
 
@@ -167,12 +185,20 @@ export function emitToolBlock(tool: ToolIR, wrap?: { fn: string }): string {
     `{ title: ${JSON.stringify(title)}, readOnlyHint: ${ann.readOnlyHint}, ` +
     `destructiveHint: ${ann.destructiveHint}, idempotentHint: ${ann.idempotentHint}, ` +
     `openWorldHint: ${ann.openWorldHint} }`;
+  // MCPFO-33: advertise the operation's success response schema as the tool's
+  // outputSchema when klaridian recovered one (a JSON-object success body — the
+  // gate lives in response-schema.ts). Same json-schema-to-zod path as
+  // inputSchema, so the SDK gets a Zod raw shape it can validate + convert to
+  // JSON Schema for tools/list.
+  const outputSchemaLine = tool.outputSchema
+    ? `\n      outputSchema: ${jsonSchemaToZod(tool.outputSchema)},`
+    : "";
   return `  server.registerTool(
     ${JSON.stringify(tool.name)},
     {
       title: ${JSON.stringify(title)},
       description: ${JSON.stringify(tool.description ?? "")},
-      inputSchema: ${zodSrc},
+      inputSchema: ${zodSrc},${outputSchemaLine}
       annotations: ${annotations},
     },
     ${handlerOpen}

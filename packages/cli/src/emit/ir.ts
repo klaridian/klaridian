@@ -89,13 +89,19 @@ export function parseKlaridianAnnotations(raw: unknown): KlaridianAnnotations | 
 }
 
 /** Per-operation metadata klaridian recovers from the raw spec because the
- *  `openapi-mcp-generator` engine drops it: the OpenAPI `summary` and the
- *  `x-klaridian` annotations. Both feed the emitter (title + tool hints). */
+ *  `openapi-mcp-generator` engine drops it: the OpenAPI `summary`, the
+ *  `x-klaridian` annotations, and the operation's success response schema.
+ *  All feed the emitter (title + tool hints + outputSchema). */
 export interface OperationMeta {
   /** OpenAPI operation `summary`, if the author wrote one. */
   summary?: string;
   /** Parsed `x-klaridian` annotations, if present + usable. */
   klaridian?: KlaridianAnnotations;
+  /** The operation's advertisable success response schema (MCPFO-33), recovered
+   *  by klaridian's own extraction (`emit/response-schema.ts`) because the
+   *  engine carries no response data at all. Present only when the success
+   *  body is a JSON object (the gate that makes it a valid MCP `outputSchema`). */
+  outputSchema?: JSONSchema7;
 }
 
 /**
@@ -224,6 +230,11 @@ export interface ToolIR {
    *  operation carries no usable `x-klaridian` — the emitter then uses its
    *  method-derived annotation defaults. */
   klaridian?: KlaridianAnnotations;
+  /** The operation's success response schema (MCPFO-33), recovered from the raw
+   *  spec by klaridian's own extraction (the engine carries no response data).
+   *  Present only when the success body is a JSON object; the emitter advertises
+   *  it as the tool's `outputSchema` and populates `structuredContent`. */
+  outputSchema?: JSONSchema7;
 }
 
 /**
@@ -258,10 +269,12 @@ export function mapMcpToolDefinitionToIR(
     operationId: tool.operationId,
     tags: tool.tags,
     deprecated: tool.deprecated,
-    // Recovered from the raw spec (the engine drops both): the OpenAPI summary
-    // feeds the tool title, and x-klaridian feeds hints + title + expose.
+    // Recovered from the raw spec (the engine drops all of these): the OpenAPI
+    // summary feeds the tool title, x-klaridian feeds hints + title + expose,
+    // and outputSchema (MCPFO-33) feeds the tool's outputSchema/structuredContent.
     summary: meta?.summary,
     klaridian: meta?.klaridian,
+    outputSchema: meta?.outputSchema,
   };
 }
 

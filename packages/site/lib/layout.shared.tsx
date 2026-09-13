@@ -12,7 +12,7 @@ export function baseOptions(): BaseLayoutProps {
     links: [
       { text: 'Docs', url: '/docs' },
       { text: 'Changelog', url: '/changelog' },
-      { text: 'GitHub', url: 'https://github.com/klaridian/klaridian' },
+      { text: '★ Star', url: 'https://github.com/klaridian/klaridian' },
     ],
   };
 }

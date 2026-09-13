@@ -49,9 +49,10 @@ export default function Home() {
             </Link>
             <a
               href="https://github.com/klaridian/klaridian"
+              title="Star klaridian on GitHub"
               className="hover:border-b-2 hover:border-[var(--klaridian-accent)]"
             >
-              github
+              <span className="text-[var(--klaridian-accent)]">★</span> star
             </a>
           </nav>
         </div>
@@ -163,7 +164,12 @@ export default function Home() {
 
       <footer className="border-t-[3px] border-[var(--klaridian-ink)] py-5">
         <div className="max-w-[860px] mx-auto px-5 flex justify-between text-[11px] text-[#666]">
-          <span>MIT LICENSE</span>
+          <a
+            href="https://github.com/klaridian/klaridian/blob/main/LICENSE"
+            className="hover:text-[var(--klaridian-accent)] hover:underline"
+          >
+            MIT LICENSE
+          </a>
           <span>BUILT ON THE OFFICIAL MCP SDK</span>
         </div>
       </footer>

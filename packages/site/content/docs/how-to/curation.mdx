@@ -103,6 +103,15 @@ Title precedence is `x-klaridian.title` → the OpenAPI `summary` → the humani
 
 A ready-to-generate example lives at [`examples/annotated/openapi.json`](https://github.com/klaridian/klaridian/blob/main/examples/annotated/openapi.json) in the repository.
 
+## Flags or `x-klaridian`: When to use which
+
+The flags and the `x-klaridian` extension aren't two ways to do the same thing—they answer to different people at different times.
+
+- **Flags are the generator's decision, made at generate time.** They live in your command (or your [`klaridian.config.json`](/docs/how-to/config-file)), apply to one build, and don't travel with the spec. Reach for them when the choice is yours as the person running klaridian: "for this server, only expose the `public` tags," or "skip everything under `/internal/`." Flags also cover coarse curation—by tag, path, or method—that `x-klaridian` can't express.
+- **`x-klaridian` is the API author's decision, and it travels with the spec.** It's versioned alongside the contract, so every consumer generating from that spec inherits it. Reach for it when the knowledge belongs to whoever owns the API: a `POST /calls` that spends money is `destructive`, `/admin/reindex` should never become a tool (`expose: false`), and a raw `operationId` deserves a human `title`. A consumer shouldn't have to rediscover any of that through flags.
+
+The two compose. An operation is generated only if it survives both layers, so `expose: false` in the spec and `--exclude-operation-ids` on the command line both hide an operation—the difference is intent. `expose: false` says "this is never a tool, for anyone"; `--exclude-operation-ids` says "not in this build." Use the spec for durable, author-owned truth; use flags for the choices that change from one generation to the next.
+
 ## Interactively
 
 Prefer to pick tags by hand instead of writing flags? Use `--interactive`:

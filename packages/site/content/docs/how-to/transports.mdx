@@ -20,6 +20,27 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
 
 The server listens on a network port instead. Use this when the server needs to run somewhere other than the client's own machine—for example, behind OAuth (see [OAuth 2.1](/docs/how-to/oauth)). This requires `streamable-http`—it doesn't work with `stdio`.
 
+### Deploying behind a public host
+
+The `--port` you pass at generation time is only the default. The generated streamable-http server reads three environment variables at runtime, so one build runs unchanged across environments:
+
+| Variable | What it does | Default |
+| --- | --- | --- |
+| `PORT` | The port to listen on. Takes precedence over `KLARIDIAN_PORT` and the generated default. Most platforms (Cloud Run, Render, Railway, Heroku) inject this automatically. | the `--port` value |
+| `KLARIDIAN_BIND_HOST` | The network interface to bind. Set to `0.0.0.0` inside a container or PaaS so the server accepts traffic from outside its own loopback. | `127.0.0.1` |
+| `KLARIDIAN_ALLOWED_HOSTS` | Comma-separated hostnames allowed in the `Host` header. By default only localhost is accepted (per the MCP spec's DNS-rebinding protection). When the server is reached through a public hostname—`myapp.fly.dev`, `name.workers.dev`, a custom domain—add it here, or every request is rejected with `403 Invalid Host`. | localhost only |
+
+For example, deploying to a host that serves `myapp.fly.dev` on the platform's injected port:
+
+```bash
+PORT=8080 \
+KLARIDIAN_BIND_HOST=0.0.0.0 \
+KLARIDIAN_ALLOWED_HOSTS=myapp.fly.dev \
+npm start
+```
+
+Leaving `KLARIDIAN_ALLOWED_HOSTS` unset keeps the secure localhost-only default, so local runs need no configuration. Only the hostnames you list are accepted—an unlisted `Host` still gets a `403`.
+
 ## Which one should I pick?
 
 Start with `stdio`. Switch to `streamable-http` only when you need remote access or OAuth.

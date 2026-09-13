@@ -51,9 +51,35 @@ test("streamable-http transport uses createMcpHandler + node adapter", () => {
   const index = files["src/index.ts"];
   assert.match(index, /createMcpHandler\(/, "http uses stateless createMcpHandler factory");
   assert.match(index, /toNodeHandler/, "http uses the node adapter");
-  assert.match(index, /localhostHostValidation/, "http arms host validation");
+  assert.match(index, /localhostHostValidation/, "http arms host validation (localhost default)");
   assert.doesNotMatch(index, /mcp-session-id/i, "no session-id machinery (stateless)");
   assert.doesNotMatch(index, /fetch-to-node/, "no fetch-to-node (the v1 crash source)");
+});
+
+// MCPFO-86 step 1 — deploy readiness: the emitted streamable-http server must be
+// reachable behind a platform-injected port and a public hostname, or every
+// deployed request 403s / hits the wrong port. These assert the env-driven seams.
+test("streamable-http: port is env-driven (PORT / KLARIDIAN_PORT) over the baked default", () => {
+  const files = emitServerProject({
+    serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://x/api",
+    transport: "streamable-http", port: 4000,
+  });
+  const index = files["src/index.ts"];
+  assert.match(index, /process\.env\.PORT/, "reads PORT (the platform convention)");
+  assert.match(index, /process\.env\.KLARIDIAN_PORT/, "reads KLARIDIAN_PORT");
+  assert.match(index, /\|\| 4000\)/, "falls back to the generation-time port");
+  assert.doesNotMatch(index, /\.listen\(4000\b/, "port is not hardcoded into listen()");
+});
+
+test("streamable-http: allowed hosts are configurable via KLARIDIAN_ALLOWED_HOSTS", () => {
+  const files = emitServerProject({
+    serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://x/api",
+    transport: "streamable-http", port: 4000,
+  });
+  const index = files["src/index.ts"];
+  assert.match(index, /KLARIDIAN_ALLOWED_HOSTS/, "reads the allowed-hosts env var");
+  assert.match(index, /hostHeaderValidation\(allowedHosts\)/, "uses the configurable validator when set");
+  assert.match(index, /originValidation\(allowedHosts\)/, "widens origin validation to match");
 });
 
 // MCPFO-28 — wires MCPFO-29/30's code-mode generator code into emitServerProject.

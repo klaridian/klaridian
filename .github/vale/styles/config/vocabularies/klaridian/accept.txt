@@ -35,3 +35,8 @@ OAuth
 venv
 pyproject
 vendored
+hostname
+hostnames
+loopback
+localhost
+workerd

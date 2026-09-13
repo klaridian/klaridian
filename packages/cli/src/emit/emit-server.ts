@@ -125,24 +125,34 @@ ${toolBlocks}
     return `${baseImports.join("\n")}
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServer } from "node:http";
-import { toNodeHandler, localhostHostValidation, localhostOriginValidation } from "@modelcontextprotocol/node";
+import { toNodeHandler, hostHeaderValidation, originValidation, localhostHostValidation, localhostOriginValidation } from "@modelcontextprotocol/node";
 ${authImport}
 const handler = createMcpHandler(${factoryBody});
 
 const nodeHandler = toNodeHandler(handler);
-const validateHost = localhostHostValidation();
-const validateOrigin = localhostOriginValidation();
+// Port precedence: PORT (the de-facto platform convention — Cloud Run, Render,
+// Railway, Heroku all inject it) > KLARIDIAN_PORT > the value baked in at
+// generation time (${port}). A deployed platform can move the port without a rebuild.
+const port = Number(process.env.PORT || process.env.KLARIDIAN_PORT || ${port});
 // Bind host is configurable so the same server is secure locally (default
 // 127.0.0.1, per MCP spec) and reachable when the caller controls the network
-// namespace it runs in (set KLARIDIAN_BIND_HOST=0.0.0.0). Host-header
-// validation still restricts callers to localhost, so 0.0.0.0 only widens the
-// network interface, not the accepted Host set.
+// namespace it runs in (set KLARIDIAN_BIND_HOST=0.0.0.0, which a container/PaaS
+// needs to accept traffic from outside its own loopback).
 const bindHost = process.env.KLARIDIAN_BIND_HOST || "127.0.0.1";
+// Host-header (DNS-rebinding) protection. By default only localhost is accepted,
+// per the MCP spec. When deployed behind a public hostname (myapp.fly.dev,
+// name.workers.dev, a custom domain), set KLARIDIAN_ALLOWED_HOSTS to a
+// comma-separated hostname list so requests routed via that name are accepted —
+// otherwise every public request is rejected with 403 "Invalid Host". Hostnames
+// only (port-agnostic); an empty/unset value keeps the localhost-only default.
+const allowedHosts = (process.env.KLARIDIAN_ALLOWED_HOSTS || "").split(",").map((h) => h.trim()).filter(Boolean);
+const validateHost = allowedHosts.length > 0 ? hostHeaderValidation(allowedHosts) : localhostHostValidation();
+const validateOrigin = allowedHosts.length > 0 ? originValidation(allowedHosts) : localhostOriginValidation();
 createServer(async (req, res) => {
   if (!validateHost(req, res) || !validateOrigin(req, res)) return;
 ${authGate}  void nodeHandler(req, res);
-}).listen(${port}, bindHost, () => {
-  console.error(\`MCP server (streamable-http) on http://\${bindHost}:${port}/mcp\`);
+}).listen(port, bindHost, () => {
+  console.error(\`MCP server (streamable-http) on http://\${bindHost}:\${port}/mcp\`);
 });
 
 process.on("SIGINT", async () => { await handler.close(); process.exit(0); });

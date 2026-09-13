@@ -13,6 +13,7 @@ import path from "node:path";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { emitDockerArtifacts } from "../src/emit/deploy/emit-docker.js";
+import { emitCloudflareArtifacts } from "../src/emit/deploy/emit-cloudflare.js";
 import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -113,6 +114,98 @@ test(
       }
       assert.equal(payload!.success, false);
       assert.equal(payload!.stage, "validate-transport");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+// --- Cloudflare target (MCPFO-86 step 3) ---
+
+test("cloudflare: emits a Worker entry that reuses the shared server factory", () => {
+  const files = emitCloudflareArtifacts({ serverName: "my-server", hasAuth: false });
+  const worker = files["worker.ts"];
+  assert.match(worker, /export default \{/, "Worker default export");
+  assert.match(worker, /async fetch\(request: Request/, "web-standard fetch handler");
+  assert.match(worker, /from "\.\/src\/server-factory\.js"/, "reuses the split-out buildServer factory");
+  assert.match(worker, /createMcpHandler\(buildServer\)/, "wraps the factory in the SDK handler");
+  assert.doesNotMatch(worker, /from "node:http"/, "no node:http import — must run on workerd");
+});
+
+test("cloudflare: wrangler.toml has nodejs_compat and a normalized name + allowed-hosts", () => {
+  const files = emitCloudflareArtifacts({ serverName: "My Server", hasAuth: false });
+  const toml = files["wrangler.toml"];
+  assert.match(toml, /name = "my-server"/, "server name normalized to a valid wrangler name");
+  assert.match(toml, /main = "worker\.ts"/, "points at the worker entry");
+  assert.match(toml, /compatibility_flags = \["nodejs_compat"\]/, "nodejs_compat for the SDK");
+  assert.match(toml, /KLARIDIAN_ALLOWED_HOSTS = "my-server\.workers\.dev"/, "presets the workers.dev host");
+});
+
+test("cloudflare: OAuth project gets a note about the unwired auth path", () => {
+  const files = emitCloudflareArtifacts({ serverName: "s", hasAuth: true });
+  assert.match(files["worker.ts"], /OAuth/, "worker flags the OAuth caveat");
+});
+
+test(
+  "deploy --target cloudflare: emits worker + wrangler for a real TS streamable-http project",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-cf-"));
+    try {
+      await execFileAsync("node", [
+        CLI_ENTRYPOINT, "generate",
+        "--spec", PETSTORE_SPEC_PATH,
+        "--out", outputDir,
+        "--name", "cf-e2e",
+        "--base-url", "https://petstore3.swagger.io/api/v3",
+        "--transport", "streamable-http",
+        "--port", "3000",
+        "--license", "none",
+      ]);
+
+      const result = await execFileAsync("node", [CLI_ENTRYPOINT, "deploy", outputDir, "--target", "cloudflare", "--json"]);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.success, true);
+      assert.equal(payload.target, "cloudflare");
+      assert.deepEqual(payload.files.sort(), ["worker.ts", "wrangler.toml"]);
+
+      // The worker must import the split-out factory that generate emitted.
+      const worker = await readFile(path.join(outputDir, "worker.ts"), "utf-8");
+      assert.match(worker, /from "\.\/src\/server-factory\.js"/);
+      assert.ok(await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8"), "factory module present");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "deploy --target cloudflare: refuses a Python project (Workers is JS/TS only)",
+  { timeout: 120_000 },
+  async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-cf-py-"));
+    try {
+      await execFileAsync("node", [
+        CLI_ENTRYPOINT, "generate",
+        "--spec", PETSTORE_SPEC_PATH,
+        "--out", outputDir,
+        "--name", "cf-py",
+        "--language", "python",
+        "--base-url", "https://petstore3.swagger.io/api/v3",
+        "--transport", "streamable-http",
+        "--port", "3000",
+        "--license", "none",
+      ]);
+
+      let payload: { success: boolean; stage: string } | undefined;
+      try {
+        await execFileAsync("node", [CLI_ENTRYPOINT, "deploy", outputDir, "--target", "cloudflare", "--json"]);
+        assert.fail("deploy should have refused a Python project for cloudflare");
+      } catch (err) {
+        payload = JSON.parse((err as { stdout: string }).stdout);
+      }
+      assert.equal(payload!.success, false);
+      assert.equal(payload!.stage, "validate-language");
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }

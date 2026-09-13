@@ -30,17 +30,21 @@ test("emitServerProject returns the three core project files", () => {
   assert.ok(files["src/index.ts"], "src/index.ts emitted");
 });
 
-test("emitted src/index.ts uses the v2 SDK and registers the tool", () => {
+test("emitted server factory uses the v2 SDK and registers the tool", () => {
   const files = emitServerProject({ serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://x/api" });
-  const index = files["src/index.ts"];
-  assert.match(index, /@modelcontextprotocol\/server/, "imports v2 server package");
-  assert.match(index, /new McpServer\(/, "constructs a fresh McpServer in a factory");
-  assert.match(index, /registerTool\(\s*"getPetById"/, "registers the tool by name");
+  const factory = files["src/server-factory.ts"];
+  assert.match(factory, /@modelcontextprotocol\/server/, "imports v2 server package");
+  assert.match(factory, /new McpServer\(/, "constructs a fresh McpServer in a factory");
+  assert.match(factory, /export function buildServer\(/, "exports a side-effect-free buildServer");
+  assert.match(factory, /registerTool\(\s*"getPetById"/, "registers the tool by name");
 });
 
-test("stdio transport (default) uses serveStdio(factory)", () => {
+test("stdio transport (default) uses serveStdio(buildServer) from the factory module", () => {
   const files = emitServerProject({ serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://x/api" });
-  assert.match(files["src/index.ts"], /serveStdio\(/, "stdio uses serveStdio");
+  const index = files["src/index.ts"];
+  assert.match(index, /serveStdio\(buildServer\)/, "stdio uses serveStdio over the imported factory");
+  assert.match(index, /from "\.\/server-factory\.js"/, "imports the factory module");
+  assert.doesNotMatch(index, /registerTool/, "the entry no longer inlines tool registration");
 });
 
 test("streamable-http transport uses createMcpHandler + node adapter", () => {
@@ -88,9 +92,9 @@ test("architecture: code-mode emits a single execute_code tool instead of per-op
     serverName: "petstore", tools: [FIXTURE_GET], baseUrl: "https://api.example.com",
     architecture: "code-mode",
   });
-  const index = files["src/index.ts"];
-  assert.match(index, /"execute_code"/, "registers execute_code");
-  assert.doesNotMatch(index, /registerTool\(\s*"getPetById"/, "does NOT register a per-operation tool");
+  const factory = files["src/server-factory.ts"];
+  assert.match(factory, /"execute_code"/, "registers execute_code");
+  assert.doesNotMatch(factory, /registerTool\(\s*"getPetById"/, "does NOT register a per-operation tool");
 });
 
 test("architecture: code-mode emits src/client.ts and src/sandbox-runner.ts", () => {
@@ -124,7 +128,7 @@ test("architecture: code-mode + plugin wiring wraps the execute_code handler", (
     architecture: "code-mode",
     wiring: { importStatement: `import { wrapTool } from "./instrumentation/otel.js";`, wrapFunctionName: "wrapTool" },
   });
-  const index = files["src/index.ts"];
-  assert.match(index, /import \{ wrapTool \} from "\.\/instrumentation\/otel\.js";/);
-  assert.match(index, /wrapTool\("execute_code", async \(args\) => \{/);
+  const factory = files["src/server-factory.ts"];
+  assert.match(factory, /import \{ wrapTool \} from "\.\/instrumentation\/otel\.js";/);
+  assert.match(factory, /wrapTool\("execute_code", async \(args\) => \{/);
 });

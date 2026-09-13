@@ -43,11 +43,11 @@ test("otel plugin instruments the v2 emit path with no plugin code changes", () 
     extraDependencies: additions.dependencies,
   });
 
-  const index = files["src/index.ts"];
+  const factory = files["src/server-factory.ts"];
   // The plugin's import is present
-  assert.match(index, /import \{ wrapTool \} from ".\/instrumentation\/otel\.js"/, "wrapTool import emitted");
+  assert.match(factory, /import \{ wrapTool \} from ".\/instrumentation\/otel\.js"/, "wrapTool import emitted");
   // Every handler is wrapped via the plugin's wrap function
-  assert.match(index, /wrapTool\(\s*"getPetById"\s*,\s*async \(args\)/, "handler wrapped with wrapTool");
+  assert.match(factory, /wrapTool\(\s*"getPetById"\s*,\s*async \(args\)/, "handler wrapped with wrapTool");
   // The vendored instrumentation file is included verbatim
   assert.ok(files["src/instrumentation/otel.ts"], "vendored otel.ts included in output");
   assert.match(files["src/instrumentation/otel.ts"], /OTLPTraceExporter/, "vendored file is the real otel instrumentation");
@@ -57,6 +57,6 @@ test("otel plugin instruments the v2 emit path with no plugin code changes", () 
 
 test("without a plugin, no instrumentation import or wrap is emitted", () => {
   const files = emitServerProject({ serverName: "petstore", tools: [FIXTURE], baseUrl: "https://x/api" });
-  assert.doesNotMatch(files["src/index.ts"], /wrapTool/, "no wrap when no plugin");
-  assert.doesNotMatch(files["src/index.ts"], /instrumentation/, "no instrumentation import when no plugin");
+  assert.doesNotMatch(files["src/server-factory.ts"], /wrapTool/, "no wrap when no plugin");
+  assert.doesNotMatch(files["src/server-factory.ts"], /instrumentation/, "no instrumentation import when no plugin");
 });

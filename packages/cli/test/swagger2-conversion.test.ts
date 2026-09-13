@@ -45,7 +45,7 @@ test(
       assert.match(result.stderr, /Detected Swagger 2\.0 spec.*converting to OpenAPI 3\.0/);
       assert.match(result.stderr, /Generated 3 tool\(s\)/);
 
-      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      const serverSource = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
 
       // The exact regression this fix targets: before the pre-conversion
       // step, every tool from a Swagger 2.0 spec would get an empty

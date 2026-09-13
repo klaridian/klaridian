@@ -247,7 +247,7 @@ test("generate --include-paths: produces a working server, tag-independent (real
     ]);
     assert.match(result.stderr, /Generated 3 tool\(s\)/, "only the 3 /customers operations survive, out of 4 total");
 
-    const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+    const serverSource = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
     assert.match(serverSource, /listCustomers/);
     assert.match(serverSource, /createCustomer/);
     assert.match(serverSource, /getCustomer/);
@@ -282,7 +282,7 @@ test(
       ]);
       assert.match(result.stderr, /Generated 8 tool\(s\) \(curated from 19 total\)/);
 
-      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      const serverSource = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
       // Petstore's "store" tag includes getInventory/placeOrder/etc, "user"
       // includes createUser/loginUser/etc — none of those operationIds
       // should be present in the curated output.

@@ -44,7 +44,7 @@ test(
       assert.match(result.stderr, /Generated 19 tool\(s\)/);
       assert.doesNotMatch(result.stderr, /\+ otel/);
 
-      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      const serverSource = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
       assert.doesNotMatch(serverSource, /wrapTool/, "no plugin requested -> no instrumentation wiring");
       assert.match(serverSource, /@modelcontextprotocol\/server/, "v2 SDK import");
 
@@ -84,7 +84,7 @@ test(
       assert.match(result.stderr, /Generated 19 tool\(s\)/);
       assert.match(result.stderr, /\+ otel/);
 
-      const serverSource = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      const serverSource = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
       assert.match(serverSource, /import \{ wrapTool \} from ".\/instrumentation\/otel\.js";/);
       // Every handler is wrapped via the plugin's wrap function at the
       // registerTool boundary (v2 native wiring — no textual patch).
@@ -385,7 +385,7 @@ test(
       // expose:false dropped the internal GET; 2 tools remain, not 3.
       assert.match(result.stderr, /Generated 2 tool\(s\)/);
 
-      const src = await readFile(path.join(outputDir, "src", "index.ts"), "utf-8");
+      const src = await readFile(path.join(outputDir, "src", "server-factory.ts"), "utf-8");
       assert.match(src, /createThing/);
       assert.match(src, /getThing/);
       assert.doesNotMatch(src, /listThingsInternal/, "expose:false tool must not be emitted");

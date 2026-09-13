@@ -93,8 +93,17 @@ export function resolveBaseUrlWarning(
   );
 }
 
-function emitIndex(opts: EmitOptions): string {
-  const transport: Transport = opts.transport ?? "stdio";
+/**
+ * Emits the tool-registration factory as a standalone, side-effect-free module
+ * (`src/server-factory.ts`) exporting `buildServer`. Split out from the entry
+ * (MCPFO-86 step 3) so multiple entrypoints can reuse the SAME registration
+ * logic: the node entry (src/index.ts, stdio or streamable-http) AND a
+ * Cloudflare Worker entry (worker.ts, emitted by `klaridian deploy --target
+ * cloudflare`). Keeping this a pure module — no `.listen()`, no `serveStdio()`,
+ * no top-level side effect — is what lets a Worker `import { buildServer }`
+ * without triggering a node:http bootstrap. See ARCHITECTURE.md §81.
+ */
+function emitServerFactoryModule(opts: EmitOptions): string {
   const architecture: Architecture = opts.architecture ?? "tools";
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;
   const toolBlocks =
@@ -102,16 +111,26 @@ function emitIndex(opts: EmitOptions): string {
       ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl), wrap), emitSearchDocsToolBlock()].join("\n\n")
       : opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
 
-  const baseImports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];
-  if (opts.wiring) baseImports.push(opts.wiring.importStatement);
+  const imports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];
+  if (opts.wiring) imports.push(opts.wiring.importStatement);
 
-  const factoryBody = `() => {
+  return `${imports.join("\n")}
+
+// The MCP server factory. Registers every tool and returns a fresh McpServer.
+// Side-effect-free and transport-agnostic: the entrypoint (src/index.ts) and any
+// other host (e.g. a Cloudflare Worker) call this to build a server instance.
+export function buildServer() {
   const server = new McpServer({ name: ${JSON.stringify(opts.serverName)}, version: "1.0.0" });
 
 ${toolBlocks}
 
   return server;
-}`;
+}
+`;
+}
+
+function emitIndex(opts: EmitOptions): string {
+  const transport: Transport = opts.transport ?? "stdio";
 
   if (transport === "streamable-http") {
     const port = opts.port ?? 3000;
@@ -122,12 +141,12 @@ ${toolBlocks}
   (req as unknown as { auth?: typeof authResult }).auth = authResult;
 `
       : "";
-    return `${baseImports.join("\n")}
-import { createMcpHandler } from "@modelcontextprotocol/server";
+    return `import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServer } from "node:http";
 import { toNodeHandler, hostHeaderValidation, originValidation, localhostHostValidation, localhostOriginValidation } from "@modelcontextprotocol/node";
+import { buildServer } from "./server-factory.js";
 ${authImport}
-const handler = createMcpHandler(${factoryBody});
+const handler = createMcpHandler(buildServer);
 
 const nodeHandler = toNodeHandler(handler);
 // Port precedence: PORT (the de-facto platform convention — Cloud Run, Render,
@@ -161,10 +180,10 @@ process.on("SIGTERM", async () => { await handler.close(); process.exit(0); });
   }
 
   // stdio — serveStdio(factory) from @modelcontextprotocol/server/stdio (verified against the installed v2 dist).
-  return `${baseImports.join("\n")}
-import { serveStdio } from "@modelcontextprotocol/server/stdio";
+  return `import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { buildServer } from "./server-factory.js";
 
-serveStdio(${factoryBody});
+serveStdio(buildServer);
 `;
 }
 
@@ -186,6 +205,7 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
   const files: EmittedProject = {
     "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName, Boolean(opts.auth)),
     "tsconfig.json": emitTsconfig(),
+    "src/server-factory.ts": emitServerFactoryModule(opts),
     "src/index.ts": emitIndex(opts),
     "server.json": emitServerJson({
       serverName: opts.serverName,

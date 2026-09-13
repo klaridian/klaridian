@@ -347,7 +347,7 @@ test(
         extraDependencies: additions.dependencies,
       });
       // Sanity-check the static wiring before paying for a real E2E run.
-      assert.match(files["src/index.ts"], /wrapTool\("execute_code", async \(args\) => \{/);
+      assert.match(files["src/server-factory.ts"], /wrapTool\("execute_code", async \(args\) => \{/);
       assert.ok(files["src/instrumentation/otel.ts"], "vendored otel.ts included in output");
 
       for (const [rel, content] of Object.entries(files)) {

@@ -25,6 +25,23 @@ docker build -t my-server ./my-server
 docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=https://api.example.com my-server
 ```
 
+## Cloudflare Workers (the edge target)
+
+```bash
+klaridian deploy ./my-server --target cloudflare
+```
+
+This writes a `worker.ts` entry and a `wrangler.toml` manifest. The Worker reuses the same server factory the local server uses — the MCP SDK exposes a web-standard `fetch` handler, so the generated server runs on Cloudflare's edge runtime unchanged. Validate it with no account needed, then deploy:
+
+```bash
+cd ./my-server
+npx wrangler deploy --dry-run   # compiles the Worker locally, no login
+# set KLARIDIAN_BASE_URL in wrangler.toml, then:
+npx wrangler deploy
+```
+
+`wrangler.toml` presets `KLARIDIAN_ALLOWED_HOSTS` to `<name>.workers.dev` — add your custom domain if you use one. This target is **TypeScript-only**: Cloudflare Workers runs JavaScript, so a Python project (or a `code-mode` server, which spawns a Deno sandbox) is refused — use `--target docker` for those.
+
 ## Reaching the server once it's deployed
 
 The generated server reads its runtime configuration from the environment (see [Transports](/docs/how-to/transports) for the full table). Two matter most in a container:
@@ -36,9 +53,9 @@ The generated server reads its runtime configuration from the environment (see [
 
 | Flag | What it does |
 | --- | --- |
-| `--target <target>` | Which target to emit for. Currently `docker`. |
+| `--target <target>` | Which target to emit for: `docker` or `cloudflare`. |
 | `--out <dir>` | Where to write the artifacts. Defaults to the project directory. |
 | `--force` | Overwrite existing artifacts instead of refusing. |
 | `--json` | Print a single machine-readable JSON result instead of human-readable lines. |
 
-More targets (Cloudflare Workers for the edge, Fly for a one-command container deploy) are planned on top of this same emit + shell-out model.
+A Fly target (a one-command container deploy over the same Dockerfile) is planned on top of this same emit + shell-out model.

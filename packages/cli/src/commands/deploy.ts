@@ -25,9 +25,10 @@ import path from "node:path";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createCliOutput } from "../cli-output.js";
 import { emitDockerArtifacts, type DeployLanguage } from "../emit/deploy/emit-docker.js";
+import { emitCloudflareArtifacts } from "../emit/deploy/emit-cloudflare.js";
 
-/** Deploy targets shipped so far. cloudflare/fly are tracked follow-ups (§78). */
-const SUPPORTED_TARGETS = ["docker"] as const;
+/** Deploy targets shipped so far. fly is a tracked follow-up (§78). */
+const SUPPORTED_TARGETS = ["docker", "cloudflare"] as const;
 type DeployTarget = (typeof SUPPORTED_TARGETS)[number];
 
 /**
@@ -63,7 +64,7 @@ async function fileExists(p: string): Promise<boolean> {
  * (deploy is streamable-http-only) and the baked-in port (for EXPOSE/PORT).
  */
 async function detectProject(dir: string): Promise<
-  | { ok: true; language: DeployLanguage; transport: string; port: number }
+  | { ok: true; language: DeployLanguage; transport: string; port: number; hasAuth: boolean; isCodeMode: boolean }
   | { ok: false; reason: string }
 > {
   const pkgPath = path.join(dir, "package.json");
@@ -84,7 +85,10 @@ async function detectProject(dir: string): Promise<
       return { ok: false, reason: `${path.join(dir, "server.json")} is not readable JSON. Is this a klaridian generate --out directory?` };
     }
     const port = await recoverPort(path.join(dir, "src", "index.ts"), /KLARIDIAN_PORT\s*\|\|\s*(\d+)\)/);
-    return { ok: true, language: "typescript", transport, port };
+    const hasAuth = await fileExists(path.join(dir, "src", "auth.ts"));
+    // code-mode emits a Deno-sandbox runner; that subprocess can't run on Workers.
+    const isCodeMode = await fileExists(path.join(dir, "src", "sandbox-runner.ts"));
+    return { ok: true, language: "typescript", transport, port, hasAuth, isCodeMode };
   }
 
   if (await fileExists(pyprojectPath)) {
@@ -102,7 +106,8 @@ async function detectProject(dir: string): Promise<
       return { ok: false, reason: `${serverPy} is not readable. Is this a klaridian generate --out directory?` };
     }
     const port = await recoverPort(serverPy, /KLARIDIAN_PORT"\)\s*or\s*(\d+)\)/);
-    return { ok: true, language: "python", transport, port };
+    const hasAuth = await fileExists(path.join(dir, "auth.py"));
+    return { ok: true, language: "python", transport, port, hasAuth, isCodeMode: false };
   }
 
   return {
@@ -121,6 +126,20 @@ async function recoverPort(sourcePath: string, pattern: RegExp): Promise<number>
     // fall through to the default
   }
   return 3000;
+}
+
+/**
+ * The server name for a Cloudflare Worker: the generated project's package.json
+ * `name`, falling back to the directory basename. wrangler normalizes it further.
+ */
+async function serverNameFor(_detected: unknown, dir: string): Promise<string> {
+  try {
+    const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf-8")) as { name?: string };
+    if (pkg.name) return pkg.name;
+  } catch {
+    // fall through to the basename
+  }
+  return path.basename(dir);
 }
 
 /** Whether `dir` already contains one of the artifacts we'd write. */
@@ -191,7 +210,29 @@ export function registerDeployCommand(program: Command): void {
         }
 
         // Emit the artifacts for the chosen target.
-        const artifacts = emitDockerArtifacts({ language: detected.language, port: detected.port });
+        let artifacts: Record<string, string>;
+        if (opts.target === "cloudflare") {
+          // Cloudflare Workers runs JS/TS on workerd — not a CPython server.
+          if (detected.language !== "typescript") {
+            fail(
+              `--target cloudflare only supports TypeScript projects, but ${dir} is a ${detected.language} project. Cloudflare Workers runs JavaScript/TypeScript, not a Python server — use \`--target docker\` (or fly) for the Python target.`,
+              "validate-language"
+            );
+            return;
+          }
+          // code-mode runs model code in a spawned Deno subprocess, which the
+          // Workers runtime has no way to launch.
+          if (detected.isCodeMode) {
+            fail(
+              `--target cloudflare can't deploy a code-mode server: its execute_code tool spawns a Deno sandbox subprocess, which the Workers runtime cannot run. Use \`--target docker\` (or fly) for a code-mode server.`,
+              "validate-architecture"
+            );
+            return;
+          }
+          artifacts = emitCloudflareArtifacts({ serverName: await serverNameFor(detected, dir), hasAuth: detected.hasAuth });
+        } else {
+          artifacts = emitDockerArtifacts({ language: detected.language, port: detected.port });
+        }
         const names = Object.keys(artifacts);
 
         // Overwrite protection, mirroring generate's --force contract.
@@ -212,11 +253,15 @@ export function registerDeployCommand(program: Command): void {
         }
 
         const nextSteps =
-          "Next: build and run locally with `docker build -t my-server " +
-          `${path.relative(process.cwd(), outDir) || "."}` +
-          "` then `docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=<api> my-server`. " +
-          "To deploy, hand the Dockerfile to your platform's CLI (for example `fly launch` / `fly deploy`). " +
-          "Set KLARIDIAN_ALLOWED_HOSTS to your public hostname so requests aren't rejected with 403.";
+          opts.target === "cloudflare"
+            ? "Next: validate with `npx wrangler deploy --dry-run` (no account needed), " +
+              "set KLARIDIAN_BASE_URL in wrangler.toml, then `npx wrangler deploy`. " +
+              "KLARIDIAN_ALLOWED_HOSTS is preset to <name>.workers.dev — add your custom domain if you use one."
+            : "Next: build and run locally with `docker build -t my-server " +
+              `${path.relative(process.cwd(), outDir) || "."}` +
+              "` then `docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=<api> my-server`. " +
+              "To deploy, hand the Dockerfile to your platform's CLI (for example `fly launch` / `fly deploy`). " +
+              "Set KLARIDIAN_ALLOWED_HOSTS to your public hostname so requests aren't rejected with 403.";
 
         if (opts.json) {
           process.stdout.write(

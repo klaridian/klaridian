@@ -11,9 +11,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { annotationsForMethod, titleForTool, resolveAnnotations } from "../src/emit/emit-tool.js";
 import {
-  parseXMcp,
-  extractXMcpByOperationId,
-  normalizeXMcpObjectsToExpose,
+  parseKlaridianAnnotations,
+  extractKlaridianByOperationId,
+  prepareSpecForEngine,
   type ToolIR,
 } from "../src/emit/ir.js";
 
@@ -88,81 +88,86 @@ function toolIR(partial: Partial<ToolIR>): ToolIR {
   };
 }
 
-test("parseXMcp: object form maps recognised boolean keys", () => {
+test("parseKlaridianAnnotations: object form maps recognised boolean keys", () => {
   assert.deepEqual(
-    parseXMcp({ readOnly: true, destructive: false, openWorld: false, expose: true }),
+    parseKlaridianAnnotations({ readOnly: true, destructive: false, openWorld: false, expose: true }),
     { readOnly: true, destructive: false, openWorld: false, expose: true }
   );
 });
 
-test("parseXMcp: boolean/booleanish shorthand becomes { expose }", () => {
-  assert.deepEqual(parseXMcp(true), { expose: true });
-  assert.deepEqual(parseXMcp(false), { expose: false });
-  assert.deepEqual(parseXMcp("true"), { expose: true });
+test("parseKlaridianAnnotations: unknown/non-boolean keys are dropped; empty/non-object → undefined", () => {
+  assert.deepEqual(
+    parseKlaridianAnnotations({ readOnly: true, description: "hi", bogus: 3 }),
+    { readOnly: true }
+  );
+  assert.equal(parseKlaridianAnnotations({ description: "hi" }), undefined);
+  assert.equal(parseKlaridianAnnotations(true), undefined); // not an object
+  assert.equal(parseKlaridianAnnotations(undefined), undefined);
+  assert.equal(parseKlaridianAnnotations(null), undefined);
 });
 
-test("parseXMcp: unknown/non-boolean keys are dropped; empty object → undefined", () => {
-  assert.deepEqual(parseXMcp({ readOnly: true, description: "hi", bogus: 3 }), { readOnly: true });
-  assert.equal(parseXMcp({ description: "hi" }), undefined);
-  assert.equal(parseXMcp(undefined), undefined);
-  assert.equal(parseXMcp(null), undefined);
-});
-
-test("resolveAnnotations: no x-mcp → identical to method-derived defaults", () => {
+test("resolveAnnotations: no x-klaridian → identical to method-derived defaults", () => {
   assert.deepEqual(resolveAnnotations(toolIR({ method: "post" })), annotationsForMethod("post"));
 });
 
-test("resolveAnnotations: x-mcp overrides the method default per hint", () => {
+test("resolveAnnotations: x-klaridian overrides the method default per hint", () => {
   // POST would derive destructive:false, openWorld:true; author says destructive:true.
   const a = resolveAnnotations(
-    toolIR({ method: "post", xMcp: { destructive: true } })
+    toolIR({ method: "post", klaridian: { destructive: true } })
   );
   assert.equal(a.destructiveHint, true);
   assert.equal(a.readOnlyHint, false); // untouched method default
   assert.equal(a.openWorldHint, true); // untouched method default
-  assert.equal(a.idempotentHint, false); // method-derived, never from x-mcp
+  assert.equal(a.idempotentHint, false); // method-derived, never from x-klaridian
 });
 
-test("resolveAnnotations: an absent x-mcp key falls back to that one hint's method default", () => {
+test("resolveAnnotations: an absent x-klaridian key falls back to that one hint's method default", () => {
   // GET derives readOnly:true; author only sets openWorld:false.
   const a = resolveAnnotations(
-    toolIR({ method: "get", xMcp: { openWorld: false } })
+    toolIR({ method: "get", klaridian: { openWorld: false } })
   );
   assert.equal(a.openWorldHint, false); // overridden
   assert.equal(a.readOnlyHint, true); // still the GET default
   assert.equal(a.idempotentHint, true); // still the GET default
 });
 
-test("extractXMcpByOperationId: collects object-form x-mcp keyed by operationId, ignores boolean form", () => {
+test("extractKlaridianByOperationId: collects x-klaridian keyed by operationId", () => {
   const doc: any = {
     openapi: "3.0.0",
     info: { title: "t", version: "1" },
     paths: {
-      "/a": { get: { operationId: "aGet", "x-mcp": { readOnly: true, expose: true } } },
-      "/b": { post: { operationId: "bPost", "x-mcp": false } }, // boolean → not collected
-      "/c": { get: { operationId: "cGet" } }, // no x-mcp
+      "/a": { get: { operationId: "aGet", "x-klaridian": { readOnly: true, expose: true } } },
+      "/b": { post: { operationId: "bPost", "x-mcp": false } }, // boolean x-mcp → not ours
+      "/c": { get: { operationId: "cGet" } }, // no x-klaridian
     },
   };
-  const map = extractXMcpByOperationId(doc);
+  const map = extractKlaridianByOperationId(doc);
   assert.deepEqual(map.get("aGet"), { readOnly: true, expose: true });
   assert.equal(map.has("bPost"), false);
   assert.equal(map.has("cGet"), false);
 });
 
-test("normalizeXMcpObjectsToExpose: rewrites object x-mcp to its boolean expose, leaves booleans + input untouched", () => {
+test("prepareSpecForEngine: x-klaridian.expose:false → x-mcp:false; object x-mcp collapsed; input untouched", () => {
   const doc: any = {
     openapi: "3.0.0",
     info: { title: "t", version: "1" },
     paths: {
-      "/a": { get: { operationId: "aGet", "x-mcp": { readOnly: true, expose: false } } },
-      "/b": { get: { operationId: "bGet", "x-mcp": { readOnly: true } } }, // no expose → true
-      "/c": { post: { operationId: "cPost", "x-mcp": false } }, // boolean untouched
+      // hidden by author → engine-native exclusion
+      "/a": { get: { operationId: "aGet", "x-klaridian": { readOnly: true, expose: false } } },
+      // exposed by author (no expose key) → left includable
+      "/b": { get: { operationId: "bGet", "x-klaridian": { readOnly: true } } },
+      // third-party object x-mcp → collapsed to boolean so the engine stays quiet
+      "/c": { post: { operationId: "cPost", "x-mcp": { readOnly: true, expose: true } } },
+      // third-party object x-mcp with expose:false → collapsed to false
+      "/d": { get: { operationId: "dGet", "x-mcp": { expose: false } } },
     },
   };
-  const out: any = normalizeXMcpObjectsToExpose(doc);
+  const out: any = prepareSpecForEngine(doc);
   assert.equal(out.paths["/a"].get["x-mcp"], false);
-  assert.equal(out.paths["/b"].get["x-mcp"], true);
-  assert.equal(out.paths["/c"].post["x-mcp"], false);
+  assert.equal(out.paths["/b"].get["x-mcp"], undefined); // untouched, engine defaults to include
+  assert.equal(out.paths["/c"].post["x-mcp"], true);
+  assert.equal(out.paths["/d"].get["x-mcp"], false);
   // input document is not mutated (deep clone)
-  assert.deepEqual(doc.paths["/a"].get["x-mcp"], { readOnly: true, expose: false });
+  assert.equal(doc.paths["/a"].get["x-mcp"], undefined);
+  assert.deepEqual(doc.paths["/c"].post["x-mcp"], { readOnly: true, expose: true });
 });

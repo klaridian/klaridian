@@ -309,39 +309,43 @@ test(
 );
 
 // ---------------------------------------------------------------------------
-// MCPFO-76 — object-form x-mcp: annotation overrides + expose:false exclusion,
-// with zero openapi-mcp-generator fallback warnings.
+// MCPFO-76 — x-klaridian annotations: per-hint overrides + expose:false
+// exclusion, with zero openapi-mcp-generator fallback warnings even when a
+// third-party object `x-mcp` is present (ARCHITECTURE.md §72).
 // ---------------------------------------------------------------------------
 
-const XMCP_SPEC = {
+const KLARIDIAN_SPEC = {
   openapi: "3.0.0",
-  info: { title: "xmcp-fixture", version: "1.0.0" },
+  info: { title: "klaridian-annotations-fixture", version: "1.0.0" },
   servers: [{ url: "https://api.example.com" }],
   paths: {
     "/things": {
-      // POST that the author marks destructive + closed-world via object x-mcp;
+      // POST the author marks destructive + closed-world via x-klaridian;
       // method-derivation alone would give destructive:false, openWorld:true.
       post: {
         operationId: "createThing",
         summary: "Create a thing",
-        "x-mcp": { readOnly: false, destructive: true, openWorld: false, expose: true },
+        "x-klaridian": { readOnly: false, destructive: true, openWorld: false, expose: true },
         responses: { "200": { description: "ok" } },
       },
-      // GET the author hides from the tool surface.
+      // GET the author hides from the tool surface via x-klaridian.expose.
       get: {
         operationId: "listThingsInternal",
         summary: "List things (internal)",
-        "x-mcp": { readOnly: true, expose: false },
+        "x-klaridian": { readOnly: true, expose: false },
         responses: { "200": { description: "ok" } },
       },
     },
     "/things/{id}": {
-      // GET with a partial object: only openWorld set; readOnly must stay the
-      // GET default (true), proving per-hint fallback.
+      // GET with a partial x-klaridian: only openWorld set; readOnly must stay
+      // the GET default (true), proving per-hint fallback. Also carries a
+      // third-party OBJECT `x-mcp` — klaridian must NOT read hints from it, and
+      // the engine must NOT warn about it (prepareSpecForEngine collapses it).
       get: {
         operationId: "getThing",
         summary: "Get a thing",
-        "x-mcp": { openWorld: false },
+        "x-klaridian": { openWorld: false },
+        "x-mcp": { readOnly: false, expose: true },
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "ok" } },
       },
@@ -350,14 +354,14 @@ const XMCP_SPEC = {
 };
 
 test(
-  "generate: object-form x-mcp overrides annotations, honours expose:false, and emits no fallback warnings",
+  "generate: x-klaridian overrides annotations, honours expose:false, and emits no fallback warnings",
   { timeout: 60_000 },
   async () => {
-    const workDir = await mkdtemp(path.join(tmpdir(), "klaridian-xmcp-"));
+    const workDir = await mkdtemp(path.join(tmpdir(), "klaridian-annot-"));
     const specPath = path.join(workDir, "spec.json");
     const outputDir = path.join(workDir, "out");
     try {
-      await writeFile(specPath, JSON.stringify(XMCP_SPEC), "utf-8");
+      await writeFile(specPath, JSON.stringify(KLARIDIAN_SPEC), "utf-8");
       const result = await execFileAsync("node", [
         CLI_ENTRYPOINT,
         "generate",
@@ -366,15 +370,16 @@ test(
         "--out",
         outputDir,
         "--name",
-        "xmcp-test",
+        "klaridian-annot-test",
         "--base-url",
         "https://api.example.com",
         "--license",
         "none",
       ]);
 
-      // No openapi-mcp-generator fallback warnings: object x-mcp is normalized
-      // to boolean before the engine ever sees it.
+      // No openapi-mcp-generator fallback warnings, even though a third-party
+      // object x-mcp is present: prepareSpecForEngine collapses it to a boolean
+      // before the engine ever sees it.
       assert.doesNotMatch(result.stderr, /Invalid x-mcp value/);
 
       // expose:false dropped the internal GET; 2 tools remain, not 3.
@@ -393,8 +398,9 @@ test(
       assert.match(createBlock, /readOnlyHint: false/);
 
       // getThing block: only openWorld was set → readOnly stays the GET default.
+      // (The sibling object x-mcp said readOnly:false and is correctly ignored.)
       const getBlock = src.slice(src.indexOf('"getThing"'));
-      assert.match(getBlock, /readOnlyHint: true/, "unset readOnly falls back to GET default");
+      assert.match(getBlock, /readOnlyHint: true/, "unset x-klaridian.readOnly falls back to GET default");
       assert.match(getBlock, /openWorldHint: false/, "author override applied");
     } finally {
       await rm(workDir, { recursive: true, force: true });

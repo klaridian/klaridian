@@ -44,6 +44,48 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
 
 Path/method filters and tag filters can combine—an operation must pass both to be included.
 
+## From the spec, with `x-klaridian`
+
+The filters above are things _you_ decide at generate time. Sometimes the API author is better placed to decide—and wants those decisions to travel with the spec. klaridian reads an `x-klaridian` extension on any operation for exactly that.
+
+### Hide an operation
+
+Set `expose: false` to keep an operation out of the generated tool surface entirely—useful for internal or maintenance endpoints that should never become agent tools:
+
+```yaml
+paths:
+  /admin/reindex:
+    post:
+      operationId: reindexCatalog
+      x-klaridian:
+        expose: false   # never generated as a tool
+```
+
+An operation with no `x-klaridian`, or without `expose`, is exposed as usual (fail-open). This composes with the flag-based filters above: an operation is generated only if it survives both.
+
+### Tune the tool annotations
+
+Every generated tool carries MCP annotation hints (`readOnlyHint`, `destructiveHint`, `openWorldHint`) that tell an agent how risky a tool is. By default klaridian derives them from the HTTP method: GET is read-only, DELETE is destructive, POST and PATCH are writes. When the method isn't the whole story—a `POST /calls` that spends money, or a `POST /search` that changes nothing—the author can state the truth directly:
+
+```yaml
+paths:
+  /calls:
+    post:
+      operationId: startCall
+      x-klaridian:
+        destructive: true    # a POST that really does something irreversible
+        openWorld: true
+  /search:
+    post:
+      operationId: search
+      x-klaridian:
+        readOnly: true       # a POST that only reads
+```
+
+Each hint is optional and overrides the method-derived default **for that hint alone**—anything you leave out keeps its default. Recognised keys: `readOnly`, `destructive`, `openWorld`, and `expose`.
+
+A ready-to-generate example lives at [`examples/annotated/openapi.json`](https://github.com/klaridian/klaridian/blob/main/examples/annotated/openapi.json) in the repository.
+
 ## Interactively
 
 Prefer to pick tags by hand instead of writing flags? Use `--interactive`:

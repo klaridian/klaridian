@@ -22,17 +22,22 @@ import type { JSONSchema7 } from "json-schema";
 import type { OpenAPIV3 } from "openapi-types";
 
 /**
- * Author-supplied MCP annotations from the `x-mcp` OpenAPI vendor extension,
- * in its OBJECT form (MCPFO-76). Each field is optional: an absent key means
- * "the author said nothing about this hint", and the emitter falls back to its
- * HTTP-method-derived default for that hint alone (not the whole annotation).
+ * Author-supplied MCP annotations from klaridian's `x-klaridian` OpenAPI vendor
+ * extension. Each field is optional: an absent key means "the author said
+ * nothing about this hint", and the emitter falls back to its HTTP-method-derived
+ * default for that hint alone (not the whole annotation).
  *
- * Note `openapi-mcp-generator` reads `x-mcp` ONLY as a boolean include/exclude
- * flag (`shouldIncludeOperationForMcp`) and DISCARDS the object form entirely —
- * it never reaches `McpToolDefinition`. klaridian therefore recovers the object
- * from the raw spec (`extractXMcpByOperationId`) and threads it onto ToolIR.
+ * `x-klaridian` is klaridian's OWN extension (reverse-DNS-free `x-<vendor>` per
+ * the OpenAPI spec-extension convention). The hint KEYS map 1:1 onto the MCP
+ * protocol's own `ToolAnnotations` (`readOnlyHint`/`destructiveHint`/
+ * `openWorldHint`) — standard MCP values under a klaridian-owned key. `expose`
+ * controls whether the operation becomes a tool at all.
+ *
+ * Distinct from the boolean `x-mcp` include/exclude flag that `openapi-mcp-
+ * generator` reads natively (and that `curation.ts` writes) — that stays as-is.
+ * klaridian does not read annotation hints from `x-mcp`.
  */
-export interface XMcpAnnotations {
+export interface KlaridianAnnotations {
   /** Author's readOnly hint → `readOnlyHint`. */
   readOnly?: boolean;
   /** Author's destructive hint → `destructiveHint`. */
@@ -43,10 +48,11 @@ export interface XMcpAnnotations {
   expose?: boolean;
 }
 
+/** The vendor-extension key klaridian reads for per-operation annotations. */
+export const KLARIDIAN_EXTENSION = "x-klaridian";
+
 /** Coerce a JSON boolean or booleanish string ("true"/"1"/"yes"/"on" and the
- *  falsey equivalents) to a boolean; anything else → undefined. Mirrors the
- *  coercion `openapi-mcp-generator` applies to the boolean form, so the two
- *  agree on what "x-mcp: true" means. */
+ *  falsey equivalents) to a boolean; anything else → undefined. */
 function coerceBoolean(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
@@ -58,51 +64,36 @@ function coerceBoolean(value: unknown): boolean | undefined {
 }
 
 /**
- * Parse a raw `x-mcp` value (boolean, booleanish string, or object) into
- * `XMcpAnnotations`, or undefined when it carries nothing usable.
- *
- * - boolean / booleanish string → `{ expose }` (the back-compat shorthand;
- *   this is exactly what `openapi-mcp-generator` already honours for
- *   include/exclude, so we only need it to also drive `expose`).
- * - object → the recognised keys (`readOnly`/`destructive`/`openWorld`/`expose`),
- *   each coerced to boolean; unrecognised or non-boolean values are dropped.
- * - anything else → undefined.
+ * Parse a raw `x-klaridian` value (an object) into `KlaridianAnnotations`, or
+ * undefined when it carries nothing usable. Recognised keys (`readOnly`/
+ * `destructive`/`openWorld`/`expose`) are each coerced to boolean; unrecognised
+ * or non-boolean values are dropped. A non-object (or empty result) → undefined.
  */
-export function parseXMcp(raw: unknown): XMcpAnnotations | undefined {
-  if (raw === undefined || raw === null) return undefined;
-
-  const asBool = coerceBoolean(raw);
-  if (asBool !== undefined) return { expose: asBool };
-
-  if (typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    const result: XMcpAnnotations = {};
-    const readOnly = coerceBoolean(obj.readOnly);
-    const destructive = coerceBoolean(obj.destructive);
-    const openWorld = coerceBoolean(obj.openWorld);
-    const expose = coerceBoolean(obj.expose);
-    if (readOnly !== undefined) result.readOnly = readOnly;
-    if (destructive !== undefined) result.destructive = destructive;
-    if (openWorld !== undefined) result.openWorld = openWorld;
-    if (expose !== undefined) result.expose = expose;
-    return Object.keys(result).length > 0 ? result : undefined;
-  }
-
-  return undefined;
+export function parseKlaridianAnnotations(raw: unknown): KlaridianAnnotations | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  const result: KlaridianAnnotations = {};
+  const readOnly = coerceBoolean(obj.readOnly);
+  const destructive = coerceBoolean(obj.destructive);
+  const openWorld = coerceBoolean(obj.openWorld);
+  const expose = coerceBoolean(obj.expose);
+  if (readOnly !== undefined) result.readOnly = readOnly;
+  if (destructive !== undefined) result.destructive = destructive;
+  if (openWorld !== undefined) result.openWorld = openWorld;
+  if (expose !== undefined) result.expose = expose;
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**
- * Walk a parsed OpenAPI document and collect the OBJECT-form `x-mcp`
- * annotations keyed by operationId. Only the object form carries rich hints
- * worth recovering; the boolean/string form is pure include/exclude and is
- * left entirely to openapi-mcp-generator. Only operation-level `x-mcp` is read.
- * Operations without an operationId or without an object `x-mcp` are omitted —
- * a caller looking one up gets undefined and keeps the method-derived defaults.
+ * Walk a parsed OpenAPI document and collect the `x-klaridian` annotations keyed
+ * by operationId. Only operation-level `x-klaridian` is read. Operations without
+ * an operationId or without a usable `x-klaridian` are omitted — a caller looking
+ * one up gets undefined and keeps the method-derived defaults.
  */
-export function extractXMcpByOperationId(
+export function extractKlaridianByOperationId(
   doc: OpenAPIV3.Document
-): Map<string, XMcpAnnotations> {
-  const map = new Map<string, XMcpAnnotations>();
+): Map<string, KlaridianAnnotations> {
+  const map = new Map<string, KlaridianAnnotations>();
   const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
   for (const pathItem of Object.values(doc.paths ?? {})) {
     if (!pathItem || typeof pathItem !== "object") continue;
@@ -111,11 +102,7 @@ export function extractXMcpByOperationId(
       if (!op || typeof op !== "object") continue;
       const operationId = op.operationId;
       if (!operationId) continue;
-      const raw = (op as Record<string, unknown>)["x-mcp"];
-      // Object form only. Boolean/string x-mcp is include/exclude, handled
-      // upstream — recovering it here would gain nothing and muddy the map.
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-      const parsed = parseXMcp(raw);
+      const parsed = parseKlaridianAnnotations((op as Record<string, unknown>)[KLARIDIAN_EXTENSION]);
       if (parsed) map.set(operationId, parsed);
     }
   }
@@ -123,20 +110,24 @@ export function extractXMcpByOperationId(
 }
 
 /**
- * Return a deep clone of the document with every OBJECT-form operation-level
- * `x-mcp` rewritten to its boolean `expose` value (`expose ?? true`).
+ * Return a deep clone of the document prepared for the openapi-mcp-generator
+ * engine, doing two things per operation:
  *
- * Why: openapi-mcp-generator reads `x-mcp` only as a boolean and emits a
- * `console.warn` for every object it sees (the "~60 fallback warnings" noise in
- * MCPFO-76), then falls back to include. Rewriting the object to the boolean it
- * already means BEFORE the engine parses the spec removes the warnings AND lets
- * the engine own exclusion uniformly: `expose: false` → `x-mcp: false` →
- * excluded natively, exactly like a boolean `x-mcp: false` or a curation
- * exclusion. The rich hints are recovered separately from the pre-normalized
- * document via `extractXMcpByOperationId`, so nothing is lost. Boolean/string
- * `x-mcp` values are left untouched (the engine already handles them silently).
+ * 1. **Apply `x-klaridian.expose: false` as a native exclusion.** An operation
+ *    the author hides is given `x-mcp: false` (the boolean include/exclude flag
+ *    the engine reads natively — same mechanism `curation.ts` uses), so exclusion
+ *    lives in exactly one place. `x-klaridian` remains on the operation but is
+ *    inert to the engine (it ignores unknown `x-*` keys).
+ * 2. **Silence the engine's object-`x-mcp` warning.** openapi-mcp-generator reads
+ *    `x-mcp` only as a boolean and `console.warn`s once per operation on any
+ *    object value. Some third-party specs carry an object `x-mcp`; rewrite any
+ *    such object to its `expose` boolean (default true) so the engine stays
+ *    quiet. klaridian does NOT read hints from `x-mcp` — only from `x-klaridian`.
+ *
+ * The rich hints are recovered separately from the ORIGINAL document via
+ * `extractKlaridianByOperationId`, so nothing is lost here.
  */
-export function normalizeXMcpObjectsToExpose(doc: OpenAPIV3.Document): OpenAPIV3.Document {
+export function prepareSpecForEngine(doc: OpenAPIV3.Document): OpenAPIV3.Document {
   const cloned: OpenAPIV3.Document = JSON.parse(JSON.stringify(doc));
   const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
   for (const pathItem of Object.values(cloned.paths ?? {})) {
@@ -145,10 +136,20 @@ export function normalizeXMcpObjectsToExpose(doc: OpenAPIV3.Document): OpenAPIV3
       const op = (pathItem as Record<string, OpenAPIV3.OperationObject | undefined>)[method];
       if (!op || typeof op !== "object") continue;
       const holder = op as Record<string, unknown>;
-      const raw = holder["x-mcp"];
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-      const parsed = parseXMcp(raw);
-      holder["x-mcp"] = parsed?.expose ?? true;
+
+      // (1) x-klaridian.expose: false → engine-native exclusion via x-mcp:false.
+      const klar = parseKlaridianAnnotations(holder[KLARIDIAN_EXTENSION]);
+      if (klar?.expose === false) {
+        holder["x-mcp"] = false;
+      }
+
+      // (2) Silence the engine's warning on a third-party object x-mcp: collapse
+      // it to its boolean expose (default true) unless (1) already set it false.
+      const xmcp = holder["x-mcp"];
+      if (xmcp && typeof xmcp === "object" && !Array.isArray(xmcp)) {
+        const exposeVal = coerceBoolean((xmcp as Record<string, unknown>).expose);
+        holder["x-mcp"] = exposeVal ?? true;
+      }
     }
   }
   return cloned;
@@ -201,11 +202,10 @@ export interface ToolIR {
   /** OpenAPI operation summary, if present. Undefined today; reserved for
    *  summary-derived tool titles (MCPFO-77). */
   summary?: string;
-  /** Author-supplied object-form `x-mcp` annotations (MCPFO-76), recovered
-   *  from the raw spec since openapi-mcp-generator discards them. Undefined
-   *  when the operation carries no usable `x-mcp` — the emitter then uses its
+  /** Author-supplied `x-klaridian` annotations (MCPFO-76). Undefined when the
+   *  operation carries no usable `x-klaridian` — the emitter then uses its
    *  method-derived annotation defaults. */
-  xMcp?: XMcpAnnotations;
+  klaridian?: KlaridianAnnotations;
 }
 
 /**
@@ -223,7 +223,7 @@ export interface ToolIR {
  */
 export function mapMcpToolDefinitionToIR(
   tool: McpToolDefinitionLike,
-  xMcp?: XMcpAnnotations
+  klaridian?: KlaridianAnnotations
 ): ToolIR {
   return {
     name: tool.name,
@@ -242,7 +242,7 @@ export function mapMcpToolDefinitionToIR(
     deprecated: tool.deprecated,
     // Not present on McpToolDefinition today; captured for faithful shape.
     summary: (tool as { summary?: string }).summary,
-    xMcp,
+    klaridian,
   };
 }
 

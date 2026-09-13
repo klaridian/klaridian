@@ -117,7 +117,8 @@ klaridian/
 │       └── test/           # end-to-end tests (real npm install + build + run)
 │   └── python-posthog-middleware/  # FastMCP-native PostHog middleware (Python) — no generation/patching, see ARCHITECTURE.md section 23
 ├── examples/
-│   └── petstore/           # real OpenAPI spec used as the test fixture throughout
+│   ├── petstore/           # real OpenAPI spec used as the test fixture throughout
+│   └── annotated/          # small spec showing the x-klaridian extension (tool hints + expose)
 ├── spikes/                  # throwaway spikes that validated risky mechanics before building for real (see spikes/README.md)
 ├── PLAN.md                 # business/strategy plan
 ├── ARCHITECTURE.md         # technical design, decisions, and validation history

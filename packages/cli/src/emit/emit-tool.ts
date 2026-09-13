@@ -67,13 +67,13 @@ export function titleForTool(tool: { name: string; operationId?: string; summary
 
 /**
  * Resolve the final tool annotations for a ToolIR: the HTTP-method-derived
- * defaults (`annotationsForMethod`), with any author-supplied object-form
- * `x-mcp` hints (MCPFO-76) overlaid PER HINT. An absent x-mcp key leaves that
- * one hint at its method default — the author overrides only what they set,
- * not the whole annotation.
+ * defaults (`annotationsForMethod`), with any author-supplied `x-klaridian`
+ * hints (MCPFO-76) overlaid PER HINT. An absent hint leaves that one at its
+ * method default — the author overrides only what they set, not the whole
+ * annotation.
  *
- * `idempotentHint` stays method-derived: the `x-mcp` object does not carry it,
- * and inferring it from anything else would assert a contract the author never
+ * `idempotentHint` stays method-derived: `x-klaridian` does not carry it, and
+ * inferring it from anything else would assert a contract the author never
  * made. `title` is handled separately (titleForTool / MCPFO-77).
  */
 export function resolveAnnotations(tool: ToolIR): {
@@ -83,13 +83,13 @@ export function resolveAnnotations(tool: ToolIR): {
   openWorldHint: boolean;
 } {
   const ann = annotationsForMethod(tool.method || "get");
-  const x = tool.xMcp;
-  if (!x) return ann;
+  const k = tool.klaridian;
+  if (!k) return ann;
   return {
-    readOnlyHint: x.readOnly ?? ann.readOnlyHint,
-    destructiveHint: x.destructive ?? ann.destructiveHint,
+    readOnlyHint: k.readOnly ?? ann.readOnlyHint,
+    destructiveHint: k.destructive ?? ann.destructiveHint,
     idempotentHint: ann.idempotentHint,
-    openWorldHint: x.openWorld ?? ann.openWorldHint,
+    openWorldHint: k.openWorld ?? ann.openWorldHint,
   };
 }
 

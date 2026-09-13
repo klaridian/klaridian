@@ -1,18 +1,22 @@
 {
   "title": "How-to guides",
   "pages": [
+    "---Get started---",
     "installation",
     "init",
     "config-file",
+    "---Generate---",
     "curation",
     "code-mode",
     "target-language",
+    "---Run & deploy---",
     "running-the-server",
     "transports",
-    "deploy",
-    "licensing",
     "oauth",
+    "deploy",
+    "---Publish---",
     "mcp-registry",
+    "licensing",
     "plugins"
   ]
 }

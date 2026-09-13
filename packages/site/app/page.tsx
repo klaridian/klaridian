@@ -1,6 +1,33 @@
 import Link from "next/link";
 import { CopyInstallCommand } from "@/components/copy-install-command";
 
+const FEATURES = [
+  {
+    title: "Born instrumented",
+    body: "OpenTelemetry spans and product-analytics events wired at generation time — not bolted on after the fact.",
+  },
+  {
+    title: "Curated, not dumped",
+    body: "Exclude, rename, and tag operations so agents see a clean tool catalog, not your whole API.",
+  },
+  {
+    title: "TypeScript or Python",
+    body: "Same tools, same annotations, same observability from one spec — pick the runtime you'd rather deploy.",
+  },
+  {
+    title: "Deploy anywhere",
+    body: "Emit a portable Dockerfile, a Cloudflare Worker, or a Fly.io app. klaridian writes the config; the platform's CLI does the rest.",
+  },
+  {
+    title: "Built for large APIs",
+    body: "Code-mode turns hundreds of operations into a typed client and just two tools, so agents keep their context lean.",
+  },
+  {
+    title: "Open by default",
+    body: "MIT-licensed generator, plain readable output on the official MCP SDK. Read it before you trust it with real credentials.",
+  },
+];
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[var(--klaridian-paper)] text-[var(--klaridian-ink)] font-mono">
@@ -14,6 +41,12 @@ export default function Home() {
             <Link href="/docs" className="hover:border-b-2 hover:border-[var(--klaridian-accent)]">
               docs
             </Link>
+            <Link
+              href="/changelog"
+              className="hover:border-b-2 hover:border-[var(--klaridian-accent)]"
+            >
+              changelog
+            </Link>
             <a
               href="https://github.com/klaridian/klaridian"
               className="hover:border-b-2 hover:border-[var(--klaridian-accent)]"
@@ -24,45 +57,65 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero — Starship-style: claim, one-line sub, single CTA. No badge, no stats. */}
-      <section className="border-b-[3px] border-[var(--klaridian-ink)] py-[90px]">
+      {/* Hero — claim, one-line sub, CTAs, then a real generate → output block. */}
+      <section className="border-b-[3px] border-[var(--klaridian-ink)] py-[80px]">
         <div className="max-w-[860px] mx-auto px-5 text-center">
-          <h1 className="text-[42px] md:text-5xl font-extrabold tracking-tight leading-[1.2] mb-5 max-w-[620px] mx-auto">
+          <h1 className="text-[42px] md:text-5xl font-extrabold tracking-tight leading-[1.2] mb-5 max-w-[640px] mx-auto">
             Generate an{" "}
             <span className="text-[var(--klaridian-accent)]">instrumented</span>{" "}
             MCP server from your API spec.
           </h1>
-          <p className="text-sm max-w-[480px] mx-auto mb-9 text-[#333]">
-            OpenAPI (or Swagger 2.0) in, a stateless MCP server out — TypeScript
-            or Python, with engineering observability and product analytics wired
-            in from the start.
+          <p className="text-sm max-w-[500px] mx-auto mb-8 text-[#333]">
+            OpenAPI (or Swagger 2.0) in, a stateless MCP server out — in
+            TypeScript or Python, with observability and tool curation wired in.
+            Generate it, run it, deploy it.
           </p>
-          <a
-            href="#install"
-            className="inline-block px-7 py-3.5 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] hover:bg-[var(--klaridian-accent)] hover:border-[var(--klaridian-accent)] hover:text-[var(--klaridian-ink)] transition-colors"
+          <div className="flex gap-3 justify-center mb-12">
+            <a
+              href="#install"
+              className="inline-block px-7 py-3.5 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] hover:bg-[var(--klaridian-accent)] hover:border-[var(--klaridian-accent)] hover:text-[var(--klaridian-ink)] transition-colors"
+            >
+              Get started →
+            </a>
+            <Link
+              href="/docs"
+              className="inline-block px-7 py-3.5 text-[13px] font-bold border-2 border-[var(--klaridian-ink)] bg-transparent text-[var(--klaridian-ink)] hover:bg-[var(--klaridian-ink)] hover:text-[var(--klaridian-paper)] transition-colors"
+            >
+              Read the docs
+            </Link>
+          </div>
+
+          {/* Representative generate run + emitted output */}
+          <div
+            className="border-[3px] border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] mx-auto max-w-[620px] text-left"
+            style={{ boxShadow: "8px 8px 0 var(--klaridian-accent)" }}
           >
-            Get started →
-          </a>
+            <div className="flex items-center gap-1.5 px-3.5 py-2 border-b border-[#444]">
+              <span className="w-2.5 h-2.5 border border-[#666]" />
+              <span className="w-2.5 h-2.5 border border-[#666]" />
+              <span className="w-2.5 h-2.5 border border-[#666]" />
+            </div>
+            <pre className="px-5 py-[22px] text-[12.5px] leading-relaxed overflow-x-auto">
+              <span className="text-[var(--klaridian-accent)]">$</span> klaridian generate --spec ./api.yaml \{"\n"}
+              {"    "}--out ./server --plugin otel
+              {"\n\n"}
+              <span className="text-[var(--klaridian-accent)]">✓</span> 24 operations → 24 MCP tools{"\n"}
+              <span className="text-[var(--klaridian-accent)]">✓</span> OpenTelemetry tracing wired in{"\n"}
+              <span className="text-[var(--klaridian-accent)]">✓</span> TypeScript · stateless · official MCP SDK
+              {"\n\n"}
+              <span className="text-[#888]">./server/</span>{"\n"}
+              <span className="text-[#888]">  ├─ src/server-factory.ts</span>{"\n"}
+              <span className="text-[#888]">  ├─ src/index.ts</span>{"\n"}
+              <span className="text-[#888]">  └─ package.json</span>
+            </pre>
+          </div>
         </div>
       </section>
 
-      {/* Three one-sentence blurbs — no cards, no icons, no borders */}
+      {/* What you get — six one-sentence blurbs, no cards, no icons */}
       <section className="border-b-[3px] border-[var(--klaridian-ink)] py-[60px]">
-        <div className="max-w-[860px] mx-auto px-5 grid grid-cols-1 md:grid-cols-3 gap-10">
-          {[
-            {
-              title: "Born instrumented",
-              body: "OTel spans and product-analytics events wired at generation time — not bolted on after the fact.",
-            },
-            {
-              title: "Curated, not dumped",
-              body: "Exclude, rename, and tag operations so agents see a clean tool catalog, not your whole API.",
-            },
-            {
-              title: "Open by default",
-              body: "MIT-licensed generator, plain readable TypeScript or Python output. Read it before you trust it with real credentials.",
-            },
-          ].map((b) => (
+        <div className="max-w-[860px] mx-auto px-5 grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-9">
+          {FEATURES.map((b) => (
             <div key={b.title}>
               <h3 className="text-sm font-extrabold mb-2.5">
                 <span className="text-[var(--klaridian-accent)]">

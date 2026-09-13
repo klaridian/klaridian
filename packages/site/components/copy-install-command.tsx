@@ -6,7 +6,7 @@ const CHANNELS = [
   {
     label: "npx",
     cmd: "npx klaridian generate --spec ./api.yaml --out ./server",
-    note: "# Node.js · run once, nothing installed — recommended for a generator",
+    note: "# Node.js · run once, nothing installed — recommended",
   },
   {
     label: "npm",
@@ -68,7 +68,7 @@ export function CopyInstallCommand() {
           {copied ? "COPIED ✓" : "COPY"}
         </button>
       </div>
-      <pre className="px-5 pt-[22px] pb-[26px] text-base overflow-x-auto text-left">
+      <pre className="px-5 pt-[22px] pb-[26px] text-sm overflow-x-auto text-left">
         <span className="text-[var(--klaridian-accent)]">$</span> {current.cmd}
         {"\n"}
         <span className="text-[#888] text-xs block mt-2.5">

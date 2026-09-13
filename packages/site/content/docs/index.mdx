@@ -1,39 +1,46 @@
 ---
 title: Getting Started
-description: Generate your first MCP server from an OpenAPI spec.
+description: What klaridian is, how it fits together, and where to go next.
 ---
 
-## Install
+klaridian turns an OpenAPI (or Swagger 2.0) spec into a stateless [Model Context Protocol](https://modelcontextprotocol.io) server — in TypeScript or Python, with observability and tool curation wired in from the start. You run it a handful of times per project, review the plain output, and ship it.
+
+## Your first server
 
 The fastest path is `npx` — no install step:
 
 ```bash
 npx klaridian generate --spec ./api.yaml --out ./my-server --plugin otel
+cd my-server && npm install && npm start
 ```
 
-Prefer a permanent install, or want a native binary with no Node.js? klaridian also ships on npm, PyPI, and Homebrew, with prebuilt binaries for macOS, Linux, and Windows — see [Installation](/docs/how-to/installation) for every option.
+Prefer a permanent install, or a native binary with no Node.js? See [Installation](/docs/how-to/installation) for npm, PyPI, Homebrew, and prebuilt binaries.
 
-klaridian is a CLI today. There's no library mode yet (no `import`/`require`)—that's tracked separately, not built.
+## How the pieces fit
+
+klaridian is a CLI with three verbs, one per stage of the lifecycle:
+
+- **`generate`** — read the spec, emit the server. Everything structural is decided here: the [target language](/docs/how-to/target-language), which operations become tools ([curation](/docs/how-to/curation)), the [architecture](/docs/how-to/code-mode), the [transport](/docs/how-to/transports), [auth](/docs/how-to/oauth), and any observability [plugins](/docs/how-to/plugins/otel).
+- **`start`** — run a generated server locally, in either language. See [Running the server](/docs/how-to/running-the-server).
+- **`deploy`** — emit the artifacts a hosting platform needs (Docker, Cloudflare Workers, or Fly.io). See [Deploy](/docs/how-to/deploy).
+
+New to the flags? [`klaridian init`](/docs/how-to/init) asks a few questions and writes a [configuration file](/docs/how-to/config-file), then prints the exact `generate` command to run.
 
 ## What you get
 
-- One MCP tool per operation in your OpenAPI spec
-- Tool names match your spec's `operationId`s exactly
-- A stateless server in TypeScript (default) or Python (`--language python`), ready to run
-- OpenTelemetry tracing already wired in, if you passed `--plugin otel`
+- One MCP tool per operation in your spec, with names matching your `operationId`s exactly — or just two tools for large specs with [code-mode](/docs/how-to/code-mode)
+- A stateless server in TypeScript (default) or Python (`--language python`), with identical tools, annotations, and observability across both
+- OpenTelemetry tracing and product-analytics events wired at generation time, if you pass a `--plugin`
+- A real `LICENSE` by default, and plain readable source you can audit before trusting it with credentials
 
-Got a Swagger 2.0 spec? Pass it the same way—klaridian detects it and converts it to OpenAPI 3.0 before generating, so you don't have to convert it yourself.
+Got a Swagger 2.0 spec? Pass it the same way — klaridian detects it and converts it to OpenAPI 3.0 before generating.
 
-## Two ways to generate
-
-By default, klaridian makes one MCP tool per API operation. This works well for small and medium specs.
-
-For large specs (dozens or hundreds of operations), that gets noisy. Use `--architecture code-mode` instead—it generates a typed client and just two tools (`execute_code`, `search_docs`). See [Code-mode architecture](/docs/how-to/code-mode).
+klaridian is a CLI today. There's no library mode yet (no `import`/`require`) — that's tracked separately, not built.
 
 ## Next steps
 
-- [Curating the tool surface](/docs/how-to/curation)—control which operations become tools
-- [Code-mode architecture](/docs/how-to/code-mode)—for large specs
-- [CLI reference](/docs/reference/cli-reference)—every flag
-- [Plugins: OpenTelemetry](/docs/how-to/plugins/otel)
-- [Plugins: PostHog](/docs/how-to/plugins/posthog)
+- [Curating the tool surface](/docs/how-to/curation) — control which operations become tools
+- [Code-mode architecture](/docs/how-to/code-mode) — for large specs
+- [Deploy](/docs/how-to/deploy) — ship to Docker, Cloudflare, or Fly
+- [CLI reference](/docs/reference/cli-reference) — every flag
+- [Plugins: OpenTelemetry](/docs/how-to/plugins/otel) · [PostHog](/docs/how-to/plugins/posthog)

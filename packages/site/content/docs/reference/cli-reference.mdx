@@ -163,6 +163,21 @@ See [Options](/docs/how-to/running-the-server) for the full guide.
 |---|---|
 | `--json` | If a pre-launch check fails (missing/unbuilt project), print a single JSON error object to stdout instead of a human message. Has no effect once the server itself starts — from that point the server owns stdout. |
 
+## klaridian deploy
+
+Emit deploy artifacts for a project previously produced by `klaridian generate`. Uses the emit + shell-out model: klaridian writes the platform's native config (a portable Dockerfile for --target docker) rather than reimplementing deploy infrastructure. Reconfigures nothing about the server itself — every structural decision was made at generation time. Requires a streamable-http project (a stdio server has nothing to expose).
+
+### Options
+
+See [Options](/docs/how-to/deploy) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--target <target>` | Deploy target to emit artifacts for. Supported: docker. Defaults to `docker`. |
+| `--out <dir>` | Directory to write the artifacts into (default: the project directory itself). |
+| `--force` | Overwrite existing artifacts (Dockerfile/.dockerignore) instead of refusing. |
+| `--json` | Print a single machine-readable JSON result to stdout instead of human-readable lines. |
+
 ## klaridian plugins list
 
 List every available observability plugin (id and name)

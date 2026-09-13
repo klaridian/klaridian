@@ -1,0 +1,44 @@
+---
+title: Deploy
+description: Emit deploy artifacts for a generated server with klaridian deploy.
+---
+
+`klaridian deploy` takes a server you already generated and emits the files a hosting platform needs to run it. It follows an **emit + shell-out** model: klaridian writes the platform's native configuration (a portable `Dockerfile` for `--target docker`) and you hand them to that platform's own CLI. klaridian never reimplements deploy infrastructure.
+
+Deploy reconfigures nothing about the server itself — every structural decision (spec, transport, port, plugins, auth) was made at generation time. It only makes sense for a **streamable-http** server: a `stdio` server has no network endpoint to expose, so `deploy` refuses one.
+
+## Docker (the portable baseline)
+
+```bash
+klaridian deploy ./my-server --target docker
+```
+
+This writes a `Dockerfile` and `.dockerignore` into the project. The Dockerfile is vendor-neutral — it runs on Fly, Render, Railway, Cloud Run, or a self-hosted box. It's an ephemeral build input, not a maintained part of your generated project.
+
+- **TypeScript projects** get a multi-stage build: `npm run build` produces a self-contained bundle, and the runtime image carries only that bundle on a slim Node base.
+- **Python projects** get a slim Python image that installs `requirements.txt` and runs `server.py`.
+
+Build and run it locally:
+
+```bash
+docker build -t my-server ./my-server
+docker run -p 3000:3000 -e KLARIDIAN_BASE_URL=https://api.example.com my-server
+```
+
+## Reaching the server once it's deployed
+
+The generated server reads its runtime configuration from the environment (see [Transports](/docs/how-to/transports) for the full table). Two matter most in a container:
+
+- `KLARIDIAN_BIND_HOST=0.0.0.0` — already set in the emitted Dockerfile, so the server binds all interfaces instead of loopback.
+- `KLARIDIAN_ALLOWED_HOSTS` — **set this at deploy time to your public hostname** (for example `myapp.fly.dev`). Without it, requests routed through that hostname are rejected with `403 Invalid Host`. The platform injects `PORT`; the server honors it automatically.
+
+## Options
+
+| Flag | What it does |
+| --- | --- |
+| `--target <target>` | Which target to emit for. Currently `docker`. |
+| `--out <dir>` | Where to write the artifacts. Defaults to the project directory. |
+| `--force` | Overwrite existing artifacts instead of refusing. |
+| `--json` | Print a single machine-readable JSON result instead of human-readable lines. |
+
+More targets (Cloudflare Workers for the edge, Fly for a one-command container deploy) are planned on top of this same emit + shell-out model.

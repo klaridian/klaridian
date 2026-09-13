@@ -9,6 +9,7 @@
     "target-language",
     "running-the-server",
     "transports",
+    "deploy",
     "licensing",
     "oauth",
     "mcp-registry",

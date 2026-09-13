@@ -40,3 +40,6 @@ hostnames
 loopback
 localhost
 workerd
+Dockerfile
+reimplements
+reimplementing

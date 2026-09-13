@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { registerGenerateCommand } from "./commands/generate.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerStartCommand } from "./commands/start.js";
+import { registerDeployCommand } from "./commands/deploy.js";
 import { registerPluginsCommand, registerLicensesCommand } from "./commands/list.js";
 // Single source of truth for the CLI version: the package manifest. Hardcoding
 // it here (was "0.0.1") silently drifts from package.json on every release —
@@ -22,6 +23,7 @@ program
 registerGenerateCommand(program);
 registerInitCommand(program);
 registerStartCommand(program);
+registerDeployCommand(program);
 registerPluginsCommand(program);
 registerLicensesCommand(program);
 

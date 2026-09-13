@@ -289,13 +289,17 @@ jobs:
           packages-dir: dist/
 
   # ---------------------------------------------------------------------------
-  # GitHub Release from the tag, with auto-generated notes. Runs only after
-  # the publish succeeds so the release never points at a version that failed
-  # to ship.
+  # GitHub Release from the tag. Release notes are DERIVED from CHANGELOG.md
+  # (the single source of truth, Keep a Changelog format) — the same
+  # "derive, don't duplicate" discipline as --version and cli-reference.mdx.
+  # If the tag's version has no CHANGELOG section (e.g. someone forgot to add
+  # it), fall back to GitHub's auto-generated notes rather than blocking the
+  # release. Runs only after the publish succeeds so the release never points
+  # at a version that failed to ship.
   # ---------------------------------------------------------------------------
   github-release:
     name: GitHub Release
-    needs: [publish-npm, publish-pypi]
+    needs: [verify, publish-npm, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -307,7 +311,38 @@ jobs:
           pattern: binary-*
           path: release-assets
           merge-multiple: true
-      - name: Create release
+      - name: Extract this version's notes from CHANGELOG.md
+        id: notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # Print the body of the "## [VERSION]" section (everything up to the
+          # next "## [" heading), dropping the heading line itself. awk keeps it
+          # dependency-free and robust to the reference-link block at the foot.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { grab=1; next }
+            grab && /^## \[/        { exit }
+            grab                    { print }
+          ' CHANGELOG.md > notes.md
+          # Trim leading/trailing blank lines.
+          sed -i -e '/./,$!d' notes.md
+          if [ -s notes.md ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Using CHANGELOG.md notes for $VERSION:"
+            cat notes.md
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No CHANGELOG.md section for $VERSION — falling back to --generate-notes."
+          fi
+      - name: Create release (notes from CHANGELOG.md)
+        if: ${{ steps.notes.outputs.found == 'true' }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md --verify-tag release-assets/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Create release (auto-generated notes fallback)
+        if: ${{ steps.notes.outputs.found == 'false' }}
         run: |
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
             --generate-notes --verify-tag release-assets/*

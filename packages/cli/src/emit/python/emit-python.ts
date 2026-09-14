@@ -415,11 +415,13 @@ SERVER_NAME = ${pyStr(opts.serverName)}
 TOOL_MAP = {t["name"]: t for t in TOOLS}
 
 
-async def _dispatch(tool_name: str, arguments: dict) -> types.CallToolResult:
+async def _dispatch(tool_name: str, arguments: dict, meta: dict | None = None) -> types.CallToolResult:
     """The single tool-dispatch boundary every call flows through (MCPFO-60.2
     shared-dispatch granularity). A plugin instruments the server by wrapping
     THIS function once, below — coarser than the TS per-tool wrap, but every
-    tool call is still covered because every call passes through here."""
+    tool call is still covered because every call passes through here. The meta
+    dict carries the request's _meta (MCPFO-90: W3C trace context lives here) so
+    a wrapping plugin can continue the caller's distributed trace."""
     entry = TOOL_MAP[tool_name]
     return await entry["call"](arguments)
 
@@ -453,7 +455,15 @@ async def on_call_tool(ctx, params):
         # protocol error.
         return invalid
     try:
-        return await _dispatch(params.name, arguments)
+        # MCPFO-90: forward the request _meta (W3C trace context lives here) to
+        # the dispatch boundary so a wrapping plugin can continue the trace.
+        meta = params.meta
+        meta_dict = (
+            meta.model_dump(by_alias=True, exclude_none=True)
+            if meta is not None and hasattr(meta, "model_dump")
+            else (dict(meta) if meta else {})
+        )
+        return await _dispatch(params.name, arguments, meta_dict)
     except Exception as exc:  # noqa: BLE001 — upstream/proxy failures are tool errors
         return conformance.tool_error(str(exc))
 

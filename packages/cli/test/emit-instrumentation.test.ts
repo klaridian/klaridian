@@ -60,3 +60,22 @@ test("without a plugin, no instrumentation import or wrap is emitted", () => {
   assert.doesNotMatch(files["src/server-factory.ts"], /wrapTool/, "no wrap when no plugin");
   assert.doesNotMatch(files["src/server-factory.ts"], /instrumentation/, "no instrumentation import when no plugin");
 });
+
+test("MCPFO-90: otel TS instrumentation continues the caller's W3C trace from request _meta", () => {
+  const config = resolvePluginConfig(otelPlugin, {
+    "otlpEndpoint": "http://localhost:4318/v1/traces",
+    "serviceName": "petstore",
+  });
+  const contribs = otelPlugin.getTemplateContributions(config);
+  const otel = contribs.find((c) => c.path === "src/instrumentation/otel.ts")!;
+  const src = otel.content as string;
+  // A W3C propagator is registered explicitly (don't rely on NodeSDK default).
+  assert.match(src, /setGlobalPropagator/, "registers a global propagator");
+  assert.match(src, /W3CTraceContextPropagator/, "uses the W3C trace context propagator");
+  // The wrap reads the request _meta and extracts a parent context from it.
+  assert.match(src, /ctx\.mcpReq\._meta/, "reads trace context from request _meta");
+  assert.match(src, /propagation\.extract/, "extracts parent context via the propagator");
+  // The tool span is opened INSIDE that parent context, and ctx is forwarded.
+  assert.match(src, /otelContext\.with\(parentContext/, "opens the span within the extracted parent context");
+  assert.match(src, /handler\(args, ctx\)/, "forwards ctx to the wrapped handler");
+});

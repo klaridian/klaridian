@@ -80,6 +80,31 @@ test("python target emits a complete, coherent project from real tool data", asy
   assert.match(files["requirements.txt"], /jsonschema/);
 });
 
+test("MCPFO-90: python server threads request _meta to the shared dispatch, and otel continues the W3C trace", async () => {
+  const tools = await petstoreTools();
+  const files = pythonTarget.emitProject({
+    serverName: "petstore-py",
+    tools,
+    baseUrl: "https://petstore3.swagger.io/api/v3",
+    transport: "stdio",
+  });
+  // The shared dispatch accepts a meta arg, and on_call_tool forwards the
+  // request _meta into it (so a wrapping plugin can read trace context).
+  assert.match(files["server.py"], /async def _dispatch\(tool_name: str, arguments: dict, meta: dict \| None = None\)/);
+  assert.match(files["server.py"], /_dispatch\(params\.name, arguments, meta_dict\)/);
+  assert.match(files["server.py"], /params\.meta/, "reads _meta off the call params");
+
+  // The otel Python instrumentation extracts the parent context from that meta.
+  const config = { otlpEndpoint: "http://localhost:4318/v1/traces", serviceName: "petstore-py" };
+  const contribs = otelPlugin.python!.getTemplateContributions(config);
+  const otel = contribs.find((c) => c.path === "instrumentation/otel.py")!;
+  const src = otel.content as string;
+  assert.match(src, /from opentelemetry\.propagate import extract/, "imports the W3C extract helper");
+  assert.match(src, /async def wrapped\(tool_name, arguments, meta=None\)/, "wrap receives the request meta");
+  assert.match(src, /extract\(meta or \{\}\)/, "extracts parent context from the request meta");
+  assert.match(src, /dispatch\(tool_name, arguments, meta\)/, "forwards meta down the dispatch chain");
+});
+
 test("python target: outputSchema advertised + structured_content populated only when the IR carries one (MCPFO-33)", () => {
   // Two hand-built ToolIRs: one WITH a recovered outputSchema (object body),
   // one WITHOUT. Mirrors the TS emitToolBlock gating so parity is enforced.
@@ -219,7 +244,7 @@ test("every shipped plugin has a Python contribution (launch parity)", () => {
     assert.ok(files.length >= 1, `${plugin.id} contributes a Python instrumentation file`);
     const content = typeof files[0].content === "function" ? files[0].content({}) : files[0].content;
     assert.match(content, /def wrap_dispatch\(dispatch\)/, `${plugin.id} wraps the shared dispatch`);
-    assert.match(content, /async def wrapped\(tool_name, arguments\)/, `${plugin.id} covers every call`);
+    assert.match(content, /async def wrapped\(tool_name, arguments, meta=None\)/, `${plugin.id} covers every call and receives request _meta`);
     assert.ok(Object.keys(plugin.python!.getDependencies()).length >= 1, `${plugin.id} declares Python deps`);
   }
 });

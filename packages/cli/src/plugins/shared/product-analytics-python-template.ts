@@ -81,19 +81,20 @@ ${t.initStatements}
 ${flushBlock}
 
 def wrap_dispatch(dispatch):
-    """Wrap the server's shared _dispatch(tool_name, arguments) to capture a
+    """Wrap the server's shared _dispatch(tool_name, arguments, meta) to capture a
     ${t.pluginId} product-analytics event per call. Every tool call flows through
     _dispatch, so one wrap covers them all — the Python peer of the TS per-tool
-    wrap."""
+    wrap. The meta dict (request _meta) is accepted and forwarded unchanged; this
+    plugin does not read it (no trace context needed for analytics)."""
 
-    async def wrapped(tool_name, arguments):
+    async def wrapped(tool_name, arguments, meta=None):
         started_at = time.monotonic()
         # A fixed identity is a deliberate v0 simplification: a generated MCP
         # server has no end-user identity (the caller is an MCP client, not a
         # logged-in human) — every event is attributed to the server itself.
         ${t.identityConstName} = "mcp-server"
         try:
-            result = await dispatch(tool_name, arguments)
+            result = await dispatch(tool_name, arguments, meta)
             ${t.captureStatement({ identityConst: t.identityConstName, success: true })}
             return result
         except Exception as err:  # noqa: BLE001

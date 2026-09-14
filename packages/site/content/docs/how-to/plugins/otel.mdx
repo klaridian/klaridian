@@ -15,6 +15,12 @@ Every tool call gets wrapped in a trace span automatically. You don't write any 
 
 Traces always go through the standard `OTLPTraceExporter`, and diagnostic logs go to `stderr`, never `stdout`. This matters: writing to `stdout` would corrupt the server's communication with its client.
 
+## Joining the caller's trace
+
+When an MCP client sends W3C trace context in the request `_meta` (the `traceparent`, `tracestate`, and `baggage` keys, per the MCP specification), the generated server continues that trace. Each tool-call span becomes a child of the caller's span instead of a disconnected root, so a single distributed trace spans the client, the generated server, and the upstream API it calls.
+
+You don't configure anything for this. The server registers the W3C trace-context and baggage propagators and extracts the parent context from every request that carries one. A request without trace context still produces a normal root span.
+
 ## Point it at your backend
 
 The generated server reads standard OpenTelemetry environment variables—no klaridian-specific config:

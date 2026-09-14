@@ -89,7 +89,8 @@ function generateInstrumentationFile(config: ResolvedPluginConfig): string {
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { trace, SpanStatusCode, diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
+import { trace, context as otelContext, propagation, SpanStatusCode, diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
+import { CompositePropagator, W3CTraceContextPropagator, W3CBaggagePropagator } from "@opentelemetry/core";
 
 // Route OTel's own internal diagnostics to stderr explicitly — never stdout,
 // which must carry only JSON-RPC for stdio-transport MCP servers.
@@ -104,6 +105,17 @@ const sdk = new NodeSDK({
 
 sdk.start();
 
+// MCPFO-90: register the W3C propagators explicitly (don't rely on the NodeSDK
+// default) so incoming trace context in an MCP request's _meta is understood.
+// The MCP spec (2026-07-28, SEP-414) carries W3C Trace Context in the request
+// _meta keys traceparent/tracestate/baggage; extracting them here lets a
+// generated server's tool spans join the caller's distributed trace.
+propagation.setGlobalPropagator(
+  new CompositePropagator({
+    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
+  })
+);
+
 // Ensure spans are flushed on exit, whether the process ends normally or is
 // signaled — the default batch processor can otherwise lose spans on exit.
 process.on("SIGINT", () => sdk.shutdown().finally(() => process.exit(0)));
@@ -116,23 +128,31 @@ const tracer = trace.getTracer(${JSON.stringify(config.serviceName)});
  * through this — no per-tool custom instrumentation code needed
  * (ARCHITECTURE.md section 5).
  */
-export function wrapTool<T extends (args: any) => Promise<unknown>>(toolName: string, handler: T): T {
-  return (async (args: any) => {
-    return tracer.startActiveSpan(\`mcp.tool.call \${toolName}\`, async (span) => {
-      span.setAttribute("mcp.tool.name", toolName);
+export function wrapTool<T extends (args: any, ctx?: any) => Promise<unknown>>(toolName: string, handler: T): T {
+  return (async (args: any, ctx?: any) => {
+    // MCPFO-90: continue the caller's distributed trace when the MCP request
+    // carries W3C trace context. The SDK lifts io.modelcontextprotocol/* keys
+    // into ctx.mcpReq.envelope but leaves traceparent/tracestate/baggage in
+    // _meta, so extract straight from there via the global W3C propagator.
+    const meta = (ctx && ctx.mcpReq && ctx.mcpReq._meta) || {};
+    const parentContext = propagation.extract(otelContext.active(), meta);
+    return otelContext.with(parentContext, () =>
+      tracer.startActiveSpan(\`mcp.tool.call \${toolName}\`, async (span) => {
+        span.setAttribute("mcp.tool.name", toolName);
 ${emitArgumentCapture(config)}
-      try {
-        const result = await handler(args);
-        span.setStatus({ code: SpanStatusCode.OK });
-        return result;
-      } catch (err) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
-        span.recordException(err as Error);
-        throw err;
-      } finally {
-        span.end();
-      }
-    });
+        try {
+          const result = await handler(args, ctx);
+          span.setStatus({ code: SpanStatusCode.OK });
+          return result;
+        } catch (err) {
+          span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) });
+          span.recordException(err as Error);
+          throw err;
+        } finally {
+          span.end();
+        }
+      })
+    );
   }) as T;
 }
 `;
@@ -146,12 +166,12 @@ ${emitArgumentCapture(config)}
 function emitPythonArgumentCapture(config: ResolvedPluginConfig): string {
   const mode = config.argumentCapture ?? "redacted";
   if (mode === "none") {
-    return "            # argumentCapture=none: tool arguments are not recorded.";
+    return "                # argumentCapture=none: tool arguments are not recorded.";
   }
   if (mode === "redacted") {
     return (
-      "            # argumentCapture=redacted (default): record argument NAMES only, never values.\n" +
-      '            span.set_attribute("mcp.tool.argument_names", ",".join((arguments or {}).keys()))'
+      "                # argumentCapture=redacted (default): record argument NAMES only, never values.\n" +
+      '                span.set_attribute("mcp.tool.argument_names", ",".join((arguments or {}).keys()))'
     );
   }
   if (mode === "full") {
@@ -160,10 +180,10 @@ function emitPythonArgumentCapture(config: ResolvedPluginConfig): string {
       .map((f) => f.trim())
       .filter(Boolean);
     return (
-      "            # argumentCapture=full: record values, masking sensitive fields.\n" +
-      `            REDACT_FIELDS = set(${JSON.stringify(fields)})\n` +
-      "            redacted = {k: (\"[REDACTED]\" if k in REDACT_FIELDS else v) for k, v in (arguments or {}).items()}\n" +
-      '            span.set_attribute("mcp.tool.arguments", __import__("json").dumps(redacted))'
+      "                # argumentCapture=full: record values, masking sensitive fields.\n" +
+      `                REDACT_FIELDS = set(${JSON.stringify(fields)})\n` +
+      "                redacted = {k: (\"[REDACTED]\" if k in REDACT_FIELDS else v) for k, v in (arguments or {}).items()}\n" +
+      '                span.set_attribute("mcp.tool.arguments", __import__("json").dumps(redacted))'
     );
   }
   throw new Error(
@@ -188,6 +208,8 @@ function generatePythonInstrumentationFile(config: ResolvedPluginConfig): string
 import os
 
 from opentelemetry import trace
+from opentelemetry.context import attach, detach
+from opentelemetry.propagate import extract
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -204,26 +226,35 @@ _tracer = trace.get_tracer(${pyStr(config.serviceName ?? "mcp-server")})
 
 
 def wrap_dispatch(dispatch):
-    """Wrap the server's shared _dispatch(tool_name, arguments) in an OTel span.
-    Every tool call flows through _dispatch, so one wrap covers them all — the
-    Python shared-dispatch equivalent of the TS per-tool wrapTool."""
+    """Wrap the server's shared _dispatch(tool_name, arguments, meta) in an OTel
+    span. Every tool call flows through _dispatch, so one wrap covers them all —
+    the Python shared-dispatch equivalent of the TS per-tool wrapTool. MCPFO-90:
+    when the request _meta carries W3C trace context (traceparent/tracestate/
+    baggage), continue the caller's trace so the span is a child, not an orphan."""
 
-    async def wrapped(tool_name, arguments):
-        with _tracer.start_as_current_span(f"mcp.tool.call {tool_name}") as span:
-            span.set_attribute("mcp.tool.name", tool_name)
+    async def wrapped(tool_name, arguments, meta=None):
+        # Extract W3C trace context from the request _meta (a plain dict carrier);
+        # missing/empty context just yields a fresh root span.
+        parent_context = extract(meta or {})
+        token = attach(parent_context)
+        try:
+            with _tracer.start_as_current_span(f"mcp.tool.call {tool_name}") as span:
+                span.set_attribute("mcp.tool.name", tool_name)
 ${emitPythonArgumentCapture(config)}
-            try:
-                result = await dispatch(tool_name, arguments)
-                span.set_status(StatusCode.OK)
-                return result
-            except Exception as err:  # noqa: BLE001
-                span.set_status(StatusCode.ERROR, str(err))
-                span.record_exception(err)
-                raise
-            finally:
-                # Flush this span promptly; a short-lived stdio server may exit
-                # right after a call, and BatchSpanProcessor can otherwise lose it.
-                _provider.force_flush()
+                try:
+                    result = await dispatch(tool_name, arguments, meta)
+                    span.set_status(StatusCode.OK)
+                    return result
+                except Exception as err:  # noqa: BLE001
+                    span.set_status(StatusCode.ERROR, str(err))
+                    span.record_exception(err)
+                    raise
+                finally:
+                    # Flush this span promptly; a short-lived stdio server may exit
+                    # right after a call, and BatchSpanProcessor can otherwise lose it.
+                    _provider.force_flush()
+        finally:
+            detach(token)
 
     return wrapped
 `;
@@ -251,6 +282,7 @@ export const otelPlugin: ObservabilityPlugin = {
   getDependencies(): Record<string, string> {
     return {
       "@opentelemetry/api": "^1.9.0",
+      "@opentelemetry/core": "^2.0.0",
       "@opentelemetry/sdk-node": "^0.222.0",
       "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     };

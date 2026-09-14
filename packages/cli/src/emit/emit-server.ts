@@ -4,8 +4,16 @@
 // project from openapi-mcp-generator's pure tool DATA. The "option d" core
 // (ARCHITECTURE.md sections 37/38). Stateless by construction (createMcpHandler
 // factory-per-request), so the v1 session-based streamable-http crash
-// (MCPFO-10) cannot occur here. Targets protocol 2025-11-25 (the current v2
-// SDK line) — NOT 2026-07-28, which the SDK does not yet negotiate (spike 021c).
+// (MCPFO-10) cannot occur here. The generated server negotiates protocol
+// 2025-11-25 (the SDK's legacy path). The emitted SDK line
+// (@modelcontextprotocol/server v2) is itself 2026-07-28-native — verified by
+// driving a generated server over stdio: `server/discover` returns -32601 and
+// `initialize` replies `protocolVersion: "2025-11-25"`. It serves the legacy
+// wire only because this factory doesn't opt into modern serving (the SDK
+// wires `server/discover` only when the factory advertises modern
+// supportedProtocolVersions). Adopting 2026-07-28 is a deliberate decision
+// (a client-compatibility trade-off), NOT gated on SDK support — tracked in
+// Plane: MCPFO-93.
 //
 // MCPFO-28: also emits SDK code mode output (ARCHITECTURE.md section 43) when
 // `architecture: "code-mode"` is requested — a single execute_code tool

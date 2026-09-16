@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "Ricardo Vasconcelos" }]
-keywords = ["mcp", "openapi", "model-context-protocol", "codegen", "cli"]
+keywords = ["mcp", "mcp-server", "model-context-protocol", "openapi", "swagger", "code-generator", "codegen", "observability", "opentelemetry", "ai-agents", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

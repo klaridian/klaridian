@@ -320,6 +320,18 @@ The "it's for agents" instinct is really about (2) and (3). But (1) stays human 
 
 **What does NOT change (the boundary):** the human adopter's trust decision (§16), the standalone/auditable positioning, and the no-telemetry promise. Those are load-bearing precisely because the human—not an agent—signs off on pointing the tool at a real API. This reframe sharpens the "who we optimize each surface for" question; it does not delete the human from the funnel.
 
+## 19. Discoverability: keywords/topics now, content-SEO deferred to launch, and the MCP Registry does NOT apply to klaridian itself (Sep 16, 2026)
+
+Executing MCPFO-96 under the §18 agent-first reframe surfaced a decision on each of its three parts, plus a premise correction worth recording.
+
+**Discovery signals (keywords + topics): done now, launch-independent.** These were the cheap, concrete wins and don't need the launch. GitHub repo topics went from 9 to 12 (added `mcp-server`, `swagger`, `ai-agents`), applied live. Package keywords were aligned across all three channels (npm, PyPI, GitHub) around the terms an agent or dev actually searches — `mcp`, `mcp-server`, `model-context-protocol`, `openapi`, `swagger`, `code-generator`, `observability`, `opentelemetry`, `ai-agents`, `cli`. PyPI's list was the thinnest (5 keywords) and is now on par with npm. Note npm/PyPI keywords only go live in the registries on the NEXT version release (a published version is immutable), so they're correct-in-code now and ship with the next tag.
+
+**Content-SEO (blog / comparison pages): deferred to the launch — explicit decision, not an oversight.** A blog and "klaridian vs FastMCP / openapi-mcp-generator / Speakeasy" comparison pages are the real content lever, but they follow the launch's backlinks rather than preceding them, and writing comparison content before there's traffic to read it is effort spent early. Decision: NOT now. Revisit as part of, or right after, the launch (MCPFO-15). For the first releases, discovery via topics/keywords + word of mouth is enough; the trust/sovereignty narrative (§16) is the "why us," not content volume.
+
+**The MCP Registry does NOT apply to klaridian itself — premise correction.** An earlier framing (including in MCPFO-96's own description) listed "MCP Registry submission" as a klaridian backlink. That's wrong: the MCP Registry is for MCP *servers* — the things agents connect to — and klaridian is a CLI that *generates* servers, not a server. So klaridian cannot be submitted to the Registry as it stands. Two things are real and must not be conflated:
+- klaridian helps the *generated server* get a reverse-DNS name for the Registry — already shipped (`how-to/mcp-registry.mdx`). That's an output feature, not klaridian's own listing.
+- klaridian could itself be listed ONLY if it were exposed AS an MCP server (a tool that generates servers) — which is exactly the deferred bet in MCPFO-99. Until that ships, "put klaridian in the Registry" is not an available move. Don't re-add it to the backlink plan as if it were.
+
 
 
 

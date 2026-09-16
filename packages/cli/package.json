@@ -5,6 +5,7 @@
   "description": "Generate MCP servers with built-in observability from an OpenAPI spec.",
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "openapi",
     "swagger",

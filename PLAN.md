@@ -299,6 +299,27 @@ Raised directly: "should klaridian have a deploy?" Decided **yes—but as an "em
 
 **Sequencing (when, not just what).** Don't build deploy until (a) `generate` is loved and (b) the observability plugins have a runtime to prove value—otherwise it's building on sand right after v0.1.1. This is v0.3–0.4 territory. The Python-can't-target-Workers limitation is a non-issue: nobody choosing `--language python` also wants edge; they deploy to containers, which `--target docker`/`fly` cover. `--target cloudflare` on a Python project must fail loudly (fail-loud contract).
 
+## 18. Audience reframe: the operator and consumer are agents; the adopter is human (Sep 16, 2026)
+
+Raised directly while reviewing the site design: "klaridian isn't really for developers—it's the agents that pick this up, so it has to be designed for them." That instinct is mostly right and reorders the roadmap, but the naive version ("stop investing in the human-facing site") is wrong for a specific reason. Recording the decision and its boundary.
+
+**There are three audiences, not one—and conflating them is the trap:**
+1. **The adopter** decides to expose an API to agents via MCP, evaluates the options, picks klaridian, and *reads the generated code before handing it real credentials*. This is a **human**, and it's the entire target of the trust/auditability/no-telemetry positioning (§16). A human with compliance concerns—not an agent—closes this decision. Zeroing the human-facing surface kills the layer that converts that trust.
+2. **The operator** runs `klaridian generate`. Increasingly this is an **agent** (inside Claude Code, Cursor, etc.), not a person at a prompt.
+3. **The consumer** uses the generated server. Always agents—this is the product core (curation, code-mode, annotations).
+
+The "it's for agents" instinct is really about (2) and (3). But (1) stays human and stays central. So the reframe is not "abandon the human"; it's **"stop optimizing the site for human emotion and start optimizing every surface for agent ingestion + a fast human trust-check."**
+
+**What changes (the site's job shrinks, effort redirects):**
+- **Stop agonizing over marketing polish.** Brutalist-vs-refined pixel debates are low-value now. Ship ONE refined theme (the sketches already done), light + dark, and stop—tracked capped as **MCPFO-100**. Note the technical SEO already shipped (JSON-LD, semantic HTML, sitemap—MCPFO-95) was *already* this: machine-legibility, not human persuasion. It aged better than the design refactor would have.
+- **Redirect energy to agent-facing surfaces:**
+  - **`llms.txt` / `llms-full.txt`**—flat-text docs an agent ingests whole. Highest-ROI, doesn't exist yet. **MCPFO-97.**
+  - **Agent-legible CLI**—`--json` output, machine-readable errors with stable codes, so an agent operator can drive `generate` reliably in a chain. **MCPFO-98.**
+  - **Discoverability into the corpus agents learn from**—GitHub topics/stars, npm/PyPI keywords, launch backlinks (the content-SEO ticket **MCPFO-96** is reframed: it's not "SEO for humans," it's "get into the training/recommendation corpus so an agent asked to generate an MCP server names klaridian").
+- **The deeper bet: should klaridian itself be agent-invocable?** A "klaridian" MCP server (or clean programmatic API) an agent calls to generate other MCP servers—which would also put klaridian in the MCP Registry. Genuinely unclaimed, but a 6–18 month bet, not tomorrow. Spiked, not built: **MCPFO-99** (relates to the programmatic-API ticket MCPFO-36).
+
+**What does NOT change (the boundary):** the human adopter's trust decision (§16), the standalone/auditable positioning, and the no-telemetry promise. Those are load-bearing precisely because the human—not an agent—signs off on pointing the tool at a real API. This reframe sharpens the "who we optimize each surface for" question; it does not delete the human from the funnel.
+
 
 
 

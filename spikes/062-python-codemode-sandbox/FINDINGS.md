@@ -91,3 +91,52 @@ Docker dependency on a plain `generate`d project, which contradicts the
 **Follow-up:** if/when demand appears, scope a dedicated ticket for a WASM-based
 Python sandbox (evaluate wasmtime + CPython.wasm vs Pyodide; define the host-fn
 capability surface mirroring the Deno allow-list). Track as successor to 60.35.
+
+---
+
+## Phase 2 (execution attempt, Sep 16 2026): WASM isolation PROVEN, but scoped network egress is BLOCKED on this stack
+
+Attempted to actually START building the WASM sandbox (wasmtime-py + a prebuilt
+CPython 3.12 `python.wasm` from VMware's webassembly-language-runtimes). Two
+results, one positive and one blocking:
+
+**PROVEN — filesystem isolation holds (`wasi_isolation.py`).** Ran untrusted
+Python inside `python.wasm` under wasmtime with NO WASI preopens. With FULL
+builtins available (no escape gadget needed — the in-process weakness is simply
+absent here), the attacker tried `open("/HOST_SECRET")`, `open("/tmp/…host
+secret…")`, and `os.listdir("/")` — ALL denied with `FileNotFoundError` because
+the host filesystem is not mounted into the sandbox. This is exactly the
+guarantee the in-process approach (escape_poc.py) could not give. Deny-by-default
+FS isolation via WASI: **VALIDATED, for real, on the target runtime.**
+
+**BLOCKING — no scoped network egress on this stack.** Code-mode is not "run
+isolated code"; it runs agent code that calls the API *through the typed client*,
+so the sandbox needs network egress scoped to the ONE API host (the analogue of
+Deno's `--allow-net=<host>`). Findings:
+- `wasmtime.WasiConfig` (wasmtime-py) exposes NO network grant of any kind — its
+  only host-permeability methods are `inherit_argv/env/stdin/stdout/stderr`.
+  There is no `allow_net`, no socket/TCP config, no host-scoped egress hook.
+- `socket` imports inside `python.wasm`, but a real outbound `connect()` has no
+  host wiring to reach (WASI sockets are a preview/unstable proposal not surfaced
+  by wasmtime-py's stable `WasiConfig`). An egress attempt just hangs.
+
+**Consequence — the naive "sandbox does the network too" design does NOT work on
+wasmtime-py today.** The realistic architecture is therefore a SPLIT: the WASM
+sandbox runs the agent's untrusted Python with ZERO ambient authority (no FS, no
+net), and the ONE capability it's granted — calling the API — is brokered by a
+**host function** the outer (trusted) process implements and scopes to the API
+host, which the in-WASM client calls instead of opening a socket itself. That is
+buildable (it is the correct capability-broker shape, and mirrors how Deno's
+allow-net is itself a host-enforced gate) but it is materially MORE work than the
+TS path: TS code-mode gets both FS and net scoping for free from the Deno CLI's
+flags; the Python path must hand-build the network broker + wire it through the
+WASM boundary + generate a client that targets it.
+
+**Verdict update:** the §86 "PARTIAL / feasible-but-not-cheap" stands and is now
+SHARPER. FS isolation is proven; the cost is concentrated in the network-broker
+host function, which is the real engineering (and security-review) surface. This
+reinforces "do not build now, keep the fail-loud gate": full parity is one
+non-trivial capability-broker away, not a mechanical port, and there is still no
+demand pulling for it. Artifacts: `wasi_isolation.py` (FS proof),
+`escape_poc.py` (in-process INVALIDATED). Heavy artifacts (`python.wasm`, venv)
+are git-ignored.

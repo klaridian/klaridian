@@ -35,3 +35,30 @@ export function HomeJsonLd() {
     />
   );
 }
+
+export type BreadcrumbItem = { name: string; url: string };
+
+// BreadcrumbList structured data for docs pages. Items are absolute URLs that
+// resolve to real pages; the caller passes only segments that exist.
+export function DocsBreadcrumbJsonLd({ items }: { items: BreadcrumbItem[] }) {
+  // A single-item breadcrumb (the /docs root pointing at itself) carries no
+  // hierarchy — skip it so only real trails emit structured data.
+  if (items.length < 2) return null;
+
+  const breadcrumb = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      item: item.url.startsWith("http") ? item.url : `${SITE_URL}${item.url}`,
+    })),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+    />
+  );
+}

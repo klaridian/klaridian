@@ -7,6 +7,7 @@ import {
 } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { DocsBreadcrumbJsonLd, type BreadcrumbItem } from '@/components/json-ld';
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -17,8 +18,21 @@ export default async function Page(props: {
 
   const MDXContent = page.data.body;
 
+  // BreadcrumbList: Docs root, then each ancestor slug that resolves to a real
+  // page, ending at the current page. Segments without their own page (pure
+  // grouping folders like how-to/reference) are skipped.
+  const breadcrumb: BreadcrumbItem[] = [{ name: 'Docs', url: '/docs' }];
+  const slug = params.slug ?? [];
+  for (let i = 0; i < slug.length; i++) {
+    const ancestor = source.getPage(slug.slice(0, i + 1));
+    if (ancestor) {
+      breadcrumb.push({ name: ancestor.data.title, url: ancestor.url });
+    }
+  }
+
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <DocsBreadcrumbJsonLd items={breadcrumb} />
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>

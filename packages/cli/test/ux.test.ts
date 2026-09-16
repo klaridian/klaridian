@@ -15,6 +15,7 @@ import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
+import { stageToCode, stageOf, StagedError } from "../src/cli-output.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
@@ -391,5 +392,61 @@ test(
     const pkg = JSON.parse(await readFile(pkgPath, "utf-8")) as { version: string };
     const result = await execFileAsync("node", [CLI_ENTRYPOINT, "--version"]);
     assert.equal(result.stdout.trim(), pkg.version);
+  }
+);
+
+test("stageToCode derives a stable UPPER_SNAKE code from a stage", () => {
+  assert.equal(stageToCode("validate-plugin"), "VALIDATE_PLUGIN");
+  assert.equal(stageToCode("emit"), "EMIT");
+  assert.equal(stageToCode("check-output-dir"), "CHECK_OUTPUT_DIR");
+  assert.equal(stageToCode("unexpected"), "UNEXPECTED");
+});
+
+test("stageOf recovers a StagedError's stage, else 'unexpected'", () => {
+  assert.equal(stageOf(new StagedError("boom", "validate-plugin")), "validate-plugin");
+  assert.equal(stageOf(new Error("plain")), "unexpected");
+  assert.equal(stageOf("not even an error"), "unexpected");
+});
+
+test(
+  "generate --json: a fail-loud plugin-config error carries a specific stage + stable code (not 'unexpected')",
+  { timeout: 60_000 },
+  async () => {
+    // Regression guard: the otel plugin's "missing required config" error used
+    // to be a plain Error, so it fell through to the top-level catch tagged
+    // "unexpected". Agents driving the CLI need it tagged validate-plugin /
+    // VALIDATE_PLUGIN so they can branch on the code, not string-match prose.
+    const outputDir = await mkdtemp(path.join(tmpdir(), "klaridian-plugincode-"));
+    let caught: unknown;
+    try {
+      await execFileAsync("node", [
+        CLI_ENTRYPOINT,
+        "generate",
+        "--spec",
+        PETSTORE_SPEC_PATH,
+        "--out",
+        outputDir,
+        "--name",
+        "plugincode",
+        "--base-url",
+        "https://petstore3.swagger.io/api/v3",
+        "--plugin",
+        "otel",
+        "--json",
+        "--force",
+      ]);
+    } catch (err) {
+      caught = err;
+    }
+    try {
+      assert.ok(caught, "expected a non-zero exit for a missing plugin config");
+      const parsed = JSON.parse((caught as { stdout?: string }).stdout ?? "");
+      assert.equal(parsed.success, false);
+      assert.equal(parsed.stage, "validate-plugin");
+      assert.equal(parsed.code, "VALIDATE_PLUGIN");
+      assert.match(parsed.error, /missing required config/);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
   }
 );

@@ -19,8 +19,51 @@
 export interface CliFailResult {
   success: false;
   error: string;
+  /**
+   * The pipeline stage that failed (e.g. "validate-plugin", "emit"), so a
+   * caller/agent can tell WHICH step failed without string-matching prose.
+   */
   stage: string;
+  /**
+   * A stable, machine-readable error code derived from `stage`
+   * (UPPER_SNAKE_CASE, e.g. "validate-plugin" -> "VALIDATE_PLUGIN"). Agents
+   * should branch on this rather than the human `error` message, which is not
+   * a stable contract. Derived from `stage` so the two never drift.
+   */
+  code: string;
   warnings: string[];
+}
+
+/**
+ * Turn a pipeline `stage` into a stable machine-readable error code:
+ * lowercase-hyphen -> UPPER_SNAKE. Kept as a pure function so both the runtime
+ * and any test/consumer can reproduce the mapping.
+ */
+export function stageToCode(stage: string): string {
+  return stage.toUpperCase().replace(/-/g, "_");
+}
+
+/**
+ * An error that carries the pipeline `stage` it belongs to, so a fail-loud
+ * throw from deep in the emitter/plugin layer surfaces with a specific stage
+ * (and thus a stable `code`) instead of the generic "unexpected" catch-all.
+ * The top-level catch reads `stageOf(err)` to recover it.
+ */
+export class StagedError extends Error {
+  readonly stage: string;
+  constructor(message: string, stage: string) {
+    super(message);
+    this.name = "StagedError";
+    this.stage = stage;
+  }
+}
+
+/**
+ * Recover the stage from a thrown value: a StagedError's own stage, otherwise
+ * the "unexpected" catch-all for a genuinely unforeseen error.
+ */
+export function stageOf(err: unknown): string {
+  return err instanceof StagedError ? err.stage : "unexpected";
 }
 
 export interface CliOutput {
@@ -56,7 +99,13 @@ export function createCliOutput(opts: { json: boolean; quiet: boolean }): CliOut
   const fail = (message: string, stage: string) => {
     process.exitCode = 1;
     if (jsonMode) {
-      const result: CliFailResult = { success: false, error: message, stage, warnings };
+      const result: CliFailResult = {
+        success: false,
+        error: message,
+        stage,
+        code: stageToCode(stage),
+        warnings,
+      };
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     } else {
       console.error(`❌ ${message}`);

@@ -5,6 +5,8 @@
 // core knowing anything tool-specific — this is what lets a future PostHog
 // plugin be additive rather than a rewrite.
 
+import { StagedError } from "../cli-output.js";
+
 export interface PluginConfigField {
   key: string;
   prompt: string;
@@ -106,9 +108,10 @@ export function resolvePluginConfig(
   }
 
   if (missing.length > 0) {
-    throw new Error(
+    throw new StagedError(
       `Plugin "${plugin.id}" is missing required config: ${missing.join(", ")}. ` +
-        `Provide via --plugin-config ${plugin.id}.<key>=<value>.`
+        `Provide via --plugin-config ${plugin.id}.<key>=<value>.`,
+      "validate-plugin"
     );
   }
 

@@ -1,0 +1,87 @@
+---
+title: JSON output for agents
+description: Drive klaridian from an agent or script with --json, structured results, and stable error codes.
+---
+
+Every klaridian command prints friendly, human-readable progress by default. When an agent or a script runs klaridian, pass `--json` to get one machine-readable value on stdout instead — no emojis to scrape, no prose to pattern-match.
+
+## What --json does
+
+`--json` changes the output contract, not the behavior:
+
+- Exactly one JSON value is written to stdout. Nothing else goes there.
+- Step-by-step progress is suppressed (as if `--quiet` were set).
+- On failure, the error is a JSON object on stdout too, and the process exits non-zero.
+
+```bash
+klaridian generate --spec ./api.yaml --out ./my-server \
+  --base-url https://api.example.com --plugin otel \
+  --plugin-config otel.serviceName=my-server --json
+```
+
+`--json` is available on `generate`, `init`, `deploy`, `start`, and the `plugins` / `licenses` listings.
+
+## A successful generate
+
+```json
+{
+  "success": true,
+  "outputDir": "/abs/path/to/my-server",
+  "toolCount": 24,
+  "curatedFromTotal": null,
+  "transport": "stdio",
+  "port": null,
+  "architecture": "tools",
+  "language": "typescript",
+  "license": "MIT",
+  "plugins": ["otel"],
+  "nextSteps": "cd /abs/path/to/my-server && npm install && npm run build && npm start",
+  "warnings": []
+}
+```
+
+`toolCount` is the number of MCP tools emitted. `curatedFromTotal` is the number of operations before curation (or `null` when nothing was filtered). `warnings` holds any non-fatal notices — the same messages a human would see on stderr, so an agent never has to read stderr to know something was off.
+
+## A failure
+
+Every failure is the same shape, whatever the command:
+
+```json
+{
+  "success": false,
+  "error": "Plugin \"otel\" is missing required config: serviceName. Provide via --plugin-config otel.<key>=<value>.",
+  "stage": "validate-plugin",
+  "code": "VALIDATE_PLUGIN",
+  "warnings": []
+}
+```
+
+- `code` is a stable, machine-readable identifier. Branch on it. It's `UPPER_SNAKE_CASE` and it won't change when the wording of `error` does.
+- `stage` is the same value in lowercase-hyphen form (`validate-plugin`), naming the step that failed.
+- `error` is the human message. Read it for logs or to show a person, but don't pattern-match it in code — that's what `code` is for.
+
+The process also exits non-zero on failure, so a script can check the exit status before it even parses the JSON.
+
+### Error codes you'll see
+
+Codes map one-to-one to the stage that failed. Common ones from `generate`:
+
+| Code | When |
+|---|---|
+| `VALIDATE_LANGUAGE` | `--language` isn't `typescript` or `python`, or an unsupported language/architecture combination |
+| `VALIDATE_PLUGIN` | An unknown `--plugin`, or a plugin missing required `--plugin-config` |
+| `VALIDATE_TRANSPORT` | An unsupported `--transport` |
+| `VALIDATE_PORT` | An invalid `--port` |
+| `VALIDATE_CURATION` | A curation flag (`--include-tags`, `--exclude-tags`, …) that selects nothing or conflicts |
+| `VALIDATE_OAUTH` | An incomplete or inconsistent `--oauth-*` set |
+| `VALIDATE_LICENSE` | An unknown `--license` |
+| `CHECK_OUTPUT_DIR` | `--out` exists and is non-empty, and `--force` wasn't passed |
+| `CONFIG_FILE` | The configuration file is missing, malformed, or unreadable |
+| `EMIT` | Generation failed while writing the server |
+| `UNEXPECTED` | A genuinely unforeseen error — treat it as a bug worth reporting |
+
+New stages may be added over time, so treat the list as open: match the codes you handle and fall back on `UNEXPECTED` for the rest. Because `code` is always the upper-case, underscored form of `stage`, you can derive one from the other if you only ever read one field.
+
+## Why the split
+
+An agent driving klaridian in a chain needs to answer two questions without guessing: did it work, and if not, what kind of failure was it. `success` answers the first; `code` answers the second without ever string-matching English prose that might be reworded in the next release. The human-readable default stays exactly as it was — `--json` is purely additive.

@@ -42,7 +42,7 @@ import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
 import { isSwagger2Document, convertSwagger2ToOpenApi3, Swagger2ConversionError } from "../spec/swagger2-conversion.js";
 import { loadConfigFile, ConfigFileError, CONFIG_FILE_NAME } from "../config/config-file.js";
-import { createCliOutput } from "../cli-output.js";
+import { createCliOutput, stageOf } from "../cli-output.js";
 import {
   parsePluginConfigFlags,
   resolveGitAuthorName,
@@ -911,7 +911,7 @@ export function registerGenerateCommand(program: Command): void {
             console.error(`   Next: ${finalNextSteps}`);
           }
         } catch (err) {
-          fail(err instanceof Error ? err.message : String(err), "unexpected");
+          fail(err instanceof Error ? err.message : String(err), stageOf(err));
         } finally {
           for (const dir of tempSpecDirs) {
             await rm(dir, { recursive: true, force: true });

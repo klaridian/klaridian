@@ -21,7 +21,7 @@ import path from "node:path";
 import { writeFile, stat } from "node:fs/promises";
 import { input, select, checkbox } from "@inquirer/prompts";
 import { CONFIG_FILE_NAME } from "../config/config-file.js";
-import { createCliOutput } from "../cli-output.js";
+import { createCliOutput, stageOf } from "../cli-output.js";
 import { AVAILABLE_PLUGINS, SUPPORTED_TRANSPORTS } from "./generate.js";
 import { SUPPORTED_LICENSES, isSupportedLicense } from "../render/license.js";
 
@@ -290,7 +290,7 @@ export function registerInitCommand(program: Command): void {
             );
           }
         } catch (err) {
-          fail(err instanceof Error ? err.message : String(err), "unexpected");
+          fail(err instanceof Error ? err.message : String(err), stageOf(err));
         }
       }
     );

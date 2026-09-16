@@ -23,3 +23,6 @@ __pycache__/
 # Generated from the root README.md by packages/cli/scripts/generate-readme.mjs
 # (prepack) so the npm package ships a README. Derived artifact — do not commit.
 packages/cli/README.md
+
+# Throwaway design mockups (sketch skill) — not shipped
+/sketches/

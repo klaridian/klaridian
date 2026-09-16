@@ -172,6 +172,13 @@ export default function Home() {
           >
             MIT LICENSE
           </a>
+          <a
+            href="/llms.txt"
+            title="Machine-readable docs index for agents (llms.txt)"
+            className="hover:text-[var(--klaridian-accent)] hover:underline"
+          >
+            llms.txt
+          </a>
           <span>BUILT ON THE OFFICIAL MCP SDK</span>
         </div>
       </footer>

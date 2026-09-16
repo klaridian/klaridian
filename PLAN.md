@@ -332,6 +332,20 @@ Executing MCPFO-96 under the §18 agent-first reframe surfaced a decision on eac
 - klaridian helps the *generated server* get a reverse-DNS name for the Registry — already shipped (`how-to/mcp-registry.mdx`). That's an output feature, not klaridian's own listing.
 - klaridian could itself be listed ONLY if it were exposed AS an MCP server (a tool that generates servers) — which is exactly the deferred bet in MCPFO-99. Until that ships, "put klaridian in the Registry" is not an available move. Don't re-add it to the backlink plan as if it were.
 
+## 20. Runtime dynamic mode (the FastMCP `from_openapi` model): considered and rejected (Sep 16, 2026)
+
+While thinking through the agent-invocable line (§18, MCPFO-99/36), a tempting reframe came up: instead of a code generator, make klaridian an importable library that turns a spec into a *live* MCP server in memory at runtime — the FastMCP `FastMCP.from_openapi()` model (`import`, map the spec in-memory each boot, `.run()`, no files). Recording the decision so it isn't re-litigated.
+
+**Decision: NOT klaridian's model. The two are opposites, deliberately.**
+- **Runtime dynamic (FastMCP):** spec in → a running server in memory, no artifact. The mapping happens inside the framework on every boot. It is a black box you run and trust.
+- **Generate (klaridian):** spec in → **files out**. A standalone project you read, review, commit, version, and deploy; the generator disappears afterwards. It is an artifact you audit before you trust.
+
+**Why reject it:** the generate model IS the differentiator (§14, §16, ARCHITECTURE §37) — "read the code before you give it real credentials," zero black box, auditable, aimed at healthcare/finance/EU. A runtime `import + run` throws exactly that away. It would also move klaridian onto the turf where FastMCP is strongest and mature, competing on convenience rather than on trust.
+
+**The decisive evidence:** FastMCP's own creator (Jeremiah Lowin) wrote "Stop Converting Your REST APIs to MCP" (Jul 10, 2025, https://jlowin.dev/blog/stop-converting-rest-apis-to-mcp) saying `from_openapi()` is for **bootstrapping — "do not ship it to production"** — because auto-mapping is lossy (pagination, multipart, streaming) and unreviewed. The gap he names — "translate carefully, don't wrap carelessly" — is precisely klaridian's production-artifact niche. Building the runtime mode would mean building the thing our competitor already ships and tells people not to use for real, while abandoning the ground where we have no competition.
+
+**What the instinct got right (kept):** the underlying pull — "an agent wants to *use* the API now, not manage a file tree" — is a real, distinct use case. But it is bootstrapping by nature (per the author), already served by FastMCP, and it is not klaridian's user, who wants to *ship* a server they trust and maintain. So this reinforces the prior conclusion rather than changing it: what serves the agent in our model is already done (llms.txt, `--json`+error codes); the rest waits for launch signal.
+
 
 
 

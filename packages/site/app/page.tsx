@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CopyInstallCommand } from "@/components/copy-install-command";
+import { HomeJsonLd } from "@/components/json-ld";
 
 const FEATURES = [
   {
@@ -31,6 +32,7 @@ const FEATURES = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-[var(--klaridian-paper)] text-[var(--klaridian-ink)] font-mono">
+      <HomeJsonLd />
       {/* Header */}
       <header className="border-b-[3px] border-[var(--klaridian-ink)]">
         <div className="max-w-[860px] mx-auto px-5 flex items-center justify-between py-[18px]">

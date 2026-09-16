@@ -5,6 +5,9 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Changelog',
   description: 'Release notes for klaridian, newest first.',
+  alternates: {
+    canonical: '/changelog',
+  },
 };
 
 // Reverse-chronological feed of every shipped release. Entries are derived

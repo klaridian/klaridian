@@ -21,6 +21,13 @@ these are always called out under **Changed** or **Removed**.
 - `klaridian deploy --target docker | cloudflare | fly`: emits a Dockerfile, a Cloudflare Worker, or a Fly.io app, then hands off to the platform's own CLI. The streamable-http server's port and allowed hosts are environment-driven.
 - OpenTelemetry spans now continue the caller's trace: the OTel plugin propagates W3C trace context from the MCP request `_meta`.
 - `--json` failures carry a stable machine-readable `code` and a specific `stage`, for scripts and agents that branch on the error.
+- Per-scheme upstream authentication: the generated server now authenticates to the upstream API according to the OpenAPI `securitySchemes` it declares, instead of always sending a bearer token. Supported schemes: `apiKey` (in header, query, or cookie), `http` bearer, `http` basic, and `oauth2` / `openIdConnect` (bearer token from the environment). Each scheme reads its credential from a `KLARIDIAN_*` environment variable; `KLARIDIAN_AUTH_TOKEN` still works for bearer. An operation whose only scheme is `mutualTLS` fails loudly rather than emitting silent, wrong auth. TypeScript and Python targets at parity.
+- `--header-passthrough <names>`: forward named inbound request headers to the upstream API (streamable-http), so a client can supply per-user credentials.
+- `--auth-hook`: emit an editable auth hook (`src/auth-hook.ts` or `auth_hook.py`) that runs before the built-in auth and can short-circuit it, as an escape hatch for schemes klaridian doesn't emit natively.
+
+### Security
+
+- Remote `http(s)` external `$ref` pointers in a spec are no longer resolved by default. A malicious or compromised spec could otherwise make the parser fetch attacker-controlled or internal-network URLs at generation time (SSRF). Local-file `$ref`s still resolve. Pass `--allow-external-refs` to opt back in to remote resolution; a spec that needs a remote `$ref` under the default fails loudly, naming the reference and the flag.
 
 ### Changed
 

@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer } from "node:http";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { emitClientModule } from "../src/emit/emit-client.js";
 
 const execFileAsync = promisify(execFile);
@@ -59,7 +59,7 @@ test(
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-client-e2e-"));
     const mock = await startMockPetstore();
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       assert.ok(tools.length >= 15, `expected many petstore tools, got ${tools.length}`);
 
       const clientSrc = emitClientModule(tools);
@@ -126,7 +126,7 @@ test(
   async () => {
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-client-e2e-validation-"));
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const clientSrc = emitClientModule(tools);
       await mkdir(path.join(outDir, "src"), { recursive: true });
       await writeFile(path.join(outDir, "src", "client.ts"), clientSrc, "utf-8");

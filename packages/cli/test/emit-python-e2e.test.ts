@@ -20,7 +20,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { pythonTarget } from "../src/emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId } from "../src/emit/ir.js";
 import { extractOutputSchemasByOperationId } from "../src/emit/response-schema.js";
@@ -48,7 +48,7 @@ function resolvePython(): string {
 }
 
 async function emitInto(outDir: string, opts: { transport: "stdio" | "streamable-http"; port?: number }) {
-  const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+  const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
   const files = pythonTarget.emitProject({
     serverName: "petstore-py-e2e",
     tools,
@@ -205,7 +205,7 @@ test(
 
       // Mirror generate.ts: raw tools -> IR, with recovered per-op meta + the
       // owned output-schema extraction merged in.
-      const rawTools = await getToolsFromOpenApi(specPath, { baseUrl: "https://api.example.com", dereference: true });
+      const rawTools = await getToolsFromOwnEngine(specPath, { baseUrl: "https://api.example.com", dereference: true });
       const originalDoc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
       const metaByOperationId = extractOperationMetaByOperationId(originalDoc);
       const outputSchemas = await extractOutputSchemasByOperationId(specPath);

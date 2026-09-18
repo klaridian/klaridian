@@ -12,7 +12,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getEmitTarget, typescriptTarget } from "../src/emit/target.js";
 import { emitServerProject } from "../src/emit/emit-server.js";
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR as McpToolDefinition } from "../src/emit/ir.js";
 
 const FIXTURE_GET: McpToolDefinition = {
   name: "getPetById",

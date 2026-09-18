@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { getEmitTarget, pythonTarget } from "../src/emit/target.js";
 import { pythonConformanceAdapter } from "../src/emit/conformance/python.js";
 import { pythonPluginDispatch, emitDispatchWrap } from "../src/emit/plugin-dispatch/python.js";
@@ -21,7 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
 
 async function petstoreTools() {
-  return getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+  return getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
 }
 
 test("python target is registered and resolvable via getEmitTarget", () => {

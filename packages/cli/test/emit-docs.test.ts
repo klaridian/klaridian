@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildOperationDocs, emitDocsDataModule, emitSearchDocsToolBlock } from "../src/emit/emit-docs.js";
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR as McpToolDefinition } from "../src/emit/ir.js";
 
 function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition {
   return {

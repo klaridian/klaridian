@@ -11,7 +11,7 @@ import { emitServerProject } from "../src/emit/emit-server.js";
 import { otelPlugin } from "../src/plugins/otel/otel.plugin.js";
 import { getPluginProjectAdditions } from "../src/render/instrument.js";
 import { resolvePluginConfig } from "../src/plugins/plugin.interface.js";
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR as McpToolDefinition } from "../src/emit/ir.js";
 
 const FIXTURE: McpToolDefinition = {
   name: "getPetById",

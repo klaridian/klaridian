@@ -1,12 +1,10 @@
 // packages/cli/src/engine/own-engine.ts
 //
-// MCPFO-73 — IR ownership Phase 2: klaridian's OWN OpenAPI-operation → tool-DATA
-// engine, in SHADOW MODE behind an OFF-by-default toggle.
+// MCPFO-73/74 — IR ownership: klaridian's OWN OpenAPI-operation → tool-DATA
+// engine. As of the Phase 3 cutover (MCPFO-74, ARCHITECTURE.md §92) this is the
+// ONLY engine klaridian uses; the openapi-mcp-generator dependency was removed.
 //
-// This is Phase 2 of the IR-ownership plan (ARCHITECTURE.md §65/§70, following
-// Phase 0 §70 = the ToolIR + adapter seam, and Phase 1 §? = the frozen golden
-// corpus, MCPFO-72). It reduces klaridian's exposure to `openapi-mcp-generator`
-// by owning the ONE part that is genuinely ours to own — the
+// This owns the ONE part that is genuinely ours to own — the
 // operation → tool-DATA mapping — while DELEGATING the hard, mature bits:
 //
 //   OWNED here (this file):
@@ -36,26 +34,15 @@
 // `openapi-mcp-generator@4.0.1`'s `dist/parser/extract-tools.js` +
 // `dist/utils/code-gen.js` (generateOperationId) + `dist/utils/url.js`
 // (determineBaseUrl). Comments cite the mirrored behavior; the goldens are the
-// byte-for-byte test of that faithfulness. This is Phase 2 ONLY — the default
-// path stays on `openapi-mcp-generator` (Phase 3 / MCPFO-74 is the cutover).
+// byte-for-byte test of that faithfulness. Parity against that (now-removed)
+// dependency was proven across the golden corpus (MCPFO-72) and 6 large real
+// specs (MCPFO-104, §90/§91) before the Phase 3 cutover (MCPFO-74, §92).
 
 import { createHash } from "node:crypto";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { OpenAPIV3 } from "openapi-types";
 import type { JSONSchema7 } from "json-schema";
 import type { McpToolDefinitionLike } from "../emit/ir.js";
-
-/** Env var that opts a run into klaridian's own engine (shadow mode). Any value
- *  other than the recognized on-values keeps the default openapi-mcp-generator
- *  path. OFF by default — real users are never routed here. */
-export const ENGINE_ENV = "KLARIDIAN_ENGINE";
-
-/** True when the caller has explicitly selected klaridian's own engine via
- *  `KLARIDIAN_ENGINE=own` (case-insensitive). Everything else → false (default
- *  path unchanged). */
-export function isOwnEngineSelected(env: NodeJS.ProcessEnv = process.env): boolean {
-  return (env[ENGINE_ENV] ?? "").trim().toLowerCase() === "own";
-}
 
 /** The engine's per-tool output. Superset of `McpToolDefinitionLike` (adds the
  *  engine-only `parameters` + `baseUrl` that `getToolsFromOpenApi` also carries)
@@ -67,6 +54,11 @@ export interface OwnEngineToolDefinition extends McpToolDefinitionLike {
   /** Resolved upstream base URL (spec `servers` or the caller override), as the
    *  default engine attaches to every tool. */
   baseUrl: string;
+  /** The engine ALWAYS produces these (narrowed from `McpToolDefinitionLike`'s
+   *  optional shape), so `OwnEngineToolDefinition[]` is assignable to `ToolIR[]`
+   *  directly — the E2E tests feed raw engine output to the emitters unmapped. */
+  executionParameters: { name: string; in: string }[];
+  securityRequirements: OpenAPIV3.SecurityRequirementObject[];
 }
 
 export interface GetToolsFromOwnEngineOptions {

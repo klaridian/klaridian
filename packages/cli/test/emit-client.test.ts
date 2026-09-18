@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { sanitizeFunctionName, dedupeFunctionNames, emitClientModule } from "../src/emit/emit-client.js";
-import type { McpToolDefinition } from "openapi-mcp-generator";
+import type { ToolIR as McpToolDefinition } from "../src/emit/ir.js";
 
 test("sanitizeFunctionName keeps valid identifiers unchanged", () => {
   assert.equal(sanitizeFunctionName("getPetById"), "getPetById");

@@ -1,14 +1,15 @@
 // packages/cli/src/commands/generate.ts
 //
-// Implements `klaridian generate`. openapi-mcp-generator is used only for its
-// pure spec->tool-DATA extraction (getToolsFromOpenApi); the actual MCP server
-// project is emitted by klaridian's own emitter (emit/emit-server.ts) targeting
-// @modelcontextprotocol/server (SDK v2), stateless, protocol 2025-11-25 —
-// MCPFO-21 / ARCHITECTURE.md sections 38 and 49. The legacy v1 engine (which
-// delegated generation to openapi-mcp-generator's generateMcpServer() and then
-// textually patched its output for conformance/security/branding/instrumentation)
-// was removed in the MCPFO-21 cutover (section 49); v2 gives native isError/-32602
-// and wraps instrumentation at the registerTool boundary instead.
+// Implements `klaridian generate`. The spec->tool-DATA extraction is done by
+// klaridian's OWN engine (engine/own-engine.ts, getToolsFromOwnEngine); the
+// actual MCP server project is emitted by klaridian's own emitter
+// (emit/emit-server.ts) targeting @modelcontextprotocol/server (SDK v2),
+// stateless, protocol 2025-11-25 — MCPFO-21 / ARCHITECTURE.md sections 38, 49
+// and 92. klaridian now owns the full OpenAPI→tool-data pipeline; the
+// openapi-mcp-generator dependency it once delegated extraction to was removed
+// in the MCPFO-74 cutover (§92), built on @apidevtools/swagger-parser +
+// swagger2openapi for parse/deref/validation/2.0-conversion. v2 gives native
+// isError/-32602 and wraps instrumentation at the registerTool boundary.
 //
 // Section 20: supports 0, 1, or multiple --plugin flags (the old v0
 // guardrail of "exactly 0 or 1 plugins" is lifted now that a second plugin
@@ -23,12 +24,11 @@
 import type { Command } from "commander";
 import path from "node:path";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
 import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
-import { getToolsFromOwnEngine, isOwnEngineSelected, ENGINE_ENV } from "../engine/own-engine.js";
+import { getToolsFromOwnEngine } from "../engine/own-engine.js";
 import { extractOutputSchemasByOperationId } from "../emit/response-schema.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
@@ -146,7 +146,7 @@ export function registerGenerateCommand(program: Command): void {
   program
     .command("generate")
     .description(
-      "Generate an MCP server from an OpenAPI spec (via openapi-mcp-generator), optionally instrumented with one or more observability plugins"
+      "Generate an MCP server from an OpenAPI spec, optionally instrumented with one or more observability plugins"
     )
     .requiredOption("--spec <path>", "Path to the OpenAPI spec (JSON or YAML)")
     .requiredOption("--out <dir>", "Output directory for the generated server")
@@ -688,34 +688,17 @@ export function registerGenerateCommand(program: Command): void {
           // we can report a tool count and catch spec problems before
           // committing to a full project generation — mirrors the old
           // mapping-warnings UX without re-implementing the mapping itself.
-          // The spec→tool-DATA engine. Default: openapi-mcp-generator's
-          // getToolsFromOpenApi. SHADOW MODE (MCPFO-73, ARCHITECTURE.md §90):
-          // when KLARIDIAN_ENGINE=own, route through klaridian's OWN engine
-          // instead — a drop-in that returns the same McpToolDefinition shape, so
-          // the adapter seam below is unchanged. OFF by default: real users never
-          // hit this branch. Both accept the same (specPath, { baseUrl,
-          // dereference }) call. Parity is proven against the Phase-1 golden
-          // corpus in test/own-engine-parity.test.ts.
-          const useOwnEngine = isOwnEngineSelected();
-          const rawTools = useOwnEngine
-            ? await getToolsFromOwnEngine(generationSpecPath, {
-                baseUrl: opts.baseUrl,
-                dereference: true,
-              })
-            : await getToolsFromOpenApi(generationSpecPath, {
-                baseUrl: opts.baseUrl,
-                dereference: true,
-              });
-          if (useOwnEngine) {
-            warnings.push(
-              `Using klaridian's own spec→IR engine (${ENGINE_ENV}=own, shadow mode, MCPFO-73). This is experimental; the default engine remains openapi-mcp-generator.`
-            );
-          }
-          // The single adapter seam (MCPFO-71, ARCHITECTURE.md §70): from here
-          // on the codebase depends on klaridian's own ToolIR, never
-          // openapi-mcp-generator's McpToolDefinition. Swapping the frontend
-          // engine later means replacing only this mapping + the curation.ts
-          // call site, not every emitter. The recovered per-operation metadata
+          // The spec→tool-DATA engine (MCPFO-74, ARCHITECTURE.md §92): klaridian's
+          // OWN engine, getToolsFromOwnEngine. This is now the ONLY engine —
+          // the openapi-mcp-generator dependency was removed in the Phase 3
+          // cutover after byte-for-byte parity was proven against it across the
+          // golden corpus (MCPFO-72) and 6 large real-world specs (MCPFO-104,
+          // §90/§91). It returns McpToolDefinition-shaped objects, so the adapter
+          // seam below is unchanged. Accepts (specPath, { baseUrl, dereference }).
+          const rawTools = await getToolsFromOwnEngine(generationSpecPath, {
+            baseUrl: opts.baseUrl,
+            dereference: true,
+          });
           // (summary + x-klaridian) is threaded onto each tool here (MCPFO-76/77);
           // operations the author set `expose: false` on were already dropped by
           // the engine via the spec-preparation step.

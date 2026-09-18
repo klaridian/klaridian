@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer } from "node:http";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { emitServerProject } from "../src/emit/emit-server.js";
 
 const execFileAsync = promisify(execFile);
@@ -87,7 +87,7 @@ test(
     const mock = await startMockApi();
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-codemode-e2e",
         tools,
@@ -137,7 +137,7 @@ test(
     const mock = await startMockApi();
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-codemode-e2e",
         tools,
@@ -197,7 +197,7 @@ test(
     const mock = await startMockApi();
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-codemode-e2e",
         tools,
@@ -262,7 +262,7 @@ test(
     const mock = await startMockApi();
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-codemode-e2e-"));
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-codemode-e2e",
         tools,
@@ -335,7 +335,7 @@ test(
       const additions = getPluginProjectAdditions([otelPlugin], configs);
       const wiring = otelPlugin.getServerWiring();
 
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-codemode-e2e",
         tools,

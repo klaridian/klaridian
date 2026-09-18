@@ -11,12 +11,12 @@
 //
 // Mechanism: pre-process the parsed OpenAPI document, setting `x-mcp: false`
 // on every operation the user chose to exclude, then hand the modified
-// document to openapi-mcp-generator's generateMcpServer() — which already
-// respects that extension natively (confirmed with a real generated-output
-// test, see section 24). No fork, no patch to openapi-mcp-generator itself.
+// document to klaridian's own spec->tool-DATA engine (getToolsFromOwnEngine) —
+// which respects that extension natively (confirmed with a real generated-output
+// test, see section 24). No fork, no third-party engine.
 
 import type { OpenAPIV3 } from "openapi-types";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../engine/own-engine.js";
 import { mapMcpToolDefinitionToIR, type ToolIR } from "../emit/ir.js";
 
 export interface CurationChoice {
@@ -55,7 +55,7 @@ export interface OperationSummary {
  * against real tag names before generation.
  */
 export async function listOperations(specPathOrUrl: string): Promise<OperationSummary[]> {
-  const tools: ToolIR[] = (await getToolsFromOpenApi(specPathOrUrl, { dereference: true })).map(
+  const tools: ToolIR[] = (await getToolsFromOwnEngine(specPathOrUrl, { dereference: true })).map(
     (t) => mapMcpToolDefinitionToIR(t)
   );
   return tools.map((t) => ({

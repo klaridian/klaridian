@@ -14,7 +14,7 @@
 //     → extractOperationMetaByOperationId  (summary + x-klaridian)
 //     → extractOutputSchemasByOperationId  (klaridian-owned response schema)
 //     → prepareSpecForEngine               (expose:false → x-mcp:false, object x-mcp → bool)
-//     → getToolsFromOpenApi(..., { dereference: true })   (the engine)
+//     → getToolsFromOwnEngine(..., { dereference: true })   (the engine)
 //     → mapMcpToolDefinitionToIR(tool, meta)              (the single adapter seam)
 //
 // and deep-equals the produced ToolIR[] against the committed golden. Any
@@ -37,7 +37,7 @@ import path from "node:path";
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPIV3 } from "openapi-types";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import {
   mapMcpToolDefinitionToIR,
   extractOperationMetaByOperationId,
@@ -108,7 +108,7 @@ async function buildToolIRForSpec(specFilePath: string): Promise<ToolIR[]> {
   }
 
   // (5) The engine + (6) the single adapter seam.
-  const rawTools = await getToolsFromOpenApi(specPath, { dereference: true });
+  const rawTools = await getToolsFromOwnEngine(specPath, { dereference: true });
   const tools: ToolIR[] = rawTools.map((t) =>
     mapMcpToolDefinitionToIR(t, metaByOperationId.get(t.operationId))
   );

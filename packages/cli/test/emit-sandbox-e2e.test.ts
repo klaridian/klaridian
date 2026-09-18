@@ -23,7 +23,7 @@ import { tmpdir } from "node:os";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer } from "node:http";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { emitClientModule } from "../src/emit/emit-client.js";
 import { emitSandboxRunner, extractApiHost, buildDenoPermissionFlags } from "../src/emit/emit-sandbox.js";
 
@@ -63,7 +63,7 @@ async function startMockApi(): Promise<{ baseUrl: string; close: () => Promise<v
 /** Builds a real compiled sandbox project (client.js + sandbox-runner.js) and returns its dist dir. */
 async function buildSandboxProject(): Promise<string> {
   const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-sandbox-e2e-"));
-  const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+  const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
   await mkdir(path.join(outDir, "src"), { recursive: true });
   await writeFile(path.join(outDir, "src", "client.ts"), emitClientModule(tools), "utf-8");
   await writeFile(path.join(outDir, "src", "sandbox-runner.ts"), emitSandboxRunner(), "utf-8");

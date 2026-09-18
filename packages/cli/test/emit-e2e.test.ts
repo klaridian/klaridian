@@ -14,7 +14,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { getToolsFromOpenApi } from "openapi-mcp-generator";
+import { getToolsFromOwnEngine } from "../src/engine/own-engine.js";
 import { emitServerProject } from "../src/emit/emit-server.js";
 import { CONFORMANCE_CONTRACT } from "../src/emit/conformance/contract.js";
 
@@ -53,7 +53,7 @@ test(
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-e2e-"));
     try {
       // 1. Emit the project from real tool data.
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       assert.ok(tools.length >= 15, `expected many petstore tools, got ${tools.length}`);
       const files = emitServerProject({
         serverName: "petstore-e2e",
@@ -141,7 +141,7 @@ test(
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-testclient-"));
     const PORT = 3922;
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-testclient-e2e",
         tools,
@@ -231,7 +231,7 @@ test(
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-http-"));
     const PORT = 3921;
     try {
-      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
       const files = emitServerProject({
         serverName: "petstore-http-e2e",
         tools,

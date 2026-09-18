@@ -22,7 +22,7 @@
 
 You pick a plugin you want at generation time—e.g. `--plugin otel` or `--plugin posthog`. The server that comes out the other end is already instrumented. (Composing more than one plugin on the same server was a capability of the retired v1 pipeline and is not yet re-implemented on the current emitter—see [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).)
 
-OpenAPI parsing / tool-data extraction is handled by [`openapi-mcp-generator`](https://github.com/harsha-iiiv/openapi-mcp-generator)'s `getToolsFromOpenApi()`; klaridian's own code emits the MCP server project itself—a stateless [`@modelcontextprotocol/server`](https://www.npmjs.com/package/@modelcontextprotocol/server) (SDK v2, protocol 2025-11-25) project—plus the instrumentation and curation layers on top.
+OpenAPI parsing / tool-data extraction is handled by klaridian's own spec→tool-data engine, built on [`@apidevtools/swagger-parser`](https://www.npmjs.com/package/@apidevtools/swagger-parser) (parse, `$ref` dereference, validation) and [`swagger2openapi`](https://www.npmjs.com/package/swagger2openapi) (Swagger 2.0 → OpenAPI 3.0 conversion); klaridian owns the operation→tool mapping end to end. Its own code then emits the MCP server project itself—a stateless [`@modelcontextprotocol/server`](https://www.npmjs.com/package/@modelcontextprotocol/server) (SDK v2, protocol 2025-11-25) project—plus the instrumentation and curation layers on top.
 
 ## Why
 

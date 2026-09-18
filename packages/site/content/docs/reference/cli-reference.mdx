@@ -33,6 +33,14 @@ Generate an MCP server from an OpenAPI spec, optionally instrumented with one or
 | `--json` | Print a single machine-readable JSON result to stdout instead of human-readable progress lines on stderr (success or failure, always exactly one JSON value, exit code still reflects success) |
 | `--quiet` | Suppress step-by-step progress messages; still prints warnings, errors, and the final summary/next-steps line |
 
+### Security
+
+See [Security](/docs/how-to/external-refs) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--allow-external-refs` | Allow resolving REMOTE http(s) external $ref pointers in the spec (default: refuse, to prevent SSRF from a malicious spec fetching attacker-controlled or internal URLs at generation time). Local-file $refs always resolve regardless. |
+
 ### Lifecycle
 
 See [Lifecycle](/docs/how-to/running-the-server) for the full guide.

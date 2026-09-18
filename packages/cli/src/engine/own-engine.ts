@@ -71,6 +71,82 @@ export interface GetToolsFromOwnEngineOptions {
   maxToolNameLength?: number;
   /** Default x-mcp include behavior when the extension is absent. Default true. */
   defaultInclude?: boolean;
+  /**
+   * MCPFO-106 (SSRF hardening, ARCHITECTURE.md §94): allow swagger-parser to
+   * FETCH remote http(s) external `$ref` pointers at parse time. OFF by default
+   * — a malicious/compromised spec could otherwise make klaridian request
+   * attacker-controlled or internal-network URLs from the operator's machine or
+   * CI runner (SSRF). Local-file `$ref`s are unaffected either way (real
+   * multi-file specs still work). Re-enabled by the CLI `--allow-external-refs`
+   * flag when the operator explicitly trusts the spec. */
+  allowExternalRefs?: boolean;
+}
+
+/** Matches a `$ref` whose target is a REMOTE http(s) URL (as opposed to a
+ *  local-file path or an in-document JSON pointer). MCPFO-106. */
+const REMOTE_REF_PATTERN = /^https?:\/\//i;
+
+/**
+ * Thrown when a spec contains a REMOTE http(s) external `$ref` while remote-ref
+ * resolution is disabled (the MCPFO-106 default). The message names the
+ * offending ref and the `--allow-external-refs` opt-out so the operator
+ * understands both what was refused and how to re-enable it if they trust the
+ * spec. Fail loudly, don't silently ship a server with an unresolved ref.
+ */
+export class RemoteRefBlockedError extends Error {
+  constructor(public readonly ref: string) {
+    super(
+      `Refusing to resolve a REMOTE external $ref in this OpenAPI spec:\n` +
+        `    ${ref}\n` +
+        `klaridian does NOT fetch remote http(s) $ref URLs at generation time by ` +
+        `default (SSRF hardening, MCPFO-106): a malicious or compromised spec ` +
+        `could otherwise make klaridian request attacker-controlled or ` +
+        `internal-network URLs from your machine or CI runner. Local-file $refs ` +
+        `still resolve normally. If you trust this spec and need its remote ` +
+        `$ref(s) fetched, re-run with --allow-external-refs.`
+    );
+    this.name = "RemoteRefBlockedError";
+  }
+}
+
+/** Recursively find the first REMOTE http(s) `$ref` string anywhere in a parsed
+ *  document (defensive check in case swagger-parser leaves a remote ref
+ *  unresolved rather than throwing). MCPFO-106. */
+function findRemoteRef(node: unknown, seen = new Set<unknown>()): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  if (seen.has(node)) return undefined; // dereference produces circular graphs
+  seen.add(node);
+  if (Array.isArray(node)) {
+    for (const el of node) {
+      const found = findRemoteRef(el, seen);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  const rec = node as Record<string, unknown>;
+  const ref = rec["$ref"];
+  if (typeof ref === "string" && REMOTE_REF_PATTERN.test(ref)) return ref;
+  for (const value of Object.values(rec)) {
+    const found = findRemoteRef(value, seen);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** True when a swagger-parser error is the failure produced by refusing to
+ *  download a remote http(s) `$ref` (either "Unable to resolve $ref pointer" or
+ *  a download error naming an http(s) URL). MCPFO-106. */
+function isRemoteRefResolutionError(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  // swagger-parser (json-schema-ref-parser) surfaces the offending URL in the
+  // message. Verified empirically with `resolve: { http: false }`: a top-level
+  // or nested remote $ref throws
+  //   SyntaxError: Unable to resolve $ref pointer "https://..."
+  const match = error.message.match(/(https?:\/\/[^\s"']+)/i);
+  if (match && /Unable to resolve \$ref pointer|Error downloading/i.test(error.message)) {
+    return match[1];
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -515,6 +591,23 @@ export async function getToolsFromOwnEngine(
   specPathOrUrl: string,
   options: GetToolsFromOwnEngineOptions = {}
 ): Promise<OwnEngineToolDefinition[]> {
+  // MCPFO-106 (SSRF hardening, ARCHITECTURE.md §94): by default, block
+  // swagger-parser from FETCHING remote http(s) external $refs (`resolve.http:
+  // false`). We deliberately do NOT set `resolve.external: false` — that would
+  // also block LOCAL-FILE $refs, which real multi-file specs need (e.g. our
+  // bundled DigitalOcean fixture is composed from ~693 local-file $refs). So
+  // local file refs keep resolving; only remote http(s) fetches are refused,
+  // unless the operator opts in via --allow-external-refs.
+  //
+  // When the operator DOES opt in (allowExternalRefs), we re-enable the http
+  // resolver AND lift json-schema-ref-parser's own `safeUrlResolver` guard
+  // (which otherwise blocks loopback/internal hosts): the flag means "I trust
+  // this spec, fetch its remote $refs", and a trusted spec may legitimately
+  // reference an internal schema registry. The default path (http:false) still
+  // blocks everything, so the SSRF surface only opens on an explicit opt-in.
+  const resolveOptions = options.allowExternalRefs
+    ? ({ resolve: { http: { safeUrlResolver: false } } } as const)
+    : ({ resolve: { http: false } } as const);
   try {
     // DELEGATED: parse + $ref dereference + validation via swagger-parser.
     // `dereference` bundles+resolves+validates; we default to it because the
@@ -522,9 +615,17 @@ export async function getToolsFromOwnEngine(
     // assumes resolved schemas (matching the default engine's contract).
     const api = (
       options.dereference === false
-        ? await SwaggerParser.parse(specPathOrUrl)
-        : await SwaggerParser.dereference(specPathOrUrl)
+        ? await SwaggerParser.parse(specPathOrUrl, resolveOptions)
+        : await SwaggerParser.dereference(specPathOrUrl, resolveOptions)
     ) as OpenAPIV3.Document;
+
+    // Defense in depth: if swagger-parser ever LEAVES a remote $ref unresolved
+    // rather than throwing (observed behavior is to throw, but don't rely on
+    // it), catch it here and fail loudly the same way.
+    if (!options.allowExternalRefs) {
+      const remoteRef = findRemoteRef(api);
+      if (remoteRef) throw new RemoteRefBlockedError(remoteRef);
+    }
 
     const tools = extractToolsFromApi(
       api,
@@ -535,6 +636,15 @@ export async function getToolsFromOwnEngine(
     const baseUrl = determineBaseUrl(api, options.baseUrl);
     return tools.map((tool) => ({ ...tool, baseUrl: baseUrl || "" }));
   } catch (error) {
+    // MCPFO-106: turn swagger-parser's low-level "can't resolve this URL"
+    // failure (the shape it throws when `resolve.http: false` meets a remote
+    // $ref) into klaridian's actionable RemoteRefBlockedError, which names the
+    // ref and the --allow-external-refs opt-out.
+    if (error instanceof RemoteRefBlockedError) throw error;
+    if (!options.allowExternalRefs) {
+      const blockedRef = isRemoteRefResolutionError(error);
+      if (blockedRef) throw new RemoteRefBlockedError(blockedRef);
+    }
     if (error instanceof Error) {
       throw new Error(`Failed to extract tools from OpenAPI: ${error.message}`, {
         cause: error,

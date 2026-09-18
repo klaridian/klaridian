@@ -1,0 +1,43 @@
+---
+title: External $ref resolution
+description: Why klaridian refuses to fetch remote http(s) external $ref pointers by default, and how to opt in with --allow-external-refs.
+---
+
+An OpenAPI spec can split itself across files and references with `$ref` pointers. Those pointers come in three shapes:
+
+- **In-document**: `#/components/schemas/Widget`. Always resolved.
+- **Local file**: `./schemas/widget.json#/Widget`. Always resolved. Real multi-file specs (for example, DigitalOcean's published spec) rely on these.
+- **Remote http(s)**: `https://example.com/schemas/widget.json#/Widget`. Refused by default. See below.
+
+## Why remote refs are refused by default
+
+When klaridian reads a spec, it fully resolves `$ref` pointers so it can build one tool per operation. If it followed remote http(s) refs, a malicious or compromised spec could make klaridian fetch attacker-controlled or internal-network URLs from your machine or CI runner. That's a server-side request forgery (SSRF) attack, and it happens at generation time, before you ever review the output.
+
+So by default `klaridian generate` doesn't fetch remote http(s) refs. If a spec contains one, generation fails with a message that names the offending ref and points you to the opt-in flag:
+
+```text
+Refusing to resolve a REMOTE external $ref in this OpenAPI spec:
+    https://example.com/schemas/widget.json#/Widget
+klaridian does NOT fetch remote http(s) $ref URLs at generation time by
+default (SSRF hardening, MCPFO-106): ... If you trust this spec and need
+its remote $refs fetched, re-run with --allow-external-refs.
+```
+
+Local-file refs aren't affected. Multi-file specs keep working with no flags.
+
+## Opt in with --allow-external-refs
+
+If you trust the spec and need its remote refs fetched, pass `--allow-external-refs`:
+
+```bash
+klaridian generate --spec ./api.yaml --out ./my-server \
+  --base-url https://api.example.com --allow-external-refs
+```
+
+This re-enables remote http(s) resolution for that run, including references to internal or loopback hosts (for example, an internal schema registry). Use it only for specs from a source you trust. It opens the SSRF surface that the default protects you from.
+
+## When you don't need it
+
+- Single-file specs, or specs that only use in-document `#/components/...` refs: nothing to do.
+- Multi-file specs that reference sibling files on disk: nothing to do, because local-file refs always resolve.
+- Only specs with remote http(s) refs need the flag.

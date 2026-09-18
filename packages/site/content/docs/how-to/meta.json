@@ -9,6 +9,7 @@
     "curation",
     "code-mode",
     "target-language",
+    "external-refs",
     "---Run & deploy---",
     "running-the-server",
     "json-output",

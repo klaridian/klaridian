@@ -54,10 +54,13 @@ export interface OperationSummary {
  * interactive prompt or validating --include-tags/--exclude-tags input
  * against real tag names before generation.
  */
-export async function listOperations(specPathOrUrl: string): Promise<OperationSummary[]> {
-  const tools: ToolIR[] = (await getToolsFromOwnEngine(specPathOrUrl, { dereference: true })).map(
-    (t) => mapMcpToolDefinitionToIR(t)
-  );
+export async function listOperations(
+  specPathOrUrl: string,
+  allowExternalRefs = false
+): Promise<OperationSummary[]> {
+  const tools: ToolIR[] = (
+    await getToolsFromOwnEngine(specPathOrUrl, { dereference: true, allowExternalRefs })
+  ).map((t) => mapMcpToolDefinitionToIR(t));
   return tools.map((t) => ({
     operationId: t.operationId,
     tags: t.tags ?? [],

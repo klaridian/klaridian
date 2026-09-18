@@ -143,14 +143,27 @@ export function pickSuccessObjectSchema(
  * output schema is a legitimate, lossless outcome, unlike a broken server.
  */
 export async function extractOutputSchemasByOperationId(
-  specPath: string
+  specPath: string,
+  allowExternalRefs = false
 ): Promise<Map<string, JSONSchema7>> {
   const map = new Map<string, JSONSchema7>();
   let doc: OpenAPIV3.Document;
   try {
     // Clone so we never mutate a spec another step also reads; dereference so
     // component `$ref`s in the response schemas are fully resolved.
-    doc = (await SwaggerParser.dereference(specPath)) as OpenAPIV3.Document;
+    // MCPFO-106 (SSRF hardening, ARCHITECTURE.md §94): by default block remote
+    // http(s) $ref FETCHES here too — this dereference runs BEFORE the own
+    // engine in the generate pipeline, so it would otherwise be the first place
+    // a malicious spec's remote $ref gets fetched. `resolve.http: false` only;
+    // local-file $refs still resolve. A remote $ref makes dereference throw,
+    // caught by the fail-soft path below (no outputSchema) — the own engine then
+    // fails loudly with the actionable RemoteRefBlockedError.
+    doc = (await SwaggerParser.dereference(
+      specPath,
+      allowExternalRefs
+        ? { resolve: { http: { safeUrlResolver: false } } }
+        : { resolve: { http: false } }
+    )) as OpenAPIV3.Document;
   } catch {
     return map;
   }

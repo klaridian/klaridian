@@ -102,6 +102,11 @@ export const GENERATE_FLAG_DOC_GROUPS: {
     flags: ["--name", "--base-url", "--server-description", "--force", "--json", "--quiet"],
   },
   {
+    category: "Security",
+    docPage: "/docs/how-to/external-refs",
+    flags: ["--allow-external-refs"],
+  },
+  {
     category: "Lifecycle",
     docPage: "/docs/how-to/running-the-server",
     flags: ["--install"],
@@ -284,6 +289,17 @@ export function registerGenerateCommand(program: Command): void {
       false
     )
     .option(
+      // MCPFO-106 / ARCHITECTURE.md section 94 (SSRF hardening). By default
+      // klaridian refuses to FETCH remote http(s) external $ref pointers at
+      // generation time — a malicious/compromised spec could otherwise make the
+      // parser request attacker-controlled or internal-network URLs from your
+      // machine or CI runner. Local-file $refs are unaffected (real multi-file
+      // specs still work). Set this only for specs you trust.
+      "--allow-external-refs",
+      "Allow resolving REMOTE http(s) external $ref pointers in the spec (default: refuse, to prevent SSRF from a malicious spec fetching attacker-controlled or internal URLs at generation time). Local-file $refs always resolve regardless.",
+      false
+    )
+    .option(
       // ARCHITECTURE.md section 58: the "prepare" step (npm install + npm
       // run build) sits between generate's decide (rare, no network by
       // default) and start's run (frequent, never touches the network) —
@@ -326,6 +342,7 @@ export function registerGenerateCommand(program: Command): void {
         json: boolean;
         quiet: boolean;
         install: boolean;
+        allowExternalRefs: boolean;
       }, command: Command) => {
         // MCPFO-37 / ARCHITECTURE.md section 52: merge the config file (a
         // defaults layer) into `opts` BEFORE anything reads it — including
@@ -600,7 +617,7 @@ export function registerGenerateCommand(program: Command): void {
           // threaded onto each tool's IR below (→ outputSchema/structuredContent).
           // Extracted from the original spec by path (dereferenced internally),
           // keyed by operationId, so it survives curation the same way.
-          const outputSchemas = await extractOutputSchemasByOperationId(specPath);
+          const outputSchemas = await extractOutputSchemasByOperationId(specPath, opts.allowExternalRefs);
           for (const [operationId, outputSchema] of outputSchemas) {
             const existing = metaByOperationId.get(operationId);
             if (existing) existing.outputSchema = outputSchema;
@@ -621,7 +638,7 @@ export function registerGenerateCommand(program: Command): void {
           // non-interactive flags can validate/resolve against the same
           // real tag/operationId data — and so we can report a tool count
           // before committing to a full project generation either way.
-          const operations = await listOperations(specPath);
+          const operations = await listOperations(specPath, opts.allowExternalRefs);
           if (operations.length === 0) {
             fail("No tools could be extracted from this spec — nothing to generate.", "list-operations");
             return;
@@ -698,6 +715,7 @@ export function registerGenerateCommand(program: Command): void {
           const rawTools = await getToolsFromOwnEngine(generationSpecPath, {
             baseUrl: opts.baseUrl,
             dereference: true,
+            allowExternalRefs: opts.allowExternalRefs,
           });
           // (summary + x-klaridian) is threaded onto each tool here (MCPFO-76/77);
           // operations the author set `expose: false` on were already dropped by

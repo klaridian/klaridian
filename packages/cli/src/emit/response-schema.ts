@@ -84,7 +84,7 @@ export function isObjectRootSchema(schema: unknown): schema is JSONSchema7 {
  * exactly once, so their output is byte-for-byte the prior full-clone result and
  * the committed goldens are unchanged.
  */
-function breakSchemaCycles(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+export function breakSchemaCycles(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (Array.isArray(value)) return value.map((v) => breakSchemaCycles(v, seen));
   if (!value || typeof value !== "object") return value;
   const obj = value as Record<string, unknown>;

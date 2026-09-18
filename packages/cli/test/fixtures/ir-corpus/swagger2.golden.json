@@ -4,6 +4,7 @@
     "description": "Creates a widget from a JSON body.",
     "executionParameters": [],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "requestBody": {
           "description": "The JSON request body.",
@@ -54,6 +55,7 @@
       }
     ],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Maximum number of widgets to return.",

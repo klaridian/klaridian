@@ -4,6 +4,7 @@
     "description": "Body is an allOf-composed schema referenced via $ref.",
     "executionParameters": [],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "requestBody": {
           "allOf": [
@@ -66,6 +67,7 @@
       }
     ],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "shapeId": {
           "type": "string"

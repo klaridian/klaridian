@@ -1,0 +1,67 @@
+[
+  {
+    "deprecated": false,
+    "description": "Exercises the draft-07 to 2020-12 deltas that OpenAPI 3.0 actually produces: boolean exclusiveMinimum/exclusiveMaximum paired with minimum/maximum.",
+    "executionParameters": [],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "count": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "inclusive": {
+              "minimum": 1,
+              "type": "number"
+            },
+            "label": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ratio": {
+              "exclusiveMaximum": 100,
+              "type": "number"
+            }
+          },
+          "required": [
+            "count"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "createMeasurement",
+    "operationId": "createMeasurement",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "score": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "pathTemplate": "/measurements",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [],
+    "summary": "Record a measurement",
+    "tags": []
+  }
+]

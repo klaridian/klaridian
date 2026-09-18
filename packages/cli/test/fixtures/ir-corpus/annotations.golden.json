@@ -9,6 +9,7 @@
       }
     ],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "reportId": {
           "type": "string"
@@ -38,6 +39,7 @@
     "description": "A safe, read-only listing annotated via x-klaridian.",
     "executionParameters": [],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {},
       "type": "object"
     },
@@ -49,6 +51,7 @@
     "name": "listReports",
     "operationId": "listReports",
     "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "reports": {
           "items": {
@@ -71,6 +74,7 @@
     "description": "Carries a third-party object-form x-mcp that prepareSpecForEngine collapses to a boolean; klaridian reads hints only from x-klaridian.",
     "executionParameters": [],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "requestBody": {
           "description": "The JSON request body.",
@@ -94,6 +98,7 @@
     "name": "recordAudit",
     "operationId": "recordAudit",
     "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "ok": {
           "type": "boolean"

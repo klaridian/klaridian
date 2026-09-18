@@ -16,6 +16,7 @@ import path from "node:path";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { execFileAsync, CLI_ENTRYPOINT, sendJsonRpc } from "./test-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -504,10 +505,21 @@ test(
       await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outputDir, timeout: 120_000 });
       await execFileAsync("npm", ["run", "build"], { cwd: outputDir, timeout: 120_000 });
 
+      // MCPFO-91: a mock upstream returns a real Widget object so a tools/call
+      // yields structuredContent — proving the SDK VALIDATES it against the
+      // advertised 2020-12 outputSchema at runtime (a mismatch would come back
+      // as isError). Bind to an ephemeral port and point the server at it.
+      const upstream = http.createServer((_req: http.IncomingMessage, res: http.ServerResponse) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ id: "w1", name: "Widget One", size: 42 }));
+      });
+      await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", () => resolve()));
+      const upstreamPort = (upstream.address() as import("node:net").AddressInfo).port;
+
       const proc = spawn("node", ["dist/index.js"], {
         cwd: outputDir,
         stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, KLARIDIAN_BASE_URL: "https://api.example.com" },
+        env: { ...process.env, KLARIDIAN_BASE_URL: `http://127.0.0.1:${upstreamPort}` },
       });
       let stdoutBuf = "";
       let stderrBuf = "";
@@ -530,13 +542,18 @@ test(
           300
         );
         setTimeout(() => sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }), 800);
+        setTimeout(
+          () => sendJsonRpc(proc, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "getWidget", arguments: { id: "w1" } } }),
+          1300
+        );
         setTimeout(() => {
           clearTimeout(timeout);
           proc.kill("SIGTERM");
           resolve();
-        }, 2500);
+        }, 3500);
       });
       await new Promise((r) => setTimeout(r, 300));
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
 
       const parsed = stdoutBuf
         .trim()
@@ -550,6 +567,37 @@ test(
       assert.equal((byName.getWidget as { type?: string }).type, "object");
       assert.equal(byName.listWidgets, undefined, "listWidgets (array body) has no outputSchema");
       assert.equal(byName.ping, undefined, "ping (no body) has no outputSchema");
+
+      // MCPFO-91: the advertised schemas declare the JSON Schema 2020-12 dialect.
+      // The SDK converts every advertised schema to 2020-12 on the wire (verified
+      // against @modelcontextprotocol/server 2.x: JSON_SCHEMA_CONVERSION_TARGET =
+      // "draft-2020-12"), stamping the canonical $schema.
+      const DIALECT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
+      const getWidgetTool = listResponse.result.tools.find((t: { name: string }) => t.name === "getWidget");
+      assert.equal(
+        (getWidgetTool.inputSchema as { $schema?: string }).$schema,
+        DIALECT_2020_12,
+        "inputSchema advertises the 2020-12 dialect on the wire"
+      );
+      assert.equal(
+        (getWidgetTool.outputSchema as { $schema?: string }).$schema,
+        DIALECT_2020_12,
+        "outputSchema advertises the 2020-12 dialect on the wire"
+      );
+
+      // MCPFO-91: the tools/call succeeded — structuredContent was accepted by
+      // the SDK's runtime validation against the advertised 2020-12 outputSchema.
+      // (The SDK turns a schema mismatch into isError:true, so a clean success
+      // with structuredContent present is the runtime-validation proof.)
+      const callResponse = parsed.find((r) => r.id === 3);
+      assert.ok(callResponse, `no tools/call response. stderr: ${stderrBuf}`);
+      assert.ok(!callResponse.error, "tools/call is not a protocol error");
+      assert.notEqual(callResponse.result?.isError, true, "structuredContent validated against 2020-12 outputSchema (no soft error)");
+      assert.deepEqual(
+        callResponse.result?.structuredContent,
+        { id: "w1", name: "Widget One", size: 42 },
+        "structuredContent is the parsed upstream object"
+      );
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }

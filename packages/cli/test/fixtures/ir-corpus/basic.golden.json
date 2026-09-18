@@ -4,6 +4,7 @@
     "description": "Create a new item from a JSON body.",
     "executionParameters": [],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "requestBody": {
           "description": "The JSON request body.",
@@ -30,6 +31,7 @@
     "name": "createItem",
     "operationId": "createItem",
     "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "id": {
           "type": "string"
@@ -73,6 +75,7 @@
       }
     ],
     "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "X-Request-Id": {
           "description": "Client-supplied request correlation id.",
@@ -97,6 +100,7 @@
     "name": "getItem",
     "operationId": "getItem",
     "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "id": {
           "type": "string"

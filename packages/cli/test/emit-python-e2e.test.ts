@@ -248,6 +248,23 @@ test(
         assert.equal(byName.getWidget.type, "object");
         assert.equal(byName.listWidgets, undefined, "array body → no output_schema");
         assert.equal(byName.ping, undefined, "no JSON body → no output_schema");
+
+        // MCPFO-91: both input and output schemas declare the JSON Schema 2020-12
+        // dialect (klaridian stamps the canonical $schema in the ONE adapter seam,
+        // so the Python target — which serializes the IR schema verbatim — carries
+        // it identically to TypeScript). Parity assertion on the wire.
+        const DIALECT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
+        const getWidgetTool = listResp.result.tools.find((t: any) => t.name === "getWidget");
+        assert.equal(
+          getWidgetTool.inputSchema.$schema,
+          DIALECT_2020_12,
+          "Python inputSchema advertises the 2020-12 dialect on the wire"
+        );
+        assert.equal(
+          getWidgetTool.outputSchema.$schema,
+          DIALECT_2020_12,
+          "Python outputSchema advertises the 2020-12 dialect on the wire"
+        );
       } finally {
         proc.kill("SIGKILL");
       }

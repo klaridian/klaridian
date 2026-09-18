@@ -44,6 +44,7 @@ python server.py --transport streamable-http --port 3000
 
 - **Tools.** One tool per OpenAPI operation, with identical names and input schemas.
 - **Output schemas.** When an operation's success response is a JSON object, the tool advertises a matching `outputSchema` and returns `structuredContent` alongside the text result. Identical in both languages. See [Output schemas](#output-schemas) below.
+- **Schema dialect.** Every tool's input and output schema is expressed in [JSON Schema 2020-12](https://json-schema.org/draft/2020-12/schema)—the default dialect for MCP schema definitions—and declares it with a `$schema` field. Identical in both languages. See [Schema dialect](#schema-dialect) below.
 - **Annotations.** Read-only, destructive, idempotent, and open-world hints are computed the same way and appear the same way on the wire.
 - **Curation.** `--include-tags`, `--exclude-tags`, path and method filters all work the same—they act on the spec before either language emits.
 - **Plugins.** The `otel`, `posthog`, `amplitude`, and `mixpanel` plugins all support both languages. Each ships as readable, vendored instrumentation source in the language you chose.
@@ -75,3 +76,18 @@ klaridian reads the response schema from the spec itself—including resolving `
 - the operation declares no success response schema at all.
 
 This is deliberate. The MCP spec requires an `outputSchema` root to be an object, and the TypeScript SDK validates a successful result's `structuredContent` against the advertised schema. klaridian only advertises a schema it can faithfully honour: on a successful call the handler attaches the parsed body; on an error response it returns a tool error (no structured content expected); and if a response body isn't valid JSON, it falls back to a plain text result. You get precise output typing where the spec supports it, and no spurious validation failures where it doesn't.
+
+## Schema dialect
+
+Every tool's input and output schema is emitted as [JSON Schema 2020-12](https://json-schema.org/draft/2020-12/schema), the default dialect for MCP schema definitions since MCP revision 2025-11-25. Each schema declares the dialect explicitly with a `$schema` field:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": { "count": { "type": "number", "exclusiveMinimum": 0 } },
+  "required": ["count"]
+}
+```
+
+Your OpenAPI spec's schemas are converted from their OpenAPI-3.x (JSON Schema draft-07-style) form to 2020-12 during generation. The conversion is small and bounded, because OpenAPI-derived schemas only differ from 2020-12 in a few places—most notably the exclusive bounds: an OpenAPI 3.0 `{ "minimum": 0, "exclusiveMinimum": true }` becomes the 2020-12 numeric form `{ "exclusiveMinimum": 0 }`. This is identical in TypeScript and Python, from the same spec.

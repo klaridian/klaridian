@@ -20,6 +20,7 @@
 
 import type { JSONSchema7 } from "json-schema";
 import type { OpenAPIV3 } from "openapi-types";
+import { toJsonSchema2020 } from "./json-schema-dialect.js";
 
 /**
  * Author-supplied MCP annotations from klaridian's `x-klaridian` OpenAPI vendor
@@ -259,7 +260,12 @@ export function mapMcpToolDefinitionToIR(
     description: tool.description,
     method: tool.method,
     pathTemplate: tool.pathTemplate,
-    inputSchema: tool.inputSchema,
+    // inputSchema/outputSchema are re-dialected from JSON Schema draft-07 (what
+    // OpenAPI-3.x-derived schemas arrive as) to JSON Schema 2020-12 — the MCP
+    // default dialect since revision 2025-11-25 (SEP-1613/2106), MCPFO-91 / §89.
+    // Doing it in the ONE adapter seam keeps every emitter + the golden contract
+    // in lockstep and guarantees TS/Python parity for free.
+    inputSchema: toJsonSchema2020(tool.inputSchema),
     executionParameters: (tool.executionParameters ?? []).map((p) => ({
       name: p.name,
       in: p.in,
@@ -274,7 +280,10 @@ export function mapMcpToolDefinitionToIR(
     // and outputSchema (MCPFO-33) feeds the tool's outputSchema/structuredContent.
     summary: meta?.summary,
     klaridian: meta?.klaridian,
-    outputSchema: meta?.outputSchema,
+    outputSchema:
+      meta?.outputSchema === undefined
+        ? undefined
+        : (toJsonSchema2020(meta.outputSchema) as JSONSchema7),
   };
 }
 

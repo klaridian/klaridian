@@ -11,8 +11,21 @@
 //   - GitHub REST   (~1239 operations)
 //   - DigitalOcean  (~684 operations)
 //
-// committed offline under test/fixtures/real-specs/*.json (CI reads local files,
-// NEVER the network, so the run is deterministic).
+// MCPFO-104 (reopened, §91 addendum) adds THREE more for SHAPE diversity, not
+// just volume — chosen to stress paths the first three don't:
+//
+//   - Kubernetes    (~1202 operations) — a large SWAGGER 2.0 spec, the priority:
+//                   it exercises the swagger2openapi conversion path at scale
+//                   (previously only one tiny fixture did).
+//   - OpenAI        (~346 operations)  — OpenAPI 3.1.0, distinct req/resp shapes.
+//   - Twilio api    (~197 operations)  — OpenAPI 3.0.1, twilio_api_v2010 (the
+//                   largest/richest Twilio per-product spec): unusual param
+//                   serialization + multiple security schemes.
+//
+// All committed offline under test/fixtures/real-specs/*.json (CI reads local
+// files, NEVER the network, so the run is deterministic). This file
+// AUTO-DISCOVERS every *.json in that dir (see realSpecFiles), so adding a
+// fixture adds a parity case with no code change here.
 //
 // For each spec this runs BOTH engines through the IDENTICAL pipeline — the same
 // meta recovery, the same `mapMcpToolDefinitionToIR` adapter, the same

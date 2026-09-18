@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import posthog from "posthog-js";
 
 const CHANNELS = [
   {
@@ -35,6 +36,9 @@ export function CopyInstallCommand() {
     navigator.clipboard.writeText(current.cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+    // Conversion signal. No-op unless the visitor consented (posthog is
+    // opted out by default), so this is safe to always call.
+    posthog.capture("install_command_copied", { channel: current.label });
   };
 
   return (

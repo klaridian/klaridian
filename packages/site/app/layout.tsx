@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { RootProvider } from "fumadocs-ui/provider/next";
+import { PostHogProvider } from "@/components/posthog-provider";
+import { ConsentBanner } from "@/components/consent-banner";
 import "./globals.css";
 
 const inter = Inter({
@@ -79,7 +81,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body className="antialiased">
-        <RootProvider>{children}</RootProvider>
+        <PostHogProvider>
+          <RootProvider>{children}</RootProvider>
+          <ConsentBanner />
+        </PostHogProvider>
       </body>
     </html>
   );

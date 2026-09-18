@@ -6,7 +6,7 @@
 
 ![klaridian: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
 
-> Generate MCP servers with engineering + product observability built in—no manual instrumentation.
+> ⚡ Generate MCP servers with engineering + product observability built in—no manual instrumentation.
 
 **Status:** v0.3.0. Generates real, runnable [Model Context Protocol](https://modelcontextprotocol.io) servers from an OpenAPI spec—**OpenAPI 3.1, 3.0, and Swagger 2.0** (2.0 is converted to 3.0 automatically)—in TypeScript or Python, optionally instrumented with OpenTelemetry and/or a product-analytics plugin (PostHog, Amplitude, or Mixpanel), with generation-time tool curation. klaridian owns the full spec-to-server pipeline (built on `@apidevtools/swagger-parser` and `swagger2openapi`). The CLI ships on **npm, PyPI, and Homebrew**, with prebuilt native binaries for macOS, Linux, and Windows. See [PLAN.md](PLAN.md) for the strategic plan and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design + validation history.
 
@@ -63,7 +63,7 @@ OpenAPI parsing / tool-data extraction is handled by klaridian's own spec→tool
 
 Building an MCP server today means writing the server, then manually wiring up tracing and analytics—repetitive work every MCP server author does from scratch. Datadog, PostHog, Sentry, and Grafana already ship MCP servers of their own, but those let an agent *query* those platforms—they don't instrument a *new* server you're building. `klaridian` closes that gap.
 
-## Install
+## 📦 Install
 
 klaridian is one CLI, distributed on every major channel. Pick whichever fits your toolchain—all deliver the same generator:
 
@@ -94,7 +94,7 @@ chmod +x klaridian && ./klaridian --version
 
 To build from source instead, see [Development environment](#development-environment).
 
-## Quickstart
+## 🚀 Quickstart
 
 Once klaridian is on your PATH (or via `npx klaridian`), generate a server from an OpenAPI spec:
 
@@ -137,7 +137,7 @@ Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--inc
 
 Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning)—MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-klaridian-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
 
-## Upstream authentication
+## 🔐 Upstream authentication
 
 The generated server authenticates to the upstream API using **the actual OpenAPI `securityScheme`** each operation declares—apiKey (header, query, or cookie), HTTP bearer, HTTP basic, or OAuth2/OpenID Connect—not a one-size-fits-all bearer token. Credentials come from environment variables at runtime, so one build points at different deployments without a rebuild. The convention (TypeScript and Python emit identical wiring):
 

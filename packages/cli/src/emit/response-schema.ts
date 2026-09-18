@@ -61,6 +61,41 @@ export function isObjectRootSchema(schema: unknown): schema is JSONSchema7 {
 }
 
 /**
+ * Deep-clone a resolved (dereferenced) schema, collapsing every REPEATED node —
+ * whether a recursive `$ref` cycle or a shared-component DAG reference — to a
+ * generic `{ type: "object" }` the first time it is re-encountered.
+ * `SwaggerParser.dereference` resolves component `$ref`s into a real object GRAPH:
+ * recursive schemas become circular (e.g. Stripe's `account` embeds itself;
+ * ~474/594 Stripe success bodies are cyclic) and shared components become
+ * multiply-referenced nodes. A naive deep walk of such a graph either overflows
+ * the stack (cycles) or expands exponentially (diamond sharing) — Stripe's
+ * account body alone blows up both the 2020-12 re-dialect step and canonical
+ * serialization.
+ *
+ * A GLOBAL visited set (identity-based, never removed) makes this O(nodes) and
+ * deterministic: the first traversal of each distinct object is expanded in
+ * full; any later reference to that same object collapses to `{ type: "object" }`.
+ * This mirrors — and extends to DAG sharing — `openapi-mcp-generator`'s own
+ * cycle break in `mapOpenApiSchemaToJsonSchema` (a generic-object fallback), so a
+ * klaridian-owned `outputSchema` is bounded symmetrically with the engine's
+ * `inputSchema`. Because it is applied inside the engine-independent meta
+ * pipeline, BOTH engines receive the identical transformed schema — parity is
+ * unaffected. Acyclic, unshared schemas (the Phase-1 corpus) traverse each node
+ * exactly once, so their output is byte-for-byte the prior full-clone result and
+ * the committed goldens are unchanged.
+ */
+function breakSchemaCycles(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (Array.isArray(value)) return value.map((v) => breakSchemaCycles(v, seen));
+  if (!value || typeof value !== "object") return value;
+  const obj = value as Record<string, unknown>;
+  if (seen.has(obj)) return { type: "object" };
+  seen.add(obj);
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(obj)) out[key] = breakSchemaCycles(v, seen);
+  return out;
+}
+
+/**
  * Pick the response schema klaridian should advertise for one operation: the
  * `application/json` schema of its success response, preferring an explicit
  * `200`, then `201`, then any other `2xx`/`2XX`, then `default`. Returns the
@@ -128,7 +163,12 @@ export async function extractOutputSchemasByOperationId(
       const operationId = op.operationId;
       if (!operationId) continue;
       const schema = pickSuccessObjectSchema(op.responses);
-      if (schema) map.set(operationId, schema);
+      // Break recursive-$ref cycles (dereference produces circular object
+      // graphs) so downstream deep walks — the 2020-12 re-dialect, canonical
+      // serialization, SDK structured-content validation — never overflow. For
+      // an acyclic schema this is a plain deep clone, so cycle-free specs
+      // (including the Phase-1 corpus goldens) are byte-for-byte unchanged.
+      if (schema) map.set(operationId, breakSchemaCycles(schema) as JSONSchema7);
     }
   }
   return map;

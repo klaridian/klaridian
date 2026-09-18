@@ -10,9 +10,24 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
 ### Added
 
 - Structured tool output: when an OpenAPI operation's success response is a JSON object, the generated tool advertises a matching `outputSchema` and returns `structuredContent` (the parsed response body) alongside the text result. klaridian reads and dereferences the response schema from the spec itself (including `$ref`s into `components.schemas`). Array, primitive, and no-body responses stay text-only. TypeScript and Python targets at parity.
+- Tool `inputSchema` and `outputSchema` are now emitted as JSON Schema 2020-12, the default dialect for MCP schema definitions (spec revisions 2025-11-25 and 2026-07-28), replacing draft-07.
+- Built-in HTML test client: a `--transport streamable-http` server now serves a test client at `GET /` that speaks MCP over HTTP (initialize, tools/list, tools/call), so you can exercise a generated server in the browser. For stdio servers, the generated README documents the MCP Inspector (`npx @modelcontextprotocol/inspector`).
+- `klaridian deploy --target docker | cloudflare | fly`: emits a Dockerfile, a Cloudflare Worker, or a Fly.io app, then hands off to the platform's own CLI. The streamable-http server's port and allowed hosts are environment-driven.
+- OpenTelemetry spans now continue the caller's trace: the OTel plugin propagates W3C trace context from the MCP request `_meta`.
+- `--json` failures carry a stable machine-readable `code` and a specific `stage`, for scripts and agents that branch on the error.
+
+### Changed
+
+- klaridian now owns the full OpenAPI-to-tool-data pipeline. Parsing, `$ref` dereferencing, validation, and Swagger 2.0 conversion run on the standard `@apidevtools/swagger-parser` and `swagger2openapi` libraries; the operation-to-tool mapping is klaridian's own code. Output is unchanged: the new engine is verified byte-for-byte against the previous one across Stripe, GitHub, Kubernetes, OpenAI, Twilio, and DigitalOcean specs (about 4,200 real operations, OpenAPI 2.0, 3.0, and 3.1).
+
+### Removed
+
+- The `openapi-mcp-generator` runtime dependency. Its role (tool-data extraction) is now handled by klaridian's own engine described above. `@apidevtools/swagger-parser` and `swagger2openapi` are kept.
 
 ## [0.2.0] - 2026-09-13
 

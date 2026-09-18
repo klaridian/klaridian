@@ -4,16 +4,21 @@
 // project from openapi-mcp-generator's pure tool DATA. The "option d" core
 // (ARCHITECTURE.md sections 37/38). Stateless by construction (createMcpHandler
 // factory-per-request), so the v1 session-based streamable-http crash
-// (MCPFO-10) cannot occur here. The generated server negotiates protocol
-// 2025-11-25 (the SDK's legacy path). The emitted SDK line
-// (@modelcontextprotocol/server v2) is itself 2026-07-28-native — verified by
-// driving a generated server over stdio: `server/discover` returns -32601 and
-// `initialize` replies `protocolVersion: "2025-11-25"`. It serves the legacy
-// wire only because this factory doesn't opt into modern serving (the SDK
-// wires `server/discover` only when the factory advertises modern
-// supportedProtocolVersions). Adopting 2026-07-28 is a deliberate decision
-// (a client-compatibility trade-off), NOT gated on SDK support — tracked in
-// Plane: MCPFO-93.
+// (MCPFO-10) cannot occur here.
+//
+// MCPFO-93: the generated server now serves the MODERN MCP protocol revision
+// 2026-07-28 (via `server/discover`) AND keeps the legacy 2025-11-25 wire
+// (via classic `initialize`) — the two eras coexist on ONE server. The opt-in
+// is a single option on the McpServer factory: passing
+// `supportedProtocolVersions` that include a modern (2026-07-28) entry makes
+// the SDK wire the `server/discover` handler (it does so only when
+// `modernProtocolVersions(supportedProtocolVersions).length > 0`), while the
+// legacy `initialize` handshake continues to negotiate the 2025-era entry
+// (2025-11-25) via `_oninitialize`'s graceful fallback. Verified E2E by
+// driving a generated server over BOTH stdio and streamable-http:
+// `server/discover` returns a result advertising 2026-07-28, and classic
+// `initialize` on the SAME server still replies `protocolVersion: "2025-11-25"`.
+// See ARCHITECTURE.md section 93.
 //
 // MCPFO-28: also emits SDK code mode output (ARCHITECTURE.md section 43) when
 // `architecture: "code-mode"` is requested — a single execute_code tool
@@ -125,11 +130,23 @@ function emitServerFactoryModule(opts: EmitOptions): string {
 
   return `${imports.join("\n")}
 
+// MCPFO-93: opt into MODERN (2026-07-28) serving while KEEPING the legacy
+// (2025-11-25) wire. The list carries a modern entry AND a 2025-era entry:
+// the SDK wires the \`server/discover\` handler because
+// \`modernProtocolVersions(supportedProtocolVersions).length > 0\`, and the
+// classic \`initialize\` handshake still negotiates the 2025-era entry via its
+// graceful fallback. The two eras coexist on ONE server (server/discover ->
+// 2026-07-28; initialize -> 2025-11-25). See ARCHITECTURE.md section 93.
+const SUPPORTED_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25"];
+
 // The MCP server factory. Registers every tool and returns a fresh McpServer.
 // Side-effect-free and transport-agnostic: the entrypoint (src/index.ts) and any
 // other host (e.g. a Cloudflare Worker) call this to build a server instance.
 export function buildServer() {
-  const server = new McpServer({ name: ${JSON.stringify(opts.serverName)}, version: "1.0.0" });
+  const server = new McpServer(
+    { name: ${JSON.stringify(opts.serverName)}, version: "1.0.0" },
+    { supportedProtocolVersions: SUPPORTED_PROTOCOL_VERSIONS }
+  );
 
 ${toolBlocks}
 

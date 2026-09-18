@@ -149,6 +149,37 @@ test(
       } finally {
         proc.kill("SIGKILL");
       }
+
+      // MCPFO-93 coexistence (leg 2, Python): the MODERN path on the SAME
+      // emitted server. The official mcp Python SDK (mcp==2.1.1) is
+      // 2026-07-28-native and registers `server/discover` unconditionally, so
+      // NO opt-in is needed on the Python side — TS/Python parity, not
+      // asymmetry. Like TS stdio, the SDK pins one era per connection, so a
+      // fresh spawn probes the modern path: server/discover carrying the
+      // 2026-07-28 envelope must advertise 2026-07-28.
+      const proc2 = spawn(venvPy, ["server.py"], {
+        cwd: outDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, KLARIDIAN_BASE_URL: PETSTORE_BASE_URL },
+      });
+      try {
+        const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
+        const CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities";
+        sendJsonRpc(proc2, {
+          jsonrpc: "2.0", id: 1, method: "server/discover",
+          params: { _meta: { [PROTOCOL_VERSION_META_KEY]: "2026-07-28", [CLIENT_CAPABILITIES_META_KEY]: {} } },
+        });
+        const discoverResp = await readOneJsonRpcLine(proc2);
+        assert.equal(discoverResp.id, 1);
+        assert.ok(discoverResp.result, "python server/discover returns a result (modern era wired)");
+        assert.ok(
+          Array.isArray(discoverResp.result.supportedVersions) &&
+            discoverResp.result.supportedVersions.includes("2026-07-28"),
+          `python server/discover advertises 2026-07-28 (got ${JSON.stringify(discoverResp.result.supportedVersions)})`
+        );
+      } finally {
+        proc2.kill("SIGKILL");
+      }
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }

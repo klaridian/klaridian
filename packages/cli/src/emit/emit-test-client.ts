@@ -220,6 +220,12 @@ function loadTools() {
   setStatus("Connecting...");
   // initialize first (the MCP handshake), then list tools. The server is
   // stateless, so each request stands alone — no session header to carry.
+  // MCPFO-93: this built-in client deliberately uses the LEGACY 2025-11-25
+  // initialize handshake. The server serves 2026-07-28 too (via
+  // server/discover), and coexistence means legacy initialize keeps working
+  // — the simplest path for a dependency-free in-browser client. Modern
+  // clients that probe server/discover negotiate 2026-07-28 on the same
+  // server.
   mcpCall("initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},

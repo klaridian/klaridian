@@ -69,7 +69,7 @@ export default function Home() {
       {/* Hero */}
       <section className="max-w-[1080px] mx-auto px-8 pt-20 pb-10 text-center">
         <div className="inline-flex items-center gap-2 border border-fd-border bg-fd-card rounded-full px-3.5 py-1.5 text-[12.5px] text-fd-muted-foreground font-mono mb-7">
-          MCP SDK v2 &nbsp;·&nbsp; MCP 2025-11-25 &nbsp;·&nbsp;{" "}
+          MCP SDK v2 &nbsp;·&nbsp; MCP 2026-07-28 &nbsp;·&nbsp;{" "}
           <b className="text-[var(--klaridian-accent)] font-medium">TypeScript + Python</b>
         </div>
         <h1 className="text-[clamp(34px,6vw,56px)] leading-[1.05] font-extrabold tracking-[-0.03em] mb-5 max-w-[720px] mx-auto">

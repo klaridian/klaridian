@@ -1,12 +1,15 @@
 // packages/cli/test/canary-sdk-era.test.ts
 //
-// MCPFO-21 Task 3.3 — SDK-era canary. The v2 emit path targets the
-// @modelcontextprotocol/server v2 line, which (as of 2026-09-03, verified in
-// spike 021c) still negotiates protocol 2025-11-25, NOT 2026-07-28 despite its
-// README. This canary pins the versions the emitter templates into generated
-// projects, so a deliberate bump (e.g. when v2 starts negotiating 2026-07-28)
-// is a reviewed change that also updates the conformance claims in README /
-// ARCHITECTURE.md section 38 — not a silent drift.
+// MCPFO-21 Task 3.3 / MCPFO-93 — SDK-era canary. The v2 emit path targets the
+// @modelcontextprotocol/server v2 line, which is 2026-07-28-native. As of
+// MCPFO-93 the emitter OPTS INTO modern serving by passing
+// `supportedProtocolVersions: ["2026-07-28", "2025-11-25"]` to the McpServer
+// factory, so the SDK wires `server/discover` (negotiating 2026-07-28) while
+// the classic `initialize` handshake still negotiates 2025-11-25 — the two
+// eras coexist on ONE server (proven E2E in emit-e2e.test.ts). This canary
+// pins the versions the emitter templates into generated projects, so a
+// deliberate bump is a reviewed change that also updates the conformance
+// claims in README / ARCHITECTURE.md sections 38 + 93 — not a silent drift.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,10 +24,10 @@ const FIXTURE: McpToolDefinition = {
 } as unknown as McpToolDefinition;
 
 // The versions the emitter is known-good against (spikes 021/021b/021d).
-// If these change, re-verify: (1) the emit-e2e tests still pass, (2) whether the
-// new @modelcontextprotocol/server negotiates 2026-07-28 — if so, add
-// server/discover + ttlMs/cacheScope handling and update the "protocol
-// 2025-11-25" claims in README + ARCHITECTURE.md section 38.
+// If these change, re-verify: (1) the emit-e2e tests still pass, (2) the
+// server/discover -> 2026-07-28 negotiation and legacy initialize -> 2025-11-25
+// coexistence assertions in emit-e2e.test.ts still hold, and update the
+// protocol claims in README + ARCHITECTURE.md sections 38 + 93 in lockstep.
 const EXPECTED_SERVER_RANGE = "^2.0.0";
 const EXPECTED_ZOD_RANGE = "^4.2.0";
 
@@ -34,14 +37,18 @@ test("canary: emitted project pins the known-good v2 SDK version range", () => {
   assert.equal(
     pkg.dependencies["@modelcontextprotocol/server"],
     EXPECTED_SERVER_RANGE,
-    "If this changed, re-verify emit-e2e AND check whether the new SDK negotiates 2026-07-28 (spike 021c method); update ARCHITECTURE.md section 38's 'protocol 2025-11-25' claim in lockstep."
+    "If this changed, re-verify emit-e2e AND the server/discover->2026-07-28 + initialize->2025-11-25 coexistence assertions; update ARCHITECTURE.md sections 38 + 93 in lockstep."
   );
   assert.equal(pkg.dependencies["zod"], EXPECTED_ZOD_RANGE, "zod v4 range pinned");
 });
 
-test("canary: emitted project does NOT claim or target 2026-07-28 (SDK doesn't negotiate it yet)", () => {
+test("canary: emitted server opts into modern (2026-07-28) serving while keeping 2025-11-25 legacy (MCPFO-93)", () => {
   const files = emitServerProject({ serverName: "x", tools: [FIXTURE], baseUrl: "https://x/api" });
-  // The emitter must not hardcode a 2026-07-28 protocolVersion anywhere — the
-  // SDK negotiates the era; hardcoding a version it can't speak would be a bug.
-  assert.doesNotMatch(files["src/index.ts"], /2026-07-28/, "no hardcoded 2026-07-28 protocol version");
+  const factory = files["src/server-factory.ts"];
+  // The factory must advertise BOTH the modern (2026-07-28) revision — which is
+  // what wires server/discover — and the legacy (2025-11-25) revision, which
+  // classic initialize negotiates. Both present = coexistence.
+  assert.match(factory, /supportedProtocolVersions/, "factory passes supportedProtocolVersions to McpServer");
+  assert.match(factory, /2026-07-28/, "modern revision advertised (wires server/discover)");
+  assert.match(factory, /2025-11-25/, "legacy revision kept (initialize coexistence)");
 });

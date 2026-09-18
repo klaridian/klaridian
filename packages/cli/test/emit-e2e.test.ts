@@ -80,6 +80,9 @@ test(
         const initResp = await readOneJsonRpcLine(proc);
         assert.equal(initResp.id, 1);
         assert.ok(initResp.result, "initialize returns a result");
+        // MCPFO-93 coexistence (leg 1): classic initialize still negotiates the
+        // LEGACY 2025-11-25 wire, unchanged, on the modern-serving server.
+        assert.equal(initResp.result.protocolVersion, "2025-11-25", "legacy initialize negotiates 2025-11-25");
 
         // tools/list
         sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
@@ -127,6 +130,32 @@ test(
         );
       } finally {
         proc.kill("SIGKILL");
+      }
+
+      // MCPFO-93 coexistence (leg 2): the MODERN path on the SAME built server.
+      // A fresh stdio connection (the SDK pins one era per connection) sends a
+      // `server/discover` carrying the 2026-07-28 per-request envelope claim;
+      // the server must answer with a result advertising 2026-07-28 (NOT the
+      // pre-MCPFO-93 -32601 method-not-found). Same dist/index.js, proving both
+      // eras coexist on one emitted server.
+      const proc2 = spawn("node", ["dist/index.js"], { cwd: outDir, stdio: ["pipe", "pipe", "pipe"] });
+      try {
+        const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
+        const CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities";
+        sendJsonRpc(proc2, {
+          jsonrpc: "2.0", id: 1, method: "server/discover",
+          params: { _meta: { [PROTOCOL_VERSION_META_KEY]: "2026-07-28", [CLIENT_CAPABILITIES_META_KEY]: {} } },
+        });
+        const discoverResp = await readOneJsonRpcLine(proc2);
+        assert.equal(discoverResp.id, 1);
+        assert.ok(discoverResp.result, "server/discover returns a result (not -32601 method-not-found)");
+        assert.ok(
+          Array.isArray(discoverResp.result.supportedVersions) &&
+            discoverResp.result.supportedVersions.includes("2026-07-28"),
+          `server/discover advertises 2026-07-28 (got ${JSON.stringify(discoverResp.result.supportedVersions)})`
+        );
+      } finally {
+        proc2.kill("SIGKILL");
       }
     } finally {
       await rm(outDir, { recursive: true, force: true });
@@ -292,6 +321,8 @@ test(
         const r1 = await post({ jsonrpc: "2.0", id: 1, method: "initialize",
           params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });
         assert.ok(r1?.result, "initialize ok");
+        // MCPFO-93 coexistence (leg 1, HTTP): legacy initialize negotiates 2025-11-25.
+        assert.equal(r1.result.protocolVersion, "2025-11-25", "HTTP legacy initialize negotiates 2025-11-25");
 
         // Request 2: tools/list — the SECOND request, where the v1 session-based transport crashes
         const r2 = await post({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
@@ -302,6 +333,40 @@ test(
         assert.ok(Array.isArray(r3?.result?.tools), "3rd request ok");
         const r4 = await post({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "noSuchTool", arguments: {} } });
         assert.equal(r4?.error?.code, (CONFORMANCE_CONTRACT.unknownTool as { code: number }).code, "4th request: unknown tool is a native protocol error");
+
+        // MCPFO-93 coexistence (leg 2, HTTP): the MODERN path on the SAME server.
+        // Over HTTP the modern era is header-driven: the SDK requires the
+        // `Mcp-Method` and `MCP-Protocol-Version` headers alongside the
+        // per-request envelope (createMcpHandler cross-checks header vs body).
+        // A `server/discover` so framed must return a result advertising
+        // 2026-07-28, proving both eras coexist over HTTP too.
+        const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
+        const CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities";
+        const discoverBody = {
+          jsonrpc: "2.0", id: 5, method: "server/discover",
+          params: { _meta: { [PROTOCOL_VERSION_META_KEY]: "2026-07-28", [CLIENT_CAPABILITIES_META_KEY]: {} } },
+        };
+        const discoverRes = await fetch(url, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Mcp-Method": "server/discover",
+            "MCP-Protocol-Version": "2026-07-28",
+          },
+          body: JSON.stringify(discoverBody),
+        });
+        const discoverText = await discoverRes.text();
+        const discoverLine = discoverText
+          .split("\n")
+          .map((l) => l.replace(/^data:\s*/, "").trim())
+          .find((l) => l.startsWith("{"));
+        const rDiscover = discoverLine ? JSON.parse(discoverLine) : null;
+        assert.ok(rDiscover?.result, `server/discover returns a result over HTTP (not method-not-found); got ${discoverText}`);
+        assert.ok(
+          Array.isArray(rDiscover.result.supportedVersions) &&
+            rDiscover.result.supportedVersions.includes("2026-07-28"),
+          `HTTP server/discover advertises 2026-07-28 (got ${JSON.stringify(rDiscover.result.supportedVersions)})`
+        );
 
         assert.equal(exitedEarly, false, "server did not crash across 4 sequential requests");
       } finally {

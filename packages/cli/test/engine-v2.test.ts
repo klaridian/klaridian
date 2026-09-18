@@ -54,7 +54,7 @@ test(
         "--registry-name", "io.github.acme/engine-v2-test",
         "--license", "none",
       ]);
-      assert.match(gen.stderr, /protocol 2025-11-25/, "reports the v2 emitter + negotiated protocol");
+      assert.match(gen.stderr, /protocol 2026-07-28/, "reports the v2 emitter + negotiated modern protocol (MCPFO-93)");
 
       // package.json must be the v2 dep set, not v1
       const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));

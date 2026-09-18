@@ -845,8 +845,8 @@ export function registerGenerateCommand(program: Command): void {
           // The SDK/runtime blurb differs per target language (MCPFO-60.3).
           const runtimeLabel =
             language === "python"
-              ? "official mcp Python SDK, stateless"
-              : "@modelcontextprotocol/server, stateless, protocol 2025-11-25";
+              ? "official mcp Python SDK, stateless, protocol 2026-07-28 + 2025-11-25 legacy"
+              : "@modelcontextprotocol/server, stateless, protocol 2026-07-28 (2025-11-25 legacy)";
           step(`✅ Generated ${toolCountLabel}${curationSuffix} in ${outputDir}${transportSuffix} (${runtimeLabel})${architectureSuffix}${pluginSuffix}`);
 
           // Next-steps differ per language: Python is a venv + pip flow, not npm.

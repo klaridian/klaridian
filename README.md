@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/klaridian/klaridian/actions/workflows/ci.yml/badge.svg)](https://github.com/klaridian/klaridian/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![MCP protocol](https://img.shields.io/badge/MCP-2025--11--25-8A2BE2.svg)](https://modelcontextprotocol.io)
+[![MCP protocol](https://img.shields.io/badge/MCP-2026--07--28-8A2BE2.svg)](https://modelcontextprotocol.io)
 
 ![klaridian: OpenAPI spec to MCP server, instrumented with engineering observability (OTel → Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) and product analytics (PostHog/Amplitude/Mixpanel plugins), plus tool curation](assets/banner.png)
 
@@ -22,7 +22,7 @@
 
 You pick a plugin you want at generation time—e.g. `--plugin otel` or `--plugin posthog`. The server that comes out the other end is already instrumented. (Composing more than one plugin on the same server was a capability of the retired v1 pipeline and is not yet re-implemented on the current emitter—see [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).)
 
-OpenAPI parsing / tool-data extraction is handled by klaridian's own spec→tool-data engine, built on [`@apidevtools/swagger-parser`](https://www.npmjs.com/package/@apidevtools/swagger-parser) (parse, `$ref` dereference, validation) and [`swagger2openapi`](https://www.npmjs.com/package/swagger2openapi) (Swagger 2.0 → OpenAPI 3.0 conversion); klaridian owns the operation→tool mapping end to end. Its own code then emits the MCP server project itself—a stateless [`@modelcontextprotocol/server`](https://www.npmjs.com/package/@modelcontextprotocol/server) (SDK v2, protocol 2025-11-25) project—plus the instrumentation and curation layers on top.
+OpenAPI parsing / tool-data extraction is handled by klaridian's own spec→tool-data engine, built on [`@apidevtools/swagger-parser`](https://www.npmjs.com/package/@apidevtools/swagger-parser) (parse, `$ref` dereference, validation) and [`swagger2openapi`](https://www.npmjs.com/package/swagger2openapi) (Swagger 2.0 → OpenAPI 3.0 conversion); klaridian owns the operation→tool mapping end to end. Its own code then emits the MCP server project itself—a stateless [`@modelcontextprotocol/server`](https://www.npmjs.com/package/@modelcontextprotocol/server) (SDK v2, protocol 2026-07-28 with 2025-11-25 legacy clients still supported) project—plus the instrumentation and curation layers on top.
 
 ## Why
 
@@ -127,7 +127,7 @@ klaridian/
 
 ## Status & roadmap
 
-Released v0.3.0: OpenAPI → MCP server generation across OpenAPI 3.1, 3.0, and Swagger 2.0, a tested OpenTelemetry / product-analytics instrumentation layer, generation-time tool curation, structured tool output (`outputSchema` + `structuredContent`), a built-in HTML test client for streamable-http servers, and `deploy --target docker|cloudflare|fly`. The CLI is distributed on npm, PyPI, and Homebrew, with prebuilt native binaries for macOS, Linux, and Windows—see [Install](#install) and [ARCHITECTURE.md section 64](ARCHITECTURE.md#64-distribution-reaches-the-python-ecosystem-through-a-compiled-binary-not-a-second-generator-sep-8-2026). klaridian owns the full spec-to-tool-data pipeline (on `@apidevtools/swagger-parser` + `swagger2openapi`) and emits a stateless `@modelcontextprotocol/server` (SDK v2) project directly from tool data. The generated server currently negotiates MCP protocol `2025-11-25`; the SDK it ships is `2026-07-28`-native, and opting the wire into `2026-07-28` is a tracked, deliberate client-compatibility decision. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history.
+Released v0.3.0: OpenAPI → MCP server generation across OpenAPI 3.1, 3.0, and Swagger 2.0, a tested OpenTelemetry / product-analytics instrumentation layer, generation-time tool curation, structured tool output (`outputSchema` + `structuredContent`), a built-in HTML test client for streamable-http servers, and `deploy --target docker|cloudflare|fly`. The CLI is distributed on npm, PyPI, and Homebrew, with prebuilt native binaries for macOS, Linux, and Windows—see [Install](#install) and [ARCHITECTURE.md section 64](ARCHITECTURE.md#64-distribution-reaches-the-python-ecosystem-through-a-compiled-binary-not-a-second-generator-sep-8-2026). klaridian owns the full spec-to-tool-data pipeline (on `@apidevtools/swagger-parser` + `swagger2openapi`) and emits a stateless `@modelcontextprotocol/server` (SDK v2) project directly from tool data. The generated server serves MCP protocol `2026-07-28` (the modern revision, negotiated via `server/discover`) while keeping `2025-11-25` legacy clients supported (the classic `initialize` handshake)—the two revisions coexist on one server, verified end to end on both stdio and streamable-http, for TypeScript and Python alike. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full decision history.
 
 ### What's always on
 

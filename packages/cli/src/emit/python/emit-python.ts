@@ -393,10 +393,14 @@ function emitServerModule(opts: EmitOptions): string {
 #
 # Stateless MCP server (@modelcontextprotocol Python SDK, mcp==${MCP_SDK_VERSION}),
 # built directly from the tool DATA — the Python peer of the TypeScript emitter
-# (ARCHITECTURE.md sections 60, 60.3). Targets the same protocol the SDK
-# negotiates. Conformance (unknown-tool -32602, invalid-args tool-error) is
-# guaranteed by the vendored conformance.py (the low-level SDK does not provide
-# it for free — spike 059).
+# (ARCHITECTURE.md sections 60, 60.3, 93). The mcp Python SDK is 2026-07-28-native
+# and registers \`server/discover\` unconditionally, so this server serves the
+# MODERN 2026-07-28 revision (via server/discover) AND the legacy 2025-11-25 wire
+# (via classic initialize) — the two eras coexist, matching the TS target. No
+# per-server opt-in is needed on the Python side (unlike TS, where the McpServer
+# factory takes supportedProtocolVersions). Conformance (unknown-tool -32602,
+# invalid-args tool-error) is guaranteed by the vendored conformance.py (the
+# low-level SDK does not provide it for free — spike 059).
 import argparse
 import asyncio
 import os

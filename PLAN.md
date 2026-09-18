@@ -364,6 +364,11 @@ Closes MCPFO-15 (the last open launch question in §5). The repo, npm (`klaridia
 
 **Ordering that falls out of this:** site redesign (MCPFO-100) → soft launch (r/mcp + Discord) → close the leak (MCPFO-60, 2 min) → hard launch (Show HN) → X amplification. The discovery-by-agents channels (awesome-mcp-servers lists, llms.txt) run in parallel and are not gated on the human ladder.
 
+**Launch-blocker set (updated Sep 18, 2026), both rungs unless noted:**
+- MCPFO-100 (site redesign) — DONE, shipped to klaridian.dev.
+- MCPFO-102 (generated HTML test client for HTTP servers + MCP Inspector docs for stdio) — a server you can't try out reads as incomplete to an evaluator; also a regression vs. the openapi-mcp-generator lineage.
+- MCPFO-60 (orphan-commit leak) — HARD launch only; 2-min private→public toggle on the eve of Show HN.
+
 
 
 

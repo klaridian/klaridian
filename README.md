@@ -14,11 +14,46 @@
 
 ## What is this?
 
-`klaridian` is a CLI that generates MCP servers—from an OpenAPI spec—with observability and tool curation wired in from the start:
+`klaridian` is a CLI that generates MCP servers—from an OpenAPI spec—with observability and tool curation wired in from the start.
+
+**What you get:**
+
+- **Two languages**—TypeScript (default) or Python, same tools and features (`--language python`).
+- **Every OpenAPI flavor**—3.1, 3.0, and Swagger 2.0 (2.0 is converted automatically).
+- **The latest MCP protocol**—serves `2026-07-28` and keeps `2025-11-25` clients working, on one server.
+- **Observability wired in**—OpenTelemetry (`otel`) or product analytics (`posthog`, `amplitude`, `mixpanel`), one flag.
+- **Tool curation**—pick which operations become tools by tag, path, or HTTP method, or through an interactive prompt.
+- **Structured output**—tools advertise an `outputSchema` and return `structuredContent`, in JSON Schema 2020-12.
+- **Marketplace annotations**—every tool gets a title and read-only / destructive / idempotent / open-world hints.
+- **A built-in test client**—streamable-http servers serve an HTML client at `GET /`; stdio documents MCP Inspector.
+- **Ships where you deploy**—`deploy --target docker|cloudflare|fly`.
+- **Runs everywhere**—one CLI on npm, PyPI, and Homebrew, with prebuilt binaries for macOS, Linux, and Windows.
+- **Open by default**—a real `LICENSE` file in every generated server.
+
+The three things it wires in that you'd otherwise hand-write:
 
 - **Engineering observability** (`otel` plugin)—OpenTelemetry spans for every tool call, exportable via OTLP to Datadog, Grafana, Honeycomb, New Relic, or any other OTLP-compatible backend. Latency, errors, and status per call, with zero manual instrumentation. One plugin reaches every backend here because OTel/OTLP is a genuine open wire protocol.
 - **Product observability**—an event per tool call (`tool_name`, `duration_ms`, `success`) captured by whichever provider you pick: `posthog`, `amplitude`, or `mixpanel` plugins. Unlike OTel, there's no shared standard for product analytics ingestion, so this is three separate plugins rather than one—see [ARCHITECTURE.md section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why that's a structural difference, not an oversight.
 - **Tool curation**—choose which OpenAPI operations become tools at generation time (`--include-tags`/`--exclude-tags`/`--exclude-operation-ids`, or tag-independent `--include-paths`/`--exclude-paths`/`--include-methods`/`--exclude-methods` regex/HTTP-method filters for specs with no OpenAPI tags at all, or an interactive prompt), so you don't ship every operation in a large spec as a tool by default.
+
+You can also curate and annotate from inside the spec with the `x-klaridian` extension (klaridian's own `x-<vendor>` field). `expose: false` hides an operation; `title` overrides the tool name; `readOnly`/`destructive`/`openWorld` set the matching MCP tool annotations:
+
+```yaml
+paths:
+  /books/{id}:
+    delete:
+      x-klaridian:
+        expose: true                       # include as a tool (omit = included by default)
+        title: "Remove a book from the catalog"   # overrides the generated tool name
+        destructive: true                  # sets destructiveHint on the tool
+    get:
+      x-klaridian:
+        readOnly: true                     # sets readOnlyHint
+  /internal/admin:
+    post:
+      x-klaridian:
+        expose: false                      # never surfaced as a tool
+```
 
 You pick a plugin you want at generation time—e.g. `--plugin otel` or `--plugin posthog`. The server that comes out the other end is already instrumented. (Composing more than one plugin on the same server was a capability of the retired v1 pipeline and is not yet re-implemented on the current emitter—see [ARCHITECTURE.md section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).)
 
@@ -140,7 +175,14 @@ Released v0.3.0: OpenAPI → MCP server generation across OpenAPI 3.1, 3.0, and 
 ### Plugins and transports
 
 - **Plugins:** `otel` (engineering observability, any OTLP backend) and three product-analytics plugins—`posthog`, `amplitude`, `mixpanel`. One plugin per generated server on the current emitter; multi-plugin composition ([ARCHITECTURE.md section 20](ARCHITECTURE.md#20-second-plugin-posthog-product-observability-and-multi-plugin-composition-aug-30-2026)) was a v1 capability not yet re-implemented ([section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026)). See [section 26](ARCHITECTURE.md#26-two-more-product-analytics-plugins-amplitude-mixpanel--and-why-product-analytics-needed-more-than-one-unlike-engineering-observability-aug-30-2026) for why product analytics needed three plugins where engineering observability only needed one.
-- **Transports:** `--transport stdio` (default) or `--transport streamable-http` (with `--port`, default 3000). The emitted streamable-http server is stateless by construction (`createMcpHandler` per request), so the v1 second-request crash (MCPFO-10) is structurally impossible—validated with real sequential HTTP requests in `emit-e2e.test.ts`. (`--transport web` was a v1-only option and was removed in the cutover.) See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026) and [section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
+- **Transports:** two, both verified end to end in `emit-e2e.test.ts`:
+
+  | Transport | Flag | Test client | Notes |
+  | --- | --- | --- | --- |
+  | stdio (default) | `--transport stdio` | MCP Inspector (documented in the generated README) | for local/agent use |
+  | streamable-http | `--transport streamable-http --port 3000` | HTML client served at `GET /` | stateless by construction (`createMcpHandler` per request), so the v1 second-request crash (MCPFO-10) is structurally impossible |
+
+  (`--transport web`, the v1 SSE option, was removed in the cutover.) See [ARCHITECTURE.md section 29](ARCHITECTURE.md#29-non-stdio-transports---transport-streamable-httpweb--the-stdio-only-guardrail-lifted-aug-30-2026) and [section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
 - **Server metadata:** `--server-description <text>` sets the description in the emitted `server.json`. Cosmetic icon/website metadata (`--icon`/`--website`, [ARCHITECTURE.md section 31](ARCHITECTURE.md#31-cosmetic-branding-metadata-icons-websiteurl-description-aug-30-2026)) was v1-only and is tracked for re-implementation in [section 49](ARCHITECTURE.md#49-mcpfo-21-full-cutover--the-legacy-v1-generation-engine-removed-entirely-sep-4-2026).
 - **Deploy:** `klaridian deploy <dir> --target <docker|cloudflare|fly>` emits a platform's native config for a generated streamable-http server, following an emit + shell-out model — klaridian writes the config, you hand it to the platform's CLI. `docker` emits a portable `Dockerfile` + `.dockerignore` (TypeScript or Python); `cloudflare` emits a Worker + `wrangler.toml` (TypeScript, edge); `fly` emits `fly.toml` over the Dockerfile (either language, one-command container deploy). The generated server is deploy-ready: it reads `PORT` and `KLARIDIAN_ALLOWED_HOSTS` from the environment so one build runs unchanged behind a public host (see [Deploy](packages/site/content/docs/how-to/deploy.mdx) and ARCHITECTURE.md sections 78–82).
 

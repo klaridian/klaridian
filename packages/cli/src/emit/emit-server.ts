@@ -34,6 +34,7 @@ import { buildOperationDocs, emitDocsDataModule, emitSearchDocsToolBlock } from 
 import { emitPackageJson, emitTsconfig, emitServerJson } from "./emit-project-files.js";
 import { emitTestClientHtml } from "./emit-test-client.js";
 import { emitAuthModule } from "../render/auth.js";
+import { AUTH_ENV } from "./upstream-auth.js";
 
 export type Transport = "stdio" | "streamable-http";
 export type Architecture = "tools" | "code-mode";
@@ -69,6 +70,14 @@ export interface EmitOptions {
   registryName?: string;
   /** OAuth 2.1 Resource Server config (MCPFO-22). streamable-http only. */
   auth?: OAuthConfig;
+  /** MCPFO-105 feature B: inbound HTTP header names to forward to the upstream
+   *  (streamable-http only; a no-op over stdio, where there are no inbound
+   *  headers). Enables per-user upstream credentials via MCP client headers. */
+  forwardHeaders?: string[];
+  /** MCPFO-105 feature C: emit an editable pre-auth hook file the handler calls
+   *  before built-in auth; a truthy return skips built-in auth. Escape hatch
+   *  for exotic auth schemes. */
+  authHook?: boolean;
 }
 
 export type EmittedProject = Record<string, string>;
@@ -120,13 +129,18 @@ export function resolveBaseUrlWarning(
 function emitServerFactoryModule(opts: EmitOptions): string {
   const architecture: Architecture = opts.architecture ?? "tools";
   const wrap = opts.wiring ? { fn: opts.wiring.wrapFunctionName } : undefined;
+  // MCPFO-105: per-server auth emit knobs threaded into each tool handler.
+  const toolEmitOpts = { forwardHeaders: opts.forwardHeaders, authHook: opts.authHook };
   const toolBlocks =
     architecture === "code-mode"
       ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl), wrap), emitSearchDocsToolBlock()].join("\n\n")
-      : opts.tools.map((t) => emitToolBlock(t, wrap)).join("\n\n");
+      : opts.tools.map((t) => emitToolBlock(t, wrap, toolEmitOpts)).join("\n\n");
 
   const imports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];
   if (opts.wiring) imports.push(opts.wiring.importStatement);
+  // MCPFO-105 feature C: the editable pre-auth hook, imported so each tool
+  // handler can call it before built-in auth.
+  if (opts.authHook) imports.push(`import { authHook } from "./auth-hook.js";`);
 
   return `${imports.join("\n")}
 
@@ -313,6 +327,58 @@ call them from a web UI — no code required.
 `;
 }
 
+/**
+ * MCPFO-105 feature C: emits the editable pre-auth hook module `src/auth-hook.ts`.
+ * Each tool handler calls `authHook(...)` BEFORE built-in per-scheme auth; when
+ * it returns `true` the built-in auth is skipped, so an operator can wire an
+ * exotic scheme (HMAC request signing, a token-exchange dance, mTLS via a
+ * custom agent, ...) that klaridian doesn't emit natively. Vendored as readable
+ * source the operator edits — the same rule src/auth.ts and the plugin
+ * instrumentation follow.
+ */
+function emitAuthHookModule(): string {
+  return `// src/auth-hook.ts
+//
+// EDITABLE pre-auth hook (klaridian, MCPFO-105). Every generated tool handler
+// calls authHook() BEFORE klaridian's built-in per-scheme upstream auth. Return
+// \`true\` to signal "I fully handled auth" — the built-in auth (bearer / API key
+// / basic from env vars) is then SKIPPED for that request. Return \`false\` (the
+// default) to let the built-in auth run as usual.
+//
+// This is an escape hatch for auth schemes klaridian does not emit natively
+// (request signing/HMAC, a token-exchange dance, per-tenant credential lookup,
+// mutual TLS via a custom fetch agent, ...). Edit the body freely; it ships as
+// readable source, not an opaque dependency.
+//
+// You get the outgoing request pieces to mutate in place:
+//   - headers:        the outgoing HTTP headers (add/replace Authorization etc.)
+//   - url:            the outgoing URL (mutate searchParams to sign a query, ...)
+//   - args:           the validated tool-call arguments
+//   - inboundHeaders: the inbound MCP client request headers (streamable-http
+//                     only; undefined over stdio) — read a per-user token here.
+
+export interface AuthHookContext {
+  headers: Record<string, string>;
+  url: URL;
+  args: Record<string, unknown>;
+  inboundHeaders?: Headers;
+}
+
+/**
+ * Return true to SKIP klaridian's built-in upstream auth for this request.
+ * The default implementation does nothing and returns false (built-in auth
+ * runs). Replace this body with your own logic.
+ */
+export async function authHook(_ctx: AuthHookContext): Promise<boolean> {
+  // Example — sign every request with an HMAC of the path, then skip built-in auth:
+  //   const sig = createHmac("sha256", process.env.MY_SIGNING_KEY!).update(_ctx.url.pathname).digest("hex");
+  //   _ctx.headers["X-Signature"] = sig;
+  //   return true;
+  return false;
+}
+`;
+}
+
 export function emitServerProject(opts: EmitOptions): EmittedProject {
   const transport: Transport = opts.transport ?? "stdio";
   const architecture: Architecture = opts.architecture ?? "tools";
@@ -364,6 +430,10 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
   }
   if (opts.auth) {
     files["src/auth.ts"] = emitAuthModule(opts.auth);
+  }
+  // MCPFO-105 feature C: the editable pre-auth hook module.
+  if (opts.authHook) {
+    files["src/auth-hook.ts"] = emitAuthHookModule();
   }
   for (const [p, content] of Object.entries(opts.extraFiles ?? {})) {
     files[p] = content;

@@ -20,10 +20,14 @@ import type { PluginDispatchStrategy, PluginWiring } from "./contract.js";
 export const typescriptPluginDispatch: PluginDispatchStrategy = {
   language: "typescript",
   granularity: "per-tool",
-  wrapHandlerOpen(toolName: string, wiring?: PluginWiring): string {
+  wrapHandlerOpen(toolName: string, wiring?: PluginWiring, opts?: { ctxParam?: boolean }): string {
+    // MCPFO-105: forwarding inbound headers / the auth-hook need the handler's
+    // second `ctx` arg (SDK v2 ServerContext). The plugin wrap (wrapTool) already
+    // calls the handler as `(args, ctx)`, so declaring ctx is safe either way.
+    const argList = opts?.ctxParam ? `async (args, ctx) => {` : `async (args) => {`;
     return wiring
-      ? `${wiring.wrapFunctionName}(${JSON.stringify(toolName)}, async (args) => {`
-      : `async (args) => {`;
+      ? `${wiring.wrapFunctionName}(${JSON.stringify(toolName)}, ${argList}`
+      : argList;
   },
   wrapHandlerClose(wiring?: PluginWiring): string {
     // The extra `)` closes the wrap call opened above; indentation matches the

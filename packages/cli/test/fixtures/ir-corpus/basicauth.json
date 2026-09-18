@@ -1,0 +1,49 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Basic Auth Corpus API",
+    "version": "1.0.0",
+    "description": "Exercises the http/basic security scheme so the IR carries the resolved securityScheme definition and the emitter wires Basic base64(user:pass) auth (MCPFO-105)."
+  },
+  "servers": [{ "url": "https://api.basicauth.example.com/v1" }],
+  "components": {
+    "securitySchemes": {
+      "basicAuth": { "type": "http", "scheme": "basic" }
+    }
+  },
+  "security": [{ "basicAuth": [] }],
+  "paths": {
+    "/accounts": {
+      "get": {
+        "operationId": "listAccounts",
+        "summary": "List accounts",
+        "tags": ["accounts"],
+        "description": "Protected by HTTP Basic auth (global security).",
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      },
+      "post": {
+        "operationId": "createAccount",
+        "summary": "Create an account",
+        "tags": ["accounts"],
+        "description": "Protected by HTTP Basic auth.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    }
+  }
+}

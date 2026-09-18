@@ -140,6 +140,11 @@ export const GENERATE_FLAG_DOC_GROUPS: {
   { category: "Licensing", docPage: "/docs/how-to/licensing", flags: ["--license", "--author"] },
   { category: "Transport", docPage: "/docs/how-to/transports", flags: ["--transport", "--port"] },
   {
+    category: "Upstream auth",
+    docPage: "/docs/how-to/upstream-auth",
+    flags: ["--forward-headers", "--auth-hook"],
+  },
+  {
     category: "OAuth",
     docPage: "/docs/how-to/oauth",
     flags: ["--oauth-issuer", "--oauth-jwks-uri", "--oauth-audience", "--oauth-required-scopes"],
@@ -232,6 +237,17 @@ export function registerGenerateCommand(program: Command): void {
       "--port <number>",
       "Port for the generated server when --transport is streamable-http (default: 3000)",
       (value: string) => parseInt(value, 10)
+    )
+    .option(
+      // MCPFO-105 feature B: forward inbound MCP client headers upstream.
+      "--forward-headers <names>",
+      "Comma-separated inbound HTTP header names the generated server forwards to the upstream API (enables per-user upstream credentials via MCP client headers). Requires --transport streamable-http (stdio has no inbound HTTP headers).",
+    )
+    .option(
+      // MCPFO-105 feature C: emit an editable pre-auth hook file.
+      "--auth-hook",
+      "Emit an editable pre-auth hook file (src/auth-hook.ts or auth_hook.py) the generated server calls before built-in auth. If the hook returns true, built-in auth is skipped — an escape hatch for exotic auth schemes.",
+      false
     )
     .option(
       "--architecture <id>",
@@ -330,6 +346,8 @@ export function registerGenerateCommand(program: Command): void {
         author?: string;
         transport: string;
         port?: number;
+        forwardHeaders?: string;
+        authHook: boolean;
         architecture: string;
         language: string;
         registryName?: string;
@@ -425,6 +443,22 @@ export function registerGenerateCommand(program: Command): void {
             fail(`Invalid --port "${opts.port}" — must be an integer between 1 and 65535.`, "validate-port");
             return;
           }
+
+          // MCPFO-105 feature B: --forward-headers forwards inbound HTTP headers
+          // upstream, which only exist on a network transport. Fail loudly on
+          // stdio rather than silently emitting a no-op forwarder.
+          const forwardHeaders = opts.forwardHeaders
+            ?.split(",")
+            .map((h) => h.trim())
+            .filter(Boolean);
+          if (forwardHeaders && forwardHeaders.length > 0 && transport !== "streamable-http") {
+            fail(
+              `--forward-headers requires --transport streamable-http: a stdio server has no inbound HTTP request to read headers from (it's launched as a local subprocess). Drop --forward-headers, or switch to --transport streamable-http.`,
+              "validate-forward-headers"
+            );
+            return;
+          }
+          const authHook = Boolean(opts.authHook);
 
           const SUPPORTED_ARCHITECTURES = ["tools", "code-mode"] as const;
           if (!(SUPPORTED_ARCHITECTURES as readonly string[]).includes(opts.architecture)) {
@@ -822,6 +856,8 @@ export function registerGenerateCommand(program: Command): void {
             description: opts.serverDescription,
             registryName: opts.registryName,
             auth: authConfig,
+            forwardHeaders,
+            authHook,
           });
 
           await mkdir(outputDir, { recursive: true });

@@ -29,6 +29,7 @@
     "operationId": "deleteReport",
     "pathTemplate": "/reports/{reportId}",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "Delete a report",
     "tags": [
       "reports"
@@ -64,6 +65,7 @@
     },
     "pathTemplate": "/reports",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "List reports",
     "tags": [
       "reports"
@@ -109,6 +111,7 @@
     "pathTemplate": "/audit",
     "requestBodyContentType": "application/json",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "Record an audit event",
     "tags": [
       "audit"

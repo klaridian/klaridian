@@ -1,0 +1,158 @@
+[
+  {
+    "deprecated": false,
+    "description": "Uses an apiKey-in-cookie scheme.",
+    "executionParameters": [
+      {
+        "in": "path",
+        "name": "widgetId"
+      }
+    ],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "widgetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "widgetId"
+      ],
+      "type": "object"
+    },
+    "method": "get",
+    "name": "getWidgetCookieKey",
+    "operationId": "getWidgetCookieKey",
+    "pathTemplate": "/widgets/{widgetId}",
+    "securityRequirements": [
+      {
+        "apiKeyCookie": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "in": "cookie",
+        "name": "session",
+        "type": "apiKey"
+      }
+    ],
+    "summary": "Get a widget (cookie API key)",
+    "tags": [
+      "widgets"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Uses an oauth2 client-credentials scheme (bearer token from env).",
+    "executionParameters": [],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "importWidgetsOauth",
+    "operationId": "importWidgetsOauth",
+    "pathTemplate": "/widgets/import",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [
+      {
+        "oauth2Scheme": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "type": "oauth2"
+      }
+    ],
+    "summary": "Import widgets (oauth2)",
+    "tags": [
+      "widgets"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Uses an apiKey-in-header scheme.",
+    "executionParameters": [],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {},
+      "type": "object"
+    },
+    "method": "get",
+    "name": "listWidgetsHeaderKey",
+    "operationId": "listWidgetsHeaderKey",
+    "pathTemplate": "/widgets",
+    "securityRequirements": [
+      {
+        "apiKeyHeader": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    ],
+    "summary": "List widgets (header API key)",
+    "tags": [
+      "widgets"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Uses an apiKey-in-query scheme.",
+    "executionParameters": [
+      {
+        "in": "query",
+        "name": "q"
+      }
+    ],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "q": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "method": "get",
+    "name": "searchWidgetsQueryKey",
+    "operationId": "searchWidgetsQueryKey",
+    "pathTemplate": "/widgets/search",
+    "securityRequirements": [
+      {
+        "apiKeyQuery": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "in": "query",
+        "name": "api_key",
+        "type": "apiKey"
+      }
+    ],
+    "summary": "Search widgets (query API key)",
+    "tags": [
+      "widgets"
+    ]
+  }
+]

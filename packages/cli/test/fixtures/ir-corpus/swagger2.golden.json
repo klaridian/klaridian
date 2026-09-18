@@ -40,6 +40,13 @@
         "apiKeyHeader": []
       }
     ],
+    "securitySchemes": [
+      {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    ],
     "summary": "Create a widget",
     "tags": [
       "widgets"
@@ -69,6 +76,7 @@
     "operationId": "listWidgets",
     "pathTemplate": "/widgets",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "List widgets",
     "tags": [
       "widgets"

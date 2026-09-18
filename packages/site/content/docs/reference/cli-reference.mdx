@@ -115,6 +115,15 @@ See [Transport](/docs/how-to/transports) for the full guide.
 | `--transport <type>` | Transport for the generated server: stdio (default) or streamable-http |
 | `--port <number>` | Port for the generated server when --transport is streamable-http (default: 3000) |
 
+### Upstream auth
+
+See [Upstream auth](/docs/how-to/upstream-auth) for the full guide.
+
+| Flag | What it does |
+|---|---|
+| `--forward-headers <names>` | Comma-separated inbound HTTP header names the generated server forwards to the upstream API (enables per-user upstream credentials via MCP client headers). Requires --transport streamable-http (stdio has no inbound HTTP headers). |
+| `--auth-hook` | Emit an editable pre-auth hook file (src/auth-hook.ts or auth_hook.py) the generated server calls before built-in auth. If the hook returns true, built-in auth is skipped — an escape hatch for exotic auth schemes. |
+
 ### OAuth
 
 See [OAuth](/docs/how-to/oauth) for the full guide.

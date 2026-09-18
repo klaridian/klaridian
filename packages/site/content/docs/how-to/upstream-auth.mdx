@@ -1,0 +1,79 @@
+---
+title: Upstream authentication
+description: How the generated server authenticates to the upstream API per OpenAPI securityScheme, the environment-variable convention, and the --forward-headers and --auth-hook flags.
+---
+
+The server klaridian generates is a proxy: every tool call becomes an HTTP request to your upstream API. If that API needs credentials, klaridian wires them from **the actual OpenAPI `securityScheme`** each operation declares—so an apiKey-in-header API gets a header, a basic-auth API gets `Authorization: Basic`, and a bearer API gets `Authorization: Bearer`. Credentials come from environment variables at runtime, so one build points at different deployments without a rebuild. The TypeScript and Python targets emit identical wiring.
+
+## Environment-variable convention
+
+Set the variables that match the schemes your spec uses. The server reads them per request:
+
+| OpenAPI scheme | Environment variable(s) | What the server sends |
+|---|---|---|
+| `http`, `scheme: bearer` | `KLARIDIAN_AUTH_TOKEN` | `Authorization: Bearer <token>` |
+| `apiKey`, `in: header` | `KLARIDIAN_API_KEY` | the named header, for example `X-API-Key: <key>` |
+| `apiKey`, `in: query` | `KLARIDIAN_API_KEY` | the named query parameter, for example `?api_key=<key>` |
+| `apiKey`, `in: cookie` | `KLARIDIAN_API_KEY` | a `Cookie` entry, for example `Cookie: session=<key>` |
+| `http`, `scheme: basic` | `KLARIDIAN_BASIC_USER` and `KLARIDIAN_BASIC_PASS` | `Authorization: Basic base64(user:pass)` |
+| `oauth2` or `openIdConnect` | `KLARIDIAN_OAUTH_TOKEN` | `Authorization: Bearer <token>` |
+
+A few notes:
+
+- **`KLARIDIAN_AUTH_TOKEN` is the bearer default**, kept for back-compatibility. Servers generated before per-scheme auth keep working unchanged.
+- **OAuth2 and OpenID Connect send a bearer token you supply.** klaridian emits the header wiring; obtaining the token (the client-credentials or authorization-code dance) is the operator's job. Put the resulting access token in `KLARIDIAN_OAUTH_TOKEN`.
+- **The base URL is always `KLARIDIAN_BASE_URL`** (or the `--base-url` you baked in), independent of auth.
+
+## What isn't supported
+
+`mutualTLS` is out of scope: a mutual-TLS client certificate can't come from an environment variable the way a token or key can. If an operation offers **only** `mutualTLS`, klaridian fails loudly at generation time rather than emit a server that sends no auth. Use `--auth-hook` (below) to wire a client certificate yourself. When `mutualTLS` appears alongside a supported scheme, klaridian uses the supported one.
+
+## Forward per-user headers with --forward-headers
+
+Sometimes the credential isn't the operator's—it's the end user's, passed through the MCP client. `--forward-headers` takes a comma-separated list of inbound HTTP header names the server copies from the incoming MCP request to the upstream request:
+
+```bash
+klaridian generate --spec ./api.yaml --out ./my-server \
+  --base-url https://api.example.com \
+  --transport streamable-http \
+  --forward-headers X-Tenant-Token,X-Request-Id
+```
+
+Now an MCP client that sends `X-Tenant-Token: <per-user-key>` has that header reach the upstream API. This is streamable-http only: a stdio server is launched as a local subprocess and has no inbound HTTP request to read headers from, so klaridian rejects the flag there rather than emit a silent no-op.
+
+## Handle exotic auth with --auth-hook
+
+For schemes klaridian doesn't emit natively—request signing or HMAC, a token-exchange dance, per-tenant credential lookup—`--auth-hook` emits an editable hook file the server calls **before** built-in auth:
+
+```bash
+klaridian generate --spec ./api.yaml --out ./my-server \
+  --base-url https://api.example.com --auth-hook
+```
+
+The hook is `src/auth-hook.ts` (TypeScript) or `auth_hook.py` (Python), vendored as readable source you edit. It receives the outgoing headers, URL, and tool arguments (plus the inbound headers on streamable-http). Return `true` to signal that you fully handled auth—built-in auth is then skipped for that request. Return `false` (the default) to let built-in auth run as usual.
+
+```ts
+// src/auth-hook.ts
+export async function authHook(ctx: AuthHookContext): Promise<boolean> {
+  const sig = createHmac("sha256", process.env.MY_SIGNING_KEY!)
+    .update(ctx.url.pathname)
+    .digest("hex");
+  ctx.headers["X-Signature"] = sig;
+  return true; // skip built-in auth
+}
+```
+
+## Running the server with credentials
+
+```bash
+cd my-server
+npm install && npm run build
+export KLARIDIAN_BASE_URL=https://api.example.com
+export KLARIDIAN_API_KEY=your-key-here     # matches an apiKey scheme
+# export KLARIDIAN_AUTH_TOKEN=...           # http bearer
+# export KLARIDIAN_BASIC_USER=... KLARIDIAN_BASIC_PASS=...  # http basic
+# export KLARIDIAN_OAUTH_TOKEN=...          # oauth2 / openIdConnect
+npm start
+```
+
+The Python target reads the same variables—only the run commands differ (`pip install -r requirements.txt`, `python server.py`).

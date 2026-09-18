@@ -52,6 +52,7 @@
     "pathTemplate": "/animals",
     "requestBodyContentType": "application/json",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "Create an animal",
     "tags": [
       "animals"
@@ -83,6 +84,7 @@
     "operationId": "getShape",
     "pathTemplate": "/shapes/{shapeId}",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "Get a shape",
     "tags": [
       "shapes"

@@ -137,6 +137,26 @@ Omit `--plugin` entirely to generate a plain, un-instrumented server. Add `--inc
 
 Every generated server ships with a real `LICENSE` file and a `package.json.license` field by default (`--license mit`, or `--license apache-2.0`; `--license none` opts out but prints a warning)—MCP servers run with real credentials next to an autonomous agent, so being open/auditable by default matters more than for a typical scaffolded project. `--author "Your Name"` sets the copyright holder (falls back to `git config user.name`). See [PLAN.md section 7](PLAN.md#7-distribution-norm-why-mcp-servers-are-conventionally-open-source-and-what-that-implies-for-klaridian-aug-30-2026) and [ARCHITECTURE.md section 27](ARCHITECTURE.md#27-generated-server-license--packagejson-license-field-aug-30-2026) for why.
 
+## Upstream authentication
+
+The generated server authenticates to the upstream API using **the actual OpenAPI `securityScheme`** each operation declares—apiKey (header, query, or cookie), HTTP bearer, HTTP basic, or OAuth2/OpenID Connect—not a one-size-fits-all bearer token. Credentials come from environment variables at runtime, so one build points at different deployments without a rebuild. The convention (TypeScript and Python emit identical wiring):
+
+| Scheme | Environment variable(s) | What the server sends |
+|---|---|---|
+| `http` `bearer` | `KLARIDIAN_AUTH_TOKEN` | `Authorization: Bearer <token>` |
+| `apiKey` (header/query/cookie) | `KLARIDIAN_API_KEY` | the named header, query param, or `Cookie` entry |
+| `http` `basic` | `KLARIDIAN_BASIC_USER` + `KLARIDIAN_BASIC_PASS` | `Authorization: Basic base64(user:pass)` |
+| `oauth2` / `openIdConnect` | `KLARIDIAN_OAUTH_TOKEN` | `Authorization: Bearer <token>` (you supply the token) |
+
+`KLARIDIAN_AUTH_TOKEN` stays the bearer default, so existing deployments keep working. `mutualTLS` is unsupported (a client certificate can't come from an env var)—klaridian fails loudly at generation time if an operation offers only `mutualTLS`.
+
+Two flags cover per-user and exotic auth:
+
+- **`--forward-headers <names>`** — a comma-separated list of inbound HTTP header names the server forwards from the MCP client to the upstream (streamable-http only; stdio has no inbound headers and the flag is rejected there). Use it for per-user API keys passed through the MCP client.
+- **`--auth-hook`** — emits an editable pre-auth hook file (`src/auth-hook.ts` or `auth_hook.py`) the server calls before built-in auth. Return `true` to skip built-in auth—an escape hatch for request signing, token exchange, or any scheme klaridian doesn't emit natively.
+
+See the [Upstream authentication how-to](https://klaridian.dev/docs/how-to/upstream-auth) for the full guide and [ARCHITECTURE.md section 95](ARCHITECTURE.md) for the design.
+
 ## Repository layout
 
 ```

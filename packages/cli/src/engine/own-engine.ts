@@ -42,7 +42,7 @@ import { createHash } from "node:crypto";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { OpenAPIV3 } from "openapi-types";
 import type { JSONSchema7 } from "json-schema";
-import type { McpToolDefinitionLike } from "../emit/ir.js";
+import type { McpToolDefinitionLike, ToolIRSecurityScheme } from "../emit/ir.js";
 
 /** The engine's per-tool output. Superset of `McpToolDefinitionLike` (adds the
  *  engine-only `parameters` + `baseUrl` that `getToolsFromOpenApi` also carries)
@@ -59,6 +59,8 @@ export interface OwnEngineToolDefinition extends McpToolDefinitionLike {
    *  directly — the E2E tests feed raw engine output to the emitters unmapped. */
   executionParameters: { name: string; in: string }[];
   securityRequirements: OpenAPIV3.SecurityRequirementObject[];
+  /** Resolved securityScheme definitions (MCPFO-105), see ToolIRSecurityScheme. */
+  securitySchemes: ToolIRSecurityScheme[];
 }
 
 export interface GetToolsFromOwnEngineOptions {
@@ -461,6 +463,53 @@ function determineBaseUrl(
 }
 
 // ---------------------------------------------------------------------------
+// Security scheme resolution (MCPFO-105, ARCHITECTURE.md §95).
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve an operation's `securityRequirements` (which carry only scheme NAMES)
+ * to the actual `components.securitySchemes` DEFINITIONS the emitters need to
+ * wire per-scheme upstream auth. Returns a de-duplicated list (first-appearance
+ * order), capturing only the fields klaridian consumes (type / in / name /
+ * scheme). Unknown scheme names (a requirement referencing a scheme absent from
+ * components.securitySchemes) are skipped — the requirement remains in
+ * securityRequirements, but there's no definition to emit auth from.
+ *
+ * For Swagger-2.0-converted specs, swagger2openapi normalizes securityDefinitions
+ * into components.securitySchemes with OpenAPI-3 shapes (basic→http/basic,
+ * apiKey stays apiKey, oauth2 stays oauth2), so reading components.securitySchemes
+ * here works for both native 3.x and converted 2.0 specs.
+ */
+function resolveSecuritySchemes(
+  api: OpenAPIV3.Document,
+  requirements: OpenAPIV3.SecurityRequirementObject[]
+): ToolIRSecurityScheme[] {
+  const defs = (api.components?.securitySchemes ?? {}) as Record<
+    string,
+    OpenAPIV3.SecuritySchemeObject
+  >;
+  const resolved: ToolIRSecurityScheme[] = [];
+  const seen = new Set<string>();
+  for (const requirement of requirements) {
+    for (const schemeName of Object.keys(requirement)) {
+      if (seen.has(schemeName)) continue;
+      seen.add(schemeName);
+      const def = defs[schemeName];
+      if (!def || typeof def !== "object" || !("type" in def)) continue;
+      const scheme: ToolIRSecurityScheme = { type: def.type };
+      if (def.type === "apiKey") {
+        scheme.in = (def as OpenAPIV3.ApiKeySecurityScheme).in;
+        scheme.name = (def as OpenAPIV3.ApiKeySecurityScheme).name;
+      } else if (def.type === "http") {
+        scheme.scheme = (def as OpenAPIV3.HttpSecurityScheme).scheme;
+      }
+      resolved.push(scheme);
+    }
+  }
+  return resolved;
+}
+
+// ---------------------------------------------------------------------------
 // Tool extraction (mirrors extract-tools.js extractToolsFromApi).
 // ---------------------------------------------------------------------------
 
@@ -541,6 +590,7 @@ function extractToolsFromApi(
         operation.security === null
           ? globalSecurity
           : operation.security || globalSecurity;
+      const securitySchemes = resolveSecuritySchemes(api, securityRequirements);
 
       const tags = Array.isArray(operation.tags)
         ? operation.tags.filter(Boolean)
@@ -557,6 +607,7 @@ function extractToolsFromApi(
         executionParameters,
         requestBodyContentType,
         securityRequirements,
+        securitySchemes,
         operationId: originalOperationId,
         tags,
         deprecated,

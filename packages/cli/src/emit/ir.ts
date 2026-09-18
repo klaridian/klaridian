@@ -189,6 +189,29 @@ export interface ToolIRExecutionParameter {
 }
 
 /**
+ * A resolved OpenAPI `securityScheme` DEFINITION for one of an operation's
+ * security requirements (MCPFO-105, ARCHITECTURE.md §95). The `securityRequirements`
+ * field carries only the scheme NAMES; this carries the actual `type`/`scheme`/
+ * `in`/`name` that the emitters need to wire the CORRECT upstream auth per scheme
+ * (apiKey header/query/cookie, http bearer/basic, oauth2/openIdConnect bearer).
+ *
+ * Only the fields klaridian's emitters consume are captured (a faithful subset
+ * of `OpenAPIV3.SecuritySchemeObject`): `type` always; `in` + `name` for apiKey;
+ * `scheme` for http. oauth2/openIdConnect need only `type` (the operator supplies
+ * the token via env). Resolved by the engine from `components.securitySchemes`.
+ */
+export interface ToolIRSecurityScheme {
+  /** The scheme kind: apiKey | http | oauth2 | openIdConnect | mutualTLS. */
+  type: string;
+  /** apiKey only: where the key travels — header | query | cookie. */
+  in?: string;
+  /** apiKey only: the header/query/cookie name to set. */
+  name?: string;
+  /** http only: the HTTP auth scheme — bearer | basic | ... */
+  scheme?: string;
+}
+
+/**
  * klaridian's own per-tool IR. The rest of the codebase imports THIS, never
  * `McpToolDefinition` from openapi-mcp-generator.
  *
@@ -218,6 +241,13 @@ export interface ToolIR {
   requestBodyContentType?: string;
   /** Security requirements for the operation (drives Bearer wiring). */
   securityRequirements: OpenAPIV3.SecurityRequirementObject[];
+  /** Resolved securityScheme DEFINITIONS (MCPFO-105) for the operation's
+   *  security requirements — the actual type/scheme/in/name the emitters need
+   *  to wire per-scheme upstream auth. De-duplicated, first-appearance order.
+   *  Empty when the operation has no security or the engine resolved none.
+   *  Optional in the type only so hand-built test fixtures need not set it; the
+   *  adapter always populates it (`?? []`), so it is always present at runtime. */
+  securitySchemes?: ToolIRSecurityScheme[];
   /** Original OpenAPI operationId. */
   operationId: string;
   /** OpenAPI tags for this operation, if any (used by curation). */
@@ -272,6 +302,7 @@ export function mapMcpToolDefinitionToIR(
     })),
     requestBodyContentType: tool.requestBodyContentType,
     securityRequirements: tool.securityRequirements ?? [],
+    securitySchemes: tool.securitySchemes ?? [],
     operationId: tool.operationId,
     tags: tool.tags,
     deprecated: tool.deprecated,
@@ -302,6 +333,7 @@ export interface McpToolDefinitionLike {
   executionParameters?: ToolIRExecutionParameter[];
   requestBodyContentType?: string;
   securityRequirements?: OpenAPIV3.SecurityRequirementObject[];
+  securitySchemes?: ToolIRSecurityScheme[];
   operationId: string;
   tags?: string[];
   deprecated?: boolean;

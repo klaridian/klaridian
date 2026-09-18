@@ -52,6 +52,12 @@
         "bearerAuth": []
       }
     ],
+    "securitySchemes": [
+      {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    ],
     "summary": "Create an item",
     "tags": [
       "items"
@@ -122,6 +128,12 @@
     "securityRequirements": [
       {
         "bearerAuth": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "scheme": "bearer",
+        "type": "http"
       }
     ],
     "summary": "Get an item by id",

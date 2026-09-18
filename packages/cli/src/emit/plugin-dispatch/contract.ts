@@ -64,7 +64,7 @@ export interface PluginDispatchStrategy {
    * or the bare handler opening when it isn't. `toolName` is the MCP tool name
    * the wrap is scoped to.
    */
-  wrapHandlerOpen(toolName: string, wiring?: PluginWiring): string;
+  wrapHandlerOpen(toolName: string, wiring?: PluginWiring, opts?: { ctxParam?: boolean }): string;
   /** The matching close for wrapHandlerOpen (accounts for the extra `)` a wrap adds). */
   wrapHandlerClose(wiring?: PluginWiring): string;
   /** Human-readable description of where/how this target wraps; for tests + docs. */

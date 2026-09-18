@@ -1,0 +1,77 @@
+[
+  {
+    "deprecated": false,
+    "description": "Protected by HTTP Basic auth.",
+    "executionParameters": [],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "createAccount",
+    "operationId": "createAccount",
+    "pathTemplate": "/accounts",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [
+      {
+        "basicAuth": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "scheme": "basic",
+        "type": "http"
+      }
+    ],
+    "summary": "Create an account",
+    "tags": [
+      "accounts"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Protected by HTTP Basic auth (global security).",
+    "executionParameters": [],
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {},
+      "type": "object"
+    },
+    "method": "get",
+    "name": "listAccounts",
+    "operationId": "listAccounts",
+    "pathTemplate": "/accounts",
+    "securityRequirements": [
+      {
+        "basicAuth": []
+      }
+    ],
+    "securitySchemes": [
+      {
+        "scheme": "basic",
+        "type": "http"
+      }
+    ],
+    "summary": "List accounts",
+    "tags": [
+      "accounts"
+    ]
+  }
+]

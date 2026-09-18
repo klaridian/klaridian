@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API Key Corpus API",
+    "version": "1.0.0",
+    "description": "Exercises apiKey security schemes in all three locations (header, query, cookie) plus oauth2, so the IR carries the resolved securityScheme definitions per operation (MCPFO-105)."
+  },
+  "servers": [{ "url": "https://api.apikey.example.com/v1" }],
+  "components": {
+    "securitySchemes": {
+      "apiKeyHeader": { "type": "apiKey", "in": "header", "name": "X-API-Key" },
+      "apiKeyQuery": { "type": "apiKey", "in": "query", "name": "api_key" },
+      "apiKeyCookie": { "type": "apiKey", "in": "cookie", "name": "session" },
+      "oauth2Scheme": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.apikey.example.com/token",
+            "scopes": {}
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "operationId": "listWidgetsHeaderKey",
+        "summary": "List widgets (header API key)",
+        "tags": ["widgets"],
+        "description": "Uses an apiKey-in-header scheme.",
+        "security": [{ "apiKeyHeader": [] }],
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/widgets/search": {
+      "get": {
+        "operationId": "searchWidgetsQueryKey",
+        "summary": "Search widgets (query API key)",
+        "tags": ["widgets"],
+        "description": "Uses an apiKey-in-query scheme.",
+        "security": [{ "apiKeyQuery": [] }],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/widgets/{widgetId}": {
+      "get": {
+        "operationId": "getWidgetCookieKey",
+        "summary": "Get a widget (cookie API key)",
+        "tags": ["widgets"],
+        "description": "Uses an apiKey-in-cookie scheme.",
+        "security": [{ "apiKeyCookie": [] }],
+        "parameters": [
+          {
+            "name": "widgetId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/widgets/import": {
+      "post": {
+        "operationId": "importWidgetsOauth",
+        "summary": "Import widgets (oauth2)",
+        "tags": ["widgets"],
+        "description": "Uses an oauth2 client-credentials scheme (bearer token from env).",
+        "security": [{ "oauth2Scheme": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    }
+  }
+}

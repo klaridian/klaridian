@@ -30,6 +30,7 @@ import type { EmitOptions, EmittedProject, PluginWiring } from "../emit-server.j
 import { resolveAnnotations, titleForTool } from "../emit-tool.js";
 import { pythonConformanceAdapter } from "../conformance/python.js";
 import { emitDispatchWrap } from "../plugin-dispatch/python.js";
+import { planUpstreamAuth, type UpstreamAuthDirective } from "../upstream-auth.js";
 
 /** mcp SDK pin — the version validated end to end in spike 059. */
 const MCP_SDK_VERSION = "2.1.1";
@@ -39,6 +40,14 @@ const HTTPX_SPEC = ">=0.27,<0.29";
  *  resource-server auth module (MCPFO-79). The Python peer of the TS target's
  *  `jose`. Only pinned into a project that actually enables OAuth. */
 const PYJWT_SPEC = ">=2.8,<3";
+
+/** MCPFO-105 per-server auth emit knobs threaded into each Python tool proxy:
+ *  inbound header names to forward upstream (feature B) and whether an editable
+ *  pre-auth hook file is emitted (feature C). */
+interface PythonToolEmitOptions {
+  forwardHeaders?: string[];
+  authHook?: boolean;
+}
 
 /** Turns a tool name into a unique, valid Python identifier for its proxy fn. */
 function toPyIdentifier(name: string, used: Set<string>): string {
@@ -64,14 +73,57 @@ function pyJsonValue(value: unknown): string {
   return `json.loads(${JSON.stringify(JSON.stringify(value))})`;
 }
 
+/** Renders the Python statements applying one upstream-auth directive (MCPFO-105).
+ *  Header/cookie directives mutate `headers`; the query directive mutates `query`.
+ *  Each line is emitted at 4-space base indent; callers add nesting as needed. */
+function emitAuthDirectivePy(d: UpstreamAuthDirective, indent: string): string[] {
+  switch (d.kind) {
+    case "bearer":
+      return [
+        `${indent}_tok = os.environ.get(${pyStr(d.env)})`,
+        `${indent}if _tok:`,
+        `${indent}    headers["Authorization"] = "Bearer " + _tok`,
+      ];
+    case "basic":
+      return [
+        `${indent}_bu = os.environ.get(${pyStr(d.userEnv)})`,
+        `${indent}_bp = os.environ.get(${pyStr(d.passEnv)})`,
+        `${indent}if _bu and _bp:`,
+        `${indent}    headers["Authorization"] = "Basic " + base64.b64encode((_bu + ":" + _bp).encode("utf-8")).decode("ascii")`,
+      ];
+    case "apiKeyHeader":
+      return [
+        `${indent}_ak = os.environ.get(${pyStr(d.env)})`,
+        `${indent}if _ak:`,
+        `${indent}    headers[${pyStr(d.headerName)}] = _ak`,
+      ];
+    case "apiKeyCookie":
+      return [
+        `${indent}_ak = os.environ.get(${pyStr(d.env)})`,
+        `${indent}if _ak:`,
+        `${indent}    _cookie = ${pyStr(d.cookieName)} + "=" + _ak`,
+        `${indent}    headers["Cookie"] = (headers["Cookie"] + "; " + _cookie) if headers.get("Cookie") else _cookie`,
+      ];
+    case "apiKeyQuery":
+      return [
+        `${indent}_ak = os.environ.get(${pyStr(d.env)})`,
+        `${indent}if _ak:`,
+        `${indent}    query[${pyStr(d.paramName)}] = _ak`,
+      ];
+  }
+}
+
 /** Emits one tool's async proxy function body (path/query/header/body/auth). */
-function emitToolProxy(tool: ToolIR, fnName: string): string {
+function emitToolProxy(tool: ToolIR, fnName: string, emitOpts?: PythonToolEmitOptions): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   const pathParams = params.filter((p) => p.in === "path");
   const queryParams = params.filter((p) => p.in === "query");
   const headerParams = params.filter((p) => p.in === "header");
   const hasBody = Boolean(tool.requestBodyContentType);
-  const hasAuth = Array.isArray(tool.securityRequirements) && tool.securityRequirements.length > 0;
+  // MCPFO-105: per-scheme auth directives (throws on mutualTLS-only operations).
+  const authDirectives = planUpstreamAuth(tool);
+  const forwardHeaders = emitOpts?.forwardHeaders ?? [];
+  const authHook = Boolean(emitOpts?.authHook);
   const method = (tool.method || "get").toUpperCase();
 
   const lines: string[] = [];
@@ -96,11 +148,37 @@ function emitToolProxy(tool: ToolIR, fnName: string): string {
     lines.push(`    if arguments.get(${pyStr(p.name)}) is not None:`);
     lines.push(`        headers[${pyStr(p.name)}] = str(arguments.get(${pyStr(p.name)}))`);
   }
-  if (hasAuth) {
-    lines.push(`    token = os.environ.get("KLARIDIAN_AUTH_TOKEN")`);
-    lines.push(`    if token:`);
-    lines.push(`        headers["Authorization"] = "Bearer " + token`);
+
+  // MCPFO-105 feature B: forward selected inbound MCP client headers to the
+  // upstream (streamable-http only; over stdio the contextvar is empty, so this
+  // is a harmless no-op). inbound_headers() reads the per-request contextvar
+  // set by server.py's ASGI app.
+  if (forwardHeaders.length > 0) {
+    lines.push(`    _inbound = inbound_headers()`);
+    lines.push(`    for _fwd in ${pyJsonValue(forwardHeaders.map((h: string) => h.toLowerCase()))}:`);
+    lines.push(`        _val = _inbound.get(_fwd)`);
+    lines.push(`        if _val is not None:`);
+    lines.push(`            headers[_fwd] = _val`);
   }
+
+  // MCPFO-105 feature C: an editable pre-auth hook runs BEFORE built-in auth.
+  // A truthy return means it fully handled auth, so built-in auth is skipped.
+  if (authHook) {
+    lines.push(
+      `    _auth_handled = await auth_hook(headers, query, arguments, inbound_headers())`
+    );
+  }
+
+  // MCPFO-105 feature A: built-in per-scheme upstream auth.
+  if (authDirectives.length > 0) {
+    if (authHook) {
+      lines.push(`    if not _auth_handled:`);
+      for (const d of authDirectives) lines.push(...emitAuthDirectivePy(d, "        "));
+    } else {
+      for (const d of authDirectives) lines.push(...emitAuthDirectivePy(d, "    "));
+    }
+  }
+
   if (hasBody) {
     lines.push(`    headers["Content-Type"] = ${pyStr(tool.requestBodyContentType as string)}`);
     lines.push(`    body = arguments.get("requestBody")`);
@@ -141,11 +219,11 @@ function emitToolProxy(tool: ToolIR, fnName: string): string {
 }
 
 /** Emits tools.py — every proxy fn + the TOOLS metadata registry. */
-function emitToolsModule(tools: ToolIR[]): string {
+function emitToolsModule(tools: ToolIR[], emitOpts?: PythonToolEmitOptions): string {
   const used = new Set<string>();
   const entries = tools.map((t) => ({ tool: t, fn: toPyIdentifier(t.name, used) }));
 
-  const proxies = entries.map(({ tool, fn }) => emitToolProxy(tool, fn)).join("\n\n\n");
+  const proxies = entries.map(({ tool, fn }) => emitToolProxy(tool, fn, emitOpts)).join("\n\n\n");
 
   const registry = entries
     .map(({ tool, fn }) => {
@@ -172,20 +250,31 @@ function emitToolsModule(tools: ToolIR[]): string {
     })
     .join("\n");
 
+  const forwardHeaders = emitOpts?.forwardHeaders ?? [];
+  const authHook = Boolean(emitOpts?.authHook);
+  const inboundImport = forwardHeaders.length > 0 || authHook
+    ? `from server_headers import inbound_headers\n`
+    : "";
+  const authHookImport = authHook ? `from auth_hook import auth_hook\n` : "";
+
   return `# GENERATED by klaridian (Python emit target, MCPFO-60.3) — do not edit.
 #
 # One async proxy per OpenAPI operation + the TOOLS metadata registry the
 # server builds tools/list and tools/call from. Proxies read KLARIDIAN_BASE_URL
-# (upstream host) and, when the operation declares a security requirement,
-# KLARIDIAN_AUTH_TOKEN (sent as a Bearer header) — the same env-var contract the
-# TypeScript target uses, so a server behaves identically in either language.
+# (upstream host) and wire per-scheme upstream auth from environment variables
+# (MCPFO-105): KLARIDIAN_AUTH_TOKEN (http bearer, back-compat default),
+# KLARIDIAN_API_KEY (apiKey header/query/cookie), KLARIDIAN_BASIC_USER +
+# KLARIDIAN_BASIC_PASS (http basic), KLARIDIAN_OAUTH_TOKEN (oauth2/openIdConnect).
+# The same env-var contract the TypeScript target uses, so a server behaves
+# identically in either language.
+import base64
 import json
 import os
 import urllib.parse
 
 import httpx
 from mcp import types
-
+${inboundImport}${authHookImport}
 
 ${proxies}
 
@@ -388,6 +477,11 @@ function emitServerModule(opts: EmitOptions): string {
   // ASGI app checks the bearer token before handing off to the MCP handler.
   const authEnabled = Boolean(opts.auth) && transport === "streamable-http";
   const authImport = authEnabled ? "import auth\n" : "";
+  // MCPFO-105: capture inbound HTTP headers into a contextvar when the server
+  // forwards headers (feature B) or exposes them to the auth hook (feature C),
+  // so the tool proxies (tools.py) can read them per request.
+  const captureHeaders = (opts.forwardHeaders?.length ?? 0) > 0 || Boolean(opts.authHook);
+  const headersImport = captureHeaders ? "from server_headers import set_inbound_headers\n" : "";
 
   return `# GENERATED by klaridian (Python emit target, MCPFO-60.3) — do not edit.
 #
@@ -413,7 +507,7 @@ from mcp.server.stdio import stdio_server
 
 import conformance
 from tools import TOOLS
-${authImport}${pluginImport ? pluginImport + "\n" : ""}
+${authImport}${headersImport}${pluginImport ? pluginImport + "\n" : ""}
 SERVER_NAME = ${pyStr(opts.serverName)}
 
 TOOL_MAP = {t["name"]: t for t in TOOLS}
@@ -524,7 +618,10 @@ ${authEnabled ? `        if scope["type"] == "http":
             if await auth.authenticate(scope, send):
                 return
 ` : ""}        if scope["type"] == "http" and scope.get("path", "").rstrip("/") == "/mcp":
-            await manager.handle_request(scope, receive, send)
+${captureHeaders ? `            # MCPFO-105: stash inbound HTTP headers for the tool proxies
+            # (header forwarding / auth hook) for the duration of this request.
+            set_inbound_headers(scope.get("headers", []))
+` : ""}            await manager.handle_request(scope, receive, send)
             return
         await send({"type": "http.response.start", "status": 404,
                     "headers": [(b"content-type", b"text/plain")]})
@@ -556,7 +653,12 @@ if __name__ == "__main__":
 }
 
 /** pyproject.toml (PEP 621) — the project manifest. */
-function emitPyproject(opts: EmitOptions, extraDeps: string[], authEnabled: boolean): string {
+function emitPyproject(
+  opts: EmitOptions,
+  extraDeps: string[],
+  authEnabled: boolean,
+  extraModules?: { serverHeaders?: boolean; authHook?: boolean }
+): string {
   const deps = [
     `"mcp==${MCP_SDK_VERSION}"`,
     `"httpx${HTTPX_SPEC}"`,
@@ -564,7 +666,14 @@ function emitPyproject(opts: EmitOptions, extraDeps: string[], authEnabled: bool
     ...(authEnabled ? [`"pyjwt[crypto]${PYJWT_SPEC}"`] : []),
     ...extraDeps.map((d) => `"${d}"`),
   ];
-  const pyModules = ["server", "tools", "conformance", ...(authEnabled ? ["auth"] : [])];
+  const pyModules = [
+    "server",
+    "tools",
+    "conformance",
+    ...(authEnabled ? ["auth"] : []),
+    ...(extraModules?.serverHeaders ? ["server_headers"] : []),
+    ...(extraModules?.authHook ? ["auth_hook"] : []),
+  ];
   return `[project]
 name = ${pyStr(opts.serverName)}
 version = "1.0.0"
@@ -621,7 +730,79 @@ ${runLine}
 }
 
 /**
- * Emit the complete Python project. The pythonTarget (target.ts) calls this.
+ * MCPFO-105 feature B/C support: emits `server_headers.py`, a tiny per-request
+ * contextvar holding the inbound HTTP request headers as a lowercased name→value
+ * dict. server.py's ASGI app sets it per request; tools.py reads it to forward
+ * selected headers upstream and/or hand them to the auth hook. Over stdio it
+ * simply stays empty (no inbound HTTP request), so reads are a harmless no-op.
+ */
+function emitServerHeadersModule(): string {
+  return `# GENERATED by klaridian (Python emit target, MCPFO-105) — do not edit.
+#
+# Per-request inbound HTTP headers, exposed to the tool proxies (tools.py) for
+# header forwarding and the auth hook. server.py's ASGI app calls
+# set_inbound_headers() at the start of each /mcp request; inbound_headers()
+# returns a {lowercased-name: value} dict. Over stdio there is no inbound HTTP
+# request, so the contextvar stays empty and reads are a harmless no-op.
+import contextvars
+
+_inbound: contextvars.ContextVar[dict] = contextvars.ContextVar("klaridian_inbound_headers", default={})
+
+
+def set_inbound_headers(raw_headers) -> None:
+    # raw_headers is the ASGI scope["headers"]: a list of (bytes, bytes) pairs.
+    parsed: dict = {}
+    for name, value in raw_headers or []:
+        try:
+            parsed[name.decode("latin-1").lower()] = value.decode("latin-1")
+        except Exception:
+            continue
+    _inbound.set(parsed)
+
+
+def inbound_headers() -> dict:
+    return _inbound.get()
+`;
+}
+
+/**
+ * MCPFO-105 feature C: emits the editable pre-auth hook `auth_hook.py`, the
+ * Python peer of the TS `src/auth-hook.ts`. Each tool proxy calls auth_hook()
+ * BEFORE built-in per-scheme auth; a truthy return skips the built-in auth. An
+ * escape hatch for exotic schemes klaridian doesn't emit natively. Vendored as
+ * readable source the operator edits.
+ */
+function emitPythonAuthHookModule(): string {
+  return `# EDITABLE pre-auth hook (klaridian, MCPFO-105).
+#
+# Every generated tool proxy calls auth_hook() BEFORE klaridian's built-in
+# per-scheme upstream auth. Return True to signal "I fully handled auth" — the
+# built-in auth (bearer / API key / basic from env vars) is then SKIPPED for
+# that request. Return False (the default) to let the built-in auth run.
+#
+# This is an escape hatch for auth schemes klaridian does not emit natively
+# (request signing/HMAC, a token-exchange dance, per-tenant credential lookup,
+# ...). Edit the body freely; it ships as readable source, not a dependency.
+#
+# Arguments (mutate the first two in place to affect the outgoing request):
+#   headers:         the outgoing HTTP headers dict (add/replace Authorization)
+#   query:           the outgoing query-param dict (mutate to sign a query, ...)
+#   arguments:       the validated tool-call arguments
+#   inbound_headers: the inbound MCP client headers dict (streamable-http only;
+#                    empty over stdio) — read a per-user token here.
+
+
+async def auth_hook(headers: dict, query: dict, arguments: dict, inbound_headers: dict) -> bool:
+    # Example — sign every request and skip built-in auth:
+    #   import hmac, hashlib, os
+    #   sig = hmac.new(os.environ["MY_SIGNING_KEY"].encode(), b"...", hashlib.sha256).hexdigest()
+    #   headers["X-Signature"] = sig
+    #   return True
+    return False
+`;
+}
+
+/**
  * Fails loudly on an un-emittable configuration rather than emitting a broken
  * project, matching the "fail loudly, don't guess" rule the TS emitter follows.
  */
@@ -654,17 +835,38 @@ export function emitPythonProject(opts: EmitOptions): EmittedProject {
   // combination is rejected above). authEnabled gates the auth.py file, the
   // pyjwt dependency, and the server.py ASGI gate together.
   const authEnabled = Boolean(opts.auth);
+  // MCPFO-105: feature B (header forwarding) / feature C (auth hook). The
+  // contextvar module is needed by either; the hook module only by feature C.
+  const forwardHeaders = opts.forwardHeaders ?? [];
+  const captureHeaders = forwardHeaders.length > 0 || Boolean(opts.authHook);
+  const authHookEnabled = Boolean(opts.authHook);
+  const toolEmitOpts: PythonToolEmitOptions = {
+    forwardHeaders,
+    authHook: authHookEnabled,
+  };
 
   const files: EmittedProject = {
     "server.py": emitServerModule(opts),
-    "tools.py": emitToolsModule(opts.tools),
+    "tools.py": emitToolsModule(opts.tools, toolEmitOpts),
     // The vendored conformance module comes from the Python conformance adapter
     // (MCPFO-60.1 slot) — the emitter never hand-rolls spec-error surfacing.
     "conformance.py": pythonConformanceAdapter.emitServerContributions(),
-    "pyproject.toml": emitPyproject(opts, extraDeps, authEnabled),
+    "pyproject.toml": emitPyproject(opts, extraDeps, authEnabled, {
+      serverHeaders: captureHeaders,
+      authHook: authHookEnabled,
+    }),
     "requirements.txt": emitRequirements(extraDeps, authEnabled),
     "README.md": emitReadme(opts),
   };
+
+  // MCPFO-105: the per-request inbound-header contextvar (feature B/C) and the
+  // editable pre-auth hook (feature C), vendored as readable source.
+  if (captureHeaders) {
+    files["server_headers.py"] = emitServerHeadersModule();
+  }
+  if (authHookEnabled) {
+    files["auth_hook.py"] = emitPythonAuthHookModule();
+  }
 
   // MCPFO-79: the vendored OAuth resource-server module (PRM + JWKS-backed JWT
   // validation), the Python peer of the TS target's src/auth.ts.

@@ -14,6 +14,7 @@
     "running-the-server",
     "json-output",
     "transports",
+    "upstream-auth",
     "oauth",
     "deploy",
     "---Publish---",

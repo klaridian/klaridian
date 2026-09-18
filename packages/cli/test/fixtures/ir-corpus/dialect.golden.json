@@ -61,6 +61,7 @@
     "pathTemplate": "/measurements",
     "requestBodyContentType": "application/json",
     "securityRequirements": [],
+    "securitySchemes": [],
     "summary": "Record a measurement",
     "tags": []
   }

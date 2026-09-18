@@ -1,0 +1,89 @@
+[
+  {
+    "deprecated": false,
+    "description": "Body is an allOf-composed schema referenced via $ref.",
+    "executionParameters": [],
+    "inputSchema": {
+      "properties": {
+        "requestBody": {
+          "allOf": [
+            {
+              "properties": {
+                "createdAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "legs": {
+                  "type": "integer"
+                },
+                "species": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "species"
+              ],
+              "type": "object"
+            }
+          ],
+          "description": "The JSON request body."
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "createAnimal",
+    "operationId": "createAnimal",
+    "pathTemplate": "/animals",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [],
+    "summary": "Create an animal",
+    "tags": [
+      "animals"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Response body is a oneOf union (a root-level union is NOT advertised as an outputSchema).",
+    "executionParameters": [
+      {
+        "in": "path",
+        "name": "shapeId"
+      }
+    ],
+    "inputSchema": {
+      "properties": {
+        "shapeId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shapeId"
+      ],
+      "type": "object"
+    },
+    "method": "get",
+    "name": "getShape",
+    "operationId": "getShape",
+    "pathTemplate": "/shapes/{shapeId}",
+    "securityRequirements": [],
+    "summary": "Get a shape",
+    "tags": [
+      "shapes"
+    ]
+  }
+]

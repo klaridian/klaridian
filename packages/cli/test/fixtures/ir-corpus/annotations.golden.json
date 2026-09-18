@@ -1,0 +1,112 @@
+[
+  {
+    "deprecated": false,
+    "description": "A destructive, open-world operation.",
+    "executionParameters": [
+      {
+        "in": "path",
+        "name": "reportId"
+      }
+    ],
+    "inputSchema": {
+      "properties": {
+        "reportId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reportId"
+      ],
+      "type": "object"
+    },
+    "klaridian": {
+      "destructive": true,
+      "openWorld": true
+    },
+    "method": "delete",
+    "name": "deleteReport",
+    "operationId": "deleteReport",
+    "pathTemplate": "/reports/{reportId}",
+    "securityRequirements": [],
+    "summary": "Delete a report",
+    "tags": [
+      "reports"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "A safe, read-only listing annotated via x-klaridian.",
+    "executionParameters": [],
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "klaridian": {
+      "readOnly": true,
+      "title": "Browse reports"
+    },
+    "method": "get",
+    "name": "listReports",
+    "operationId": "listReports",
+    "outputSchema": {
+      "properties": {
+        "reports": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "pathTemplate": "/reports",
+    "securityRequirements": [],
+    "summary": "List reports",
+    "tags": [
+      "reports"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Carries a third-party object-form x-mcp that prepareSpecForEngine collapses to a boolean; klaridian reads hints only from x-klaridian.",
+    "executionParameters": [],
+    "inputSchema": {
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "event": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "event"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "recordAudit",
+    "operationId": "recordAudit",
+    "outputSchema": {
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "pathTemplate": "/audit",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [],
+    "summary": "Record an audit event",
+    "tags": [
+      "audit"
+    ]
+  }
+]

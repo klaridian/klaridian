@@ -1,0 +1,75 @@
+[
+  {
+    "deprecated": false,
+    "description": "Creates a widget from a JSON body.",
+    "executionParameters": [],
+    "inputSchema": {
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "createWidget",
+    "operationId": "createWidget",
+    "pathTemplate": "/widgets",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [
+      {
+        "apiKeyHeader": []
+      }
+    ],
+    "summary": "Create a widget",
+    "tags": [
+      "widgets"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Lists widgets with an optional limit query parameter.",
+    "executionParameters": [
+      {
+        "in": "query",
+        "name": "limit"
+      }
+    ],
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "description": "Maximum number of widgets to return.",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "method": "get",
+    "name": "listWidgets",
+    "operationId": "listWidgets",
+    "pathTemplate": "/widgets",
+    "securityRequirements": [],
+    "summary": "List widgets",
+    "tags": [
+      "widgets"
+    ]
+  }
+]

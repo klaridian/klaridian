@@ -1,0 +1,128 @@
+[
+  {
+    "deprecated": false,
+    "description": "Create a new item from a JSON body.",
+    "executionParameters": [],
+    "inputSchema": {
+      "properties": {
+        "requestBody": {
+          "description": "The JSON request body.",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "price": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestBody"
+      ],
+      "type": "object"
+    },
+    "method": "post",
+    "name": "createItem",
+    "operationId": "createItem",
+    "outputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "pathTemplate": "/items",
+    "requestBodyContentType": "application/json",
+    "securityRequirements": [
+      {
+        "bearerAuth": []
+      }
+    ],
+    "summary": "Create an item",
+    "tags": [
+      "items"
+    ]
+  },
+  {
+    "deprecated": false,
+    "description": "Fetch a single item, with an optional verbose flag and a request-id header.",
+    "executionParameters": [
+      {
+        "in": "path",
+        "name": "itemId"
+      },
+      {
+        "in": "query",
+        "name": "verbose"
+      },
+      {
+        "in": "header",
+        "name": "X-Request-Id"
+      }
+    ],
+    "inputSchema": {
+      "properties": {
+        "X-Request-Id": {
+          "description": "Client-supplied request correlation id.",
+          "type": "string"
+        },
+        "itemId": {
+          "description": "The item identifier.",
+          "type": "string"
+        },
+        "verbose": {
+          "default": false,
+          "description": "Return the expanded representation.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "itemId"
+      ],
+      "type": "object"
+    },
+    "method": "get",
+    "name": "getItem",
+    "operationId": "getItem",
+    "outputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "pathTemplate": "/items/{itemId}",
+    "securityRequirements": [
+      {
+        "bearerAuth": []
+      }
+    ],
+    "summary": "Get an item by id",
+    "tags": [
+      "items"
+    ]
+  }
+]

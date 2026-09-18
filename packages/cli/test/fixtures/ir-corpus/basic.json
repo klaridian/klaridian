@@ -1,0 +1,106 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Basic Corpus API",
+    "version": "1.0.0",
+    "description": "Normal OpenAPI 3.x spec: path/query/header params, a JSON request body, and Bearer security. Covers the common shape."
+  },
+  "servers": [{ "url": "https://api.basic.example.com/v1" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/items/{itemId}": {
+      "get": {
+        "operationId": "getItem",
+        "summary": "Get an item by id",
+        "tags": ["items"],
+        "description": "Fetch a single item, with an optional verbose flag and a request-id header.",
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "description": "The item identifier.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "verbose",
+            "in": "query",
+            "required": false,
+            "description": "Return the expanded representation.",
+            "schema": { "type": "boolean", "default": false }
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": false,
+            "description": "Client-supplied request correlation id.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "price": { "type": "number" }
+                  },
+                  "required": ["id", "name"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items": {
+      "post": {
+        "operationId": "createItem",
+        "summary": "Create an item",
+        "tags": ["items"],
+        "description": "Create a new item from a JSON body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "price": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" }
+                  },
+                  "required": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

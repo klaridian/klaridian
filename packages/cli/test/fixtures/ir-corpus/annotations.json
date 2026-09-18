@@ -1,0 +1,97 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Annotations Corpus API",
+    "version": "1.0.0",
+    "description": "Exercises klaridian's x-klaridian annotations (readOnly/destructive/openWorld/title/expose) and a third-party object-form x-mcp that prepareSpecForEngine collapses to a boolean."
+  },
+  "servers": [{ "url": "https://api.annotated.example.com" }],
+  "paths": {
+    "/reports": {
+      "get": {
+        "operationId": "listReports",
+        "summary": "List reports",
+        "tags": ["reports"],
+        "description": "A safe, read-only listing annotated via x-klaridian.",
+        "x-klaridian": { "readOnly": true, "title": "Browse reports" },
+        "responses": {
+          "200": {
+            "description": "A page of reports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reports": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{reportId}": {
+      "delete": {
+        "operationId": "deleteReport",
+        "summary": "Delete a report",
+        "tags": ["reports"],
+        "description": "A destructive, open-world operation.",
+        "x-klaridian": { "destructive": true, "openWorld": true },
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "Deleted." } }
+      }
+    },
+    "/reports/internal": {
+      "get": {
+        "operationId": "internalReport",
+        "summary": "Internal report (hidden)",
+        "tags": ["reports"],
+        "description": "Hidden from the tool surface via x-klaridian.expose:false — must NOT appear in the golden.",
+        "x-klaridian": { "expose": false },
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/audit": {
+      "post": {
+        "operationId": "recordAudit",
+        "summary": "Record an audit event",
+        "tags": ["audit"],
+        "description": "Carries a third-party object-form x-mcp that prepareSpecForEngine collapses to a boolean; klaridian reads hints only from x-klaridian.",
+        "x-mcp": { "expose": true, "someVendorKey": "ignored" },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["event"],
+                "properties": { "event": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

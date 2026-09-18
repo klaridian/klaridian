@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Refs Corpus API",
+    "version": "1.0.0",
+    "description": "Exercises $ref, allOf, and oneOf in schemas so the golden captures how the pipeline dereferences composed schemas."
+  },
+  "servers": [{ "url": "https://api.refs.example.com" }],
+  "components": {
+    "schemas": {
+      "Base": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Animal": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Base" },
+          {
+            "type": "object",
+            "required": ["species"],
+            "properties": {
+              "species": { "type": "string" },
+              "legs": { "type": "integer" }
+            }
+          }
+        ]
+      },
+      "Circle": {
+        "type": "object",
+        "required": ["radius"],
+        "properties": { "kind": { "type": "string" }, "radius": { "type": "number" } }
+      },
+      "Square": {
+        "type": "object",
+        "required": ["side"],
+        "properties": { "kind": { "type": "string" }, "side": { "type": "number" } }
+      }
+    }
+  },
+  "paths": {
+    "/animals": {
+      "post": {
+        "operationId": "createAnimal",
+        "summary": "Create an animal",
+        "tags": ["animals"],
+        "description": "Body is an allOf-composed schema referenced via $ref.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Animal" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The created animal.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Animal" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shapes/{shapeId}": {
+      "get": {
+        "operationId": "getShape",
+        "summary": "Get a shape",
+        "tags": ["shapes"],
+        "description": "Response body is a oneOf union (a root-level union is NOT advertised as an outputSchema).",
+        "parameters": [
+          {
+            "name": "shapeId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A shape, either a circle or a square.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/Circle" },
+                    { "$ref": "#/components/schemas/Square" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

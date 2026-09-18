@@ -1,0 +1,79 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Swagger2 Corpus API",
+    "version": "1.0.0",
+    "description": "A Swagger 2.0 document to exercise the swagger2openapi pre-conversion path before tool extraction."
+  },
+  "host": "api.swagger2.example.com",
+  "basePath": "/v2",
+  "schemes": ["https"],
+  "securityDefinitions": {
+    "apiKeyHeader": { "type": "apiKey", "name": "X-API-Key", "in": "header" }
+  },
+  "paths": {
+    "/widgets": {
+      "get": {
+        "operationId": "listWidgets",
+        "summary": "List widgets",
+        "tags": ["widgets"],
+        "description": "Lists widgets with an optional limit query parameter.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "description": "Maximum number of widgets to return."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of widgets.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "widgets": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/Widget" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWidget",
+        "summary": "Create a widget",
+        "tags": ["widgets"],
+        "description": "Creates a widget from a JSON body.",
+        "security": [{ "apiKeyHeader": [] }],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/Widget" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The created widget.",
+            "schema": { "$ref": "#/definitions/Widget" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Widget": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" }
+      }
+    }
+  }
+}

@@ -5,28 +5,28 @@ import { HomeJsonLd } from "@/components/json-ld";
 
 const FEATURES = [
   {
-    title: "Curation built in",
-    body: "Tag, path, or operationId filtering keeps the tool surface small — the number-one pain point in the MCP ecosystem — instead of dumping your whole API on the agent.",
+    title: "Curation, not a tool dump",
+    body: "Filter by tag, path, or operationId so the agent sees the handful of tools it needs instead of your entire API. Tool bloat is the thing people complain about most with generated MCP servers, and this is the fix.",
   },
   {
-    title: "Observability wired",
-    body: "OpenTelemetry tracing and product-analytics events attached at generation time, vendored as readable source — not bolted on after the fact.",
+    title: "Observability comes wired",
+    body: "OpenTelemetry tracing and product-analytics events are written into the server at generation time, as readable source you own rather than a black-box dependency.",
   },
   {
     title: "TypeScript or Python",
-    body: "Same tools, same annotations, same observability from one spec. Pick the runtime you'd rather deploy; the output is identical in behavior.",
+    body: "One spec, either runtime. Same tools, same annotations, same traces. Pick whichever you'd rather deploy.",
   },
   {
-    title: "Auditable by design",
-    body: "Plain, readable output on the official MCP SDK. Read exactly what every tool call does before you trust it with production credentials next to an agent.",
+    title: "You can read every line",
+    body: "Plain output on the official MCP SDK. Before you hand it production credentials, you can see exactly what each tool call does.",
   },
   {
-    title: "Built for large APIs",
-    body: "Code-mode turns hundreds of operations into a typed client and just two tools, so agents keep their context lean on specs that would otherwise overflow.",
+    title: "Handles huge specs",
+    body: "Code-mode collapses hundreds of operations into a typed client and two tools, so a giant API doesn't blow up the agent's context window.",
   },
   {
-    title: "Deploy anywhere",
-    body: "Emit a portable Dockerfile, a Cloudflare Worker, or a Fly.io app. klaridian writes the config; the platform's own CLI does the rest.",
+    title: "Ships where you deploy",
+    body: "Get a Dockerfile, a Cloudflare Worker, or a Fly.io app. klaridian writes the config and the platform's own CLI takes it from there.",
   },
 ];
 
@@ -76,10 +76,10 @@ export default function Home() {
           you can trust.
         </h1>
         <p className="text-[19px] text-fd-muted-foreground max-w-[60ch] mx-auto mb-8 leading-relaxed">
-          klaridian generates a stateless Model Context Protocol server from any
-          OpenAPI or Swagger spec — with OpenTelemetry, product analytics, and
-          tool curation wired in. Plain, readable code you audit before giving it
-          credentials.
+          Point klaridian at an OpenAPI or Swagger spec and it writes a stateless
+          Model Context Protocol server, with OpenTelemetry, analytics, and tool
+          curation already in place. The output is plain code you can read before
+          it touches a single credential.
         </p>
         <div className="flex flex-wrap gap-3 justify-center items-center">
           <Link
@@ -134,8 +134,9 @@ export default function Home() {
         <div className="max-w-[1080px] mx-auto px-8 py-14 text-center">
           <h2 className="text-2xl font-bold mb-3">Install</h2>
           <p className="text-sm text-fd-muted-foreground max-w-[440px] mx-auto mb-7">
-            One CLI on npm, PyPI, and Homebrew — prebuilt native binaries for
-            macOS, Linux, and Windows, no Node.js required.
+            One CLI, available on npm, PyPI, and Homebrew. The PyPI and Homebrew
+            builds are prebuilt native binaries for macOS, Linux, and Windows, so
+            you don't need Node.js installed.
           </p>
           <CopyInstallCommand />
           <div className="text-sm mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2">

@@ -46,3 +46,4 @@ next-env.d.ts
 
 # derived from the root CHANGELOG.md by scripts/generate-changelog.mjs
 /content/changelog/
+packages/site/sketches/

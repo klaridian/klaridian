@@ -1,0 +1,114 @@
+.term {
+  max-width: 760px;
+  margin: 48px auto 0;
+  background: var(--color-fd-card);
+  border: 1px solid var(--color-fd-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-fd-border);
+}
+.bar i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--color-fd-muted-foreground);
+  opacity: 0.4;
+  display: inline-block;
+}
+.bar span {
+  margin-left: 8px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 12px;
+  color: var(--color-fd-muted-foreground);
+}
+
+.body {
+  padding: 18px 20px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 13.5px;
+  line-height: 1.85;
+  min-height: 272px;
+  color: var(--color-fd-foreground);
+}
+
+.d {
+  color: var(--klaridian-accent);
+}
+
+.type {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid var(--klaridian-accent);
+  width: 0;
+  vertical-align: bottom;
+  animation: typing 1.6s steps(46) 0.3s forwards, blink 0.8s step-end infinite;
+}
+@keyframes typing {
+  to {
+    width: 39ch;
+  }
+}
+@keyframes blink {
+  50% {
+    border-color: transparent;
+  }
+}
+
+.out {
+  opacity: 0;
+  animation: rise 0.35s ease forwards;
+}
+.out .c {
+  color: var(--color-fd-muted-foreground);
+}
+.out .g {
+  color: var(--klaridian-accent);
+}
+.out .a {
+  color: var(--klaridian-accent-strong);
+  font-weight: 500;
+}
+.tick {
+  color: var(--klaridian-accent);
+}
+
+.o1 { animation-delay: 2.1s; }
+.o2 { animation-delay: 2.4s; }
+.o3 { animation-delay: 2.7s; }
+.o4 { animation-delay: 3.0s; }
+.o5 { animation-delay: 3.3s; }
+.o6 { animation-delay: 3.7s; }
+.o7 { animation-delay: 4.1s; }
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .type {
+    width: 39ch;
+    animation: none;
+    border-right: none;
+  }
+  .out {
+    opacity: 1;
+    animation: none;
+  }
+}

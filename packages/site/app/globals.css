@@ -1,101 +1,104 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/preset.css";
-@import "fumadocs-ui/css/black.css";
+@import "fumadocs-ui/css/neutral.css";
+
+/* ============================================================
+   klaridian site theme — V2 "Modern Dark" (light + dark)
+   Fumadocs is themed via the --color-fd-* variables. We set a
+   light palette on :root and a dark palette on .dark (Fumadocs
+   toggles the .dark class). Body is Inter; code is JetBrains Mono.
+   ============================================================ */
 
 :root {
-  --klaridian-ink: #0a0a0a;
-  --klaridian-paper: #f5f3ee;
-  --klaridian-accent: #00c853;
+  --klaridian-accent: #16a34a;         /* light-mode green (AA on white) */
+  --klaridian-accent-strong: #15803d;
 
-  /* Fumadocs theme overrides -> Brutalist Terminal palette */
-  --color-fd-background: var(--klaridian-paper);
-  --color-fd-foreground: var(--klaridian-ink);
+  /* Fumadocs theme — LIGHT */
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #1a1c1a;
   --color-fd-primary: var(--klaridian-accent);
-  --color-fd-primary-foreground: var(--klaridian-ink);
-  --color-fd-card: #ffffff;
-  --color-fd-border: var(--klaridian-ink);
-  --color-fd-muted: #e7e3d8;
-  --color-fd-muted-foreground: #444444;
-  --color-fd-accent: var(--klaridian-accent);
-  --color-fd-accent-foreground: var(--klaridian-ink);
-  --font-fd-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-card: #fbfcfb;
+  --color-fd-card-foreground: #1a1c1a;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #1a1c1a;
+  --color-fd-border: #e7e9e6;
+  --color-fd-muted: #f4f6f4;
+  --color-fd-muted-foreground: #5c6360;
+  --color-fd-accent: #e8f6ee;
+  --color-fd-accent-foreground: #15803d;
+  --color-fd-ring: var(--klaridian-accent);
+
+  --font-fd-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+  --font-fd-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-html, body {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+.dark {
+  --klaridian-accent: #34d399;         /* dark-mode green (V2 sketch) */
+  --klaridian-accent-strong: #4ade80;
+
+  /* Fumadocs theme — DARK (V2 palette) */
+  --color-fd-background: #0b0e0d;
+  --color-fd-foreground: #e8ece9;
+  --color-fd-primary: var(--klaridian-accent);
+  --color-fd-primary-foreground: #04120b;
+  --color-fd-card: #0f1412;
+  --color-fd-card-foreground: #e8ece9;
+  --color-fd-popover: #111614;
+  --color-fd-popover-foreground: #e8ece9;
+  --color-fd-border: #1e2622;
+  --color-fd-muted: #111614;
+  --color-fd-muted-foreground: #9aa39d;
+  --color-fd-accent: #0f2a1f;
+  --color-fd-accent-foreground: #34d399;
+  --color-fd-ring: var(--klaridian-accent);
 }
 
-/* ---- Brutalist Terminal overrides for Fumadocs docs UI ---- */
-
-/* Kill all rounded corners globally within the docs layout — sharp edges only */
-#nd-docs-layout,
-#nd-docs-layout * {
-  border-radius: 0 !important;
+html,
+body {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
 }
 
-/* Search box: square, 2px border, no shadow-pill look */
-#nd-docs-layout [data-search],
-#nd-docs-layout [data-search-full],
-#nd-docs-layout [cmdk-input-wrapper] {
-  border: 2px solid var(--klaridian-ink) !important;
-  box-shadow: none !important;
-  background: #fff !important;
+/* Code stays monospace everywhere */
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace,
+    SFMono-Regular, monospace;
 }
 
-/* Hide the light/dark theme toggle — this site is a single fixed theme */
-#nd-docs-layout [aria-label*="theme" i],
-#nd-docs-layout [data-theme-toggle] {
-  display: none !important;
-}
+/* ---- Fumadocs docs UI: targeted refinements (V2) ---- */
 
-/* Sidebar active item: solid square accent instead of soft rounded pill
-   (scoped to #nd-sidebar only — the TOC on the right reuses the same
-   data-active attribute for "currently scrolled heading", which can be
-   true for several items at once and must NOT get this treatment) */
+/* Sidebar active item: soft accent pill. Scoped to #nd-sidebar ONLY —
+   the right-hand TOC reuses data-active for "currently scrolled heading"
+   (can be true for several items at once) and must NOT get this style. */
 #nd-sidebar a[data-active="true"] {
-  background: var(--klaridian-accent) !important;
-  color: var(--klaridian-ink) !important;
-  font-weight: 700;
+  background: var(--color-fd-accent);
+  color: var(--color-fd-accent-foreground);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--klaridian-accent);
 }
 
-/* Headings: undo Fumadocs' anchor-link data-card boxing, keep it plain text */
+/* Heading anchor links reuse [data-card] in Fumadocs — keep them plain,
+   don't let a content-card style box every heading. */
 #nd-docs-layout h1 a[data-card],
 #nd-docs-layout h2 a[data-card],
 #nd-docs-layout h3 a[data-card],
 #nd-docs-layout h4 a[data-card] {
-  border: none !important;
-  padding: 0 !important;
+  border: none;
+  padding: 0;
   text-decoration: none;
 }
 
-/* Real content cards (callouts, code tabs, actual <Card /> components)
-   get the deliberate thick-border brutalist treatment */
-#nd-docs-layout [data-card]:not(h1 a):not(h2 a):not(h3 a):not(h4 a) {
-  border: 2px solid var(--klaridian-ink) !important;
-}
-
-/* Inline code: square, bordered, no background pill */
-#nd-docs-layout :not(pre) > code {
-  border: 1px solid var(--klaridian-ink);
-  background: #fff;
-  padding: 1px 5px;
-}
-
-/* Body copy reads large because the whole site is JetBrains Mono: a
-   monospace face at 16px has wider advance width and a taller x-height
-   than a proportional face at the same size, so the docs prose looks a
-   size bigger than it measures. Nudge the content text (and the oversized
-   Fumadocs lede) down so it reads like a normal 16px docs body. The MDX
-   body is wrapped in a .prose div under #nd-page; the prev/next pager
-   cards sit outside it, so scoping to .prose leaves them untouched.
-   Headings keep the preset scale. */
+/* Body copy sits at a comfortable docs size (Inter, not the old oversized
+   monospace). The MDX body is wrapped in .prose under #nd-page; the
+   prev/next pager cards sit outside it, so scoping to .prose leaves them
+   untouched. Headings keep the Fumadocs preset scale. */
 #nd-page .prose p,
 #nd-page .prose li,
 #nd-page .prose td {
-  font-size: 15px;
+  font-size: 15.5px;
   line-height: 1.7;
-}
-/* The lede/description is Fumadocs' text-lg (18px) — trim to 16px */
-#nd-page p.text-lg {
-  font-size: 16px;
 }

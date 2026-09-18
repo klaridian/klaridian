@@ -38,11 +38,8 @@ export function CopyInstallCommand() {
   };
 
   return (
-    <div
-      className="border-[3px] border-[var(--klaridian-ink)] bg-[var(--klaridian-ink)] text-[var(--klaridian-paper)] mx-auto max-w-[560px]"
-      style={{ boxShadow: "8px 8px 0 var(--klaridian-accent)" }}
-    >
-      <div className="flex justify-between items-center px-3.5 py-2 border-b border-[#444] text-[11px] text-[#999]">
+    <div className="border border-fd-border bg-fd-card rounded-xl mx-auto max-w-[560px] overflow-hidden">
+      <div className="flex justify-between items-center px-3.5 py-2 border-b border-fd-border text-[11px] text-fd-muted-foreground">
         <div className="flex gap-1.5">
           {CHANNELS.map((c, i) => (
             <button
@@ -53,8 +50,8 @@ export function CopyInstallCommand() {
               }}
               className={
                 i === active
-                  ? "px-2 py-0.5 font-extrabold text-[var(--klaridian-ink)] bg-[var(--klaridian-accent)]"
-                  : "px-2 py-0.5 hover:text-[var(--klaridian-paper)]"
+                  ? "px-2.5 py-0.5 rounded font-semibold text-[#04120b] bg-[var(--klaridian-accent)]"
+                  : "px-2.5 py-0.5 rounded hover:text-fd-foreground transition-colors"
               }
             >
               {c.label}
@@ -63,15 +60,15 @@ export function CopyInstallCommand() {
         </div>
         <button
           onClick={onCopy}
-          className="bg-[var(--klaridian-accent)] text-[var(--klaridian-ink)] font-extrabold text-[11px] px-2.5 py-1"
+          className="text-[var(--klaridian-accent)] font-semibold text-[11px] px-2.5 py-1 hover:opacity-80"
         >
           {copied ? "COPIED ✓" : "COPY"}
         </button>
       </div>
-      <pre className="px-5 pt-[22px] pb-[26px] text-sm overflow-x-auto text-left">
+      <pre className="px-5 pt-[22px] pb-[26px] text-sm overflow-x-auto text-left font-mono text-fd-foreground">
         <span className="text-[var(--klaridian-accent)]">$</span> {current.cmd}
         {"\n"}
-        <span className="text-[#888] text-xs block mt-2.5">
+        <span className="text-fd-muted-foreground text-xs block mt-2.5">
           {current.note}
         </span>
       </pre>

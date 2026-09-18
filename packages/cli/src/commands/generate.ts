@@ -28,6 +28,7 @@ import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../r
 import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
+import { getToolsFromOwnEngine, isOwnEngineSelected, ENGINE_ENV } from "../engine/own-engine.js";
 import { extractOutputSchemasByOperationId } from "../emit/response-schema.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
@@ -687,10 +688,29 @@ export function registerGenerateCommand(program: Command): void {
           // we can report a tool count and catch spec problems before
           // committing to a full project generation — mirrors the old
           // mapping-warnings UX without re-implementing the mapping itself.
-          const rawTools = await getToolsFromOpenApi(generationSpecPath, {
-            baseUrl: opts.baseUrl,
-            dereference: true,
-          });
+          // The spec→tool-DATA engine. Default: openapi-mcp-generator's
+          // getToolsFromOpenApi. SHADOW MODE (MCPFO-73, ARCHITECTURE.md §90):
+          // when KLARIDIAN_ENGINE=own, route through klaridian's OWN engine
+          // instead — a drop-in that returns the same McpToolDefinition shape, so
+          // the adapter seam below is unchanged. OFF by default: real users never
+          // hit this branch. Both accept the same (specPath, { baseUrl,
+          // dereference }) call. Parity is proven against the Phase-1 golden
+          // corpus in test/own-engine-parity.test.ts.
+          const useOwnEngine = isOwnEngineSelected();
+          const rawTools = useOwnEngine
+            ? await getToolsFromOwnEngine(generationSpecPath, {
+                baseUrl: opts.baseUrl,
+                dereference: true,
+              })
+            : await getToolsFromOpenApi(generationSpecPath, {
+                baseUrl: opts.baseUrl,
+                dereference: true,
+              });
+          if (useOwnEngine) {
+            warnings.push(
+              `Using klaridian's own spec→IR engine (${ENGINE_ENV}=own, shadow mode, MCPFO-73). This is experimental; the default engine remains openapi-mcp-generator.`
+            );
+          }
           // The single adapter seam (MCPFO-71, ARCHITECTURE.md §70): from here
           // on the codebase depends on klaridian's own ToolIR, never
           // openapi-mcp-generator's McpToolDefinition. Swapping the frontend

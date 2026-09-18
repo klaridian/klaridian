@@ -28,6 +28,10 @@ const FEATURES = [
     title: "Ships where you deploy",
     body: "Get a Dockerfile, a Cloudflare Worker, or a Fly.io app. klaridian writes the config and the platform's own CLI takes it from there.",
   },
+  {
+    title: "No black-box generator in the middle",
+    body: "klaridian parses and maps your OpenAPI spec itself, built on the standard swagger-parser library. The mapping is checked against real specs from Stripe, GitHub, and Kubernetes, so what comes out of your spec is predictable.",
+  },
 ];
 
 const STATS = [

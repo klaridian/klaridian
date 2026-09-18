@@ -20,6 +20,10 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
 
 The server listens on a network port instead. Use this when the server needs to run somewhere other than the client's own machine—for example, behind OAuth (see [OAuth 2.1](/docs/how-to/oauth)). This requires `streamable-http`—it doesn't work with `stdio`.
 
+### Built-in test client
+
+A streamable-http server serves a small, dependency-free HTML test client at its root (TypeScript target). With the server running, open `http://localhost:3000/` (or whatever `--port` you chose) in a browser: it connects to the server's `/mcp` endpoint, lists the tools the server exposes, and lets you call any one with a JSON arguments field. Because it just asks the running server what it can do, it works the same regardless of how the server was generated—per-tool or code-mode. MCP itself stays on `/mcp`—the client is only served on `GET /`. The client's source is vendored in the generated project (`src/test-client.ts`), so you can read, edit, or remove it.
+
 ### Deploying behind a public host
 
 The `--port` you pass at generation time is only the default. The generated streamable-http server reads three environment variables at runtime, so one build runs unchanged across environments:

@@ -57,6 +57,19 @@ Two checks run before handing off to the server:
 
 Once those pass, `start` hands stdin/stdout/stderr straight to the generated server (inherited I/O) — this matters for `stdio`-transport servers, where nothing may sit between the MCP client and the server on that stream.
 
+## Inspecting a running server
+
+Once the server is running, there are two zero-install ways to explore and call its tools before you wire it into a client:
+
+- **streamable-http: the built-in test client.** A TypeScript `--transport streamable-http` server serves a small, dependency-free HTML client at its root. Open `http://localhost:3000/` (or your `--port`) in a browser — it lists the tools the server exposes and lets you call any one with a JSON arguments field. MCP itself stays on `/mcp`. See [Transports](/docs/how-to/transports#built-in-test-client).
+- **stdio: the MCP Inspector.** A `stdio` server has no browser surface, so use the official [MCP Inspector](https://github.com/modelcontextprotocol/inspector), which spawns the built server over stdio and gives you a web UI to list and call its tools:
+
+  ```bash
+  npx @modelcontextprotocol/inspector node dist/server.bundle.js
+  ```
+
+  For a Python project, point it at the server module instead: `npx @modelcontextprotocol/inspector python server.py`.
+
 ## Python
 
 A Python project (`--language python`) follows the same three steps, with Python's own prepare and run commands. Generate it, prepare it once, then run it — the same generate-once, run-many shape as TypeScript:

@@ -135,6 +135,96 @@ test(
 );
 
 test(
+  "MCPFO-102: streamable-http server serves the built-in HTML test client at GET / while MCP still works on /mcp",
+  { timeout: 300_000 },
+  async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-emit-testclient-"));
+    const PORT = 3922;
+    try {
+      const tools = await getToolsFromOpenApi(PETSTORE_SPEC_PATH, { dereference: true });
+      const files = emitServerProject({
+        serverName: "petstore-testclient-e2e",
+        tools,
+        baseUrl: "https://petstore3.swagger.io/api/v3",
+        transport: "streamable-http",
+        port: PORT,
+      });
+      // The vendored, readable test-client source must be emitted (PLAN.md §7).
+      assert.ok(files["src/test-client.ts"], "src/test-client.ts is emitted for streamable-http");
+      assert.match(files["src/test-client.ts"], /TEST_CLIENT_HTML/, "exports TEST_CLIENT_HTML");
+      for (const [rel, content] of Object.entries(files)) {
+        const full = path.join(outDir, rel);
+        await mkdir(path.dirname(full), { recursive: true });
+        await writeFile(full, content, "utf-8");
+      }
+      await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outDir, timeout: 180_000 });
+      await execFileAsync("npm", ["run", "build"], { cwd: outDir, timeout: 120_000 });
+
+      const proc = spawn("node", ["dist/index.js"], { cwd: outDir, stdio: ["ignore", "pipe", "pipe"] });
+      let exitedEarly = false;
+      proc.on("exit", () => { exitedEarly = true; });
+      proc.stderr!.on("data", () => {});
+      try {
+        const origin = `http://127.0.0.1:${PORT}`;
+        const mcpUrl = `${origin}/mcp`;
+        const headers = {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          Origin: origin,
+        };
+        const post = async (body: unknown) => {
+          const r = await fetch(mcpUrl, { method: "POST", headers, body: JSON.stringify(body) });
+          const text = await r.text();
+          const line = text.split("\n").map((l) => l.replace(/^data:\s*/, "").trim()).find((l) => l.startsWith("{"));
+          return line ? JSON.parse(line) : null;
+        };
+
+        // Connection-based readiness (never log-based): poll /mcp until it answers.
+        await (async () => {
+          const deadline = Date.now() + 15000;
+          let lastErr: unknown;
+          while (Date.now() < deadline) {
+            if (exitedEarly) throw new Error("server exited before it became ready");
+            try {
+              await post({ jsonrpc: "2.0", id: 0, method: "initialize",
+                params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "probe", version: "1.0.0" } } });
+              return;
+            } catch (e) {
+              lastErr = e;
+              await new Promise((r) => setTimeout(r, 150));
+            }
+          }
+          throw new Error(`server did not become ready within 15s: ${String(lastErr)}`);
+        })();
+
+        // GET / returns the built-in HTML test client.
+        const rootRes = await fetch(`${origin}/`, { method: "GET", headers: { Origin: origin } });
+        assert.equal(rootRes.status, 200, "GET / responds 200");
+        assert.match(rootRes.headers.get("content-type") ?? "", /text\/html/, "GET / is HTML");
+        const html = await rootRes.text();
+        assert.match(html, /<title>MCP test client<\/title>/, "served page is the test client");
+        assert.match(html, /\/mcp/, "test client posts to /mcp");
+        assert.match(html, /application\/json, text\/event-stream/, "test client sends the required Accept header");
+
+        // The test client did NOT break MCP: tools/list over /mcp still works.
+        const init = await post({ jsonrpc: "2.0", id: 1, method: "initialize",
+          params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "e2e", version: "1.0.0" } } });
+        assert.ok(init?.result, "initialize still works after adding the GET / route");
+        const listResp = await post({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+        assert.ok(Array.isArray(listResp?.result?.tools), "tools/list still works over /mcp");
+        assert.equal(listResp.result.tools.length, tools.length, "all tools still listed");
+
+        assert.equal(exitedEarly, false, "server stayed alive across GET / and MCP POSTs");
+      } finally {
+        proc.kill("SIGKILL");
+      }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
   "v2 emit path: streamable-http server survives SEQUENTIAL requests (the MCPFO-10 crash is gone)",
   { timeout: 300_000 },
   async () => {

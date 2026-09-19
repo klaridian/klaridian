@@ -67,6 +67,19 @@ test(
       assert.equal(serverJson["$schema"], "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json");
       assert.equal(pkg.mcpName, serverJson.name, "package.json mcpName matches server.json name (ownership proof)");
 
+      // MCPFO-107 (§97) GATE A: the version is DERIVED from the spec's
+      // info.version (petstore = 1.0.27), not hardcoded 1.0.0, and is stamped
+      // identically into package.json, server.json (server + package level).
+      // --registry-name signalled publish intent, so the project is publishable:
+      // package.json is NOT private and server.json declares a matching npm
+      // packages[] entry (MCPFO-111). The runtime alignment is asserted below,
+      // after the server is spawned.
+      assert.equal(pkg.version, "1.0.27", "package.json version derived from spec info.version");
+      assert.equal(serverJson.version, "1.0.27", "server.json server-level version derived from spec");
+      assert.ok(Array.isArray(serverJson.packages) && serverJson.packages.length === 1, "publishable: server.json declares npm packages[]");
+      assert.equal(serverJson.packages[0].version, "1.0.27", "server.json package-level version aligned");
+      assert.notEqual(pkg.private, true, "publishable project: package.json is not private (MCPFO-111)");
+
       await execFileAsync("npm", ["install", "--no-audit", "--no-fund"], { cwd: outDir, timeout: 180_000 });
       await execFileAsync("npm", ["run", "build"], { cwd: outDir, timeout: 120_000 });
 
@@ -76,6 +89,8 @@ test(
           params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "t", version: "1" } } }) + "\n");
         const initResp = await readOneJsonRpcLine(proc);
         assert.ok(initResp.result, "initialize ok");
+        // GATE A (runtime): the live server announces the SAME derived version.
+        assert.equal(initResp.result.serverInfo?.version, "1.0.27", "runtime serverInfo.version aligned with the manifests");
 
         proc.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n");
         const listResp = await readOneJsonRpcLine(proc);
@@ -165,6 +180,64 @@ test("klaridian generate: relative spec server URL without --base-url warns (MCP
       "--name", "rel", "--base-url", "https://api.example.com/v3", "--license", "none",
     ]);
     assert.doesNotMatch(gen2.stderr, /Base URL is not absolute/, "no warning with absolute base-url");
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
+// MCPFO-107 (§97): --server-version overrides the spec's info.version, and a
+// non-semver override is rejected fail-loud at generation time.
+test("klaridian generate: --server-version overrides the spec info.version in every manifest", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-ver-override-"));
+  try {
+    await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
+      "--name", "ver", "--base-url", "https://x/api", "--license", "none",
+      "--server-version", "3.1.4",
+      "--registry-name", "io.github.acme/ver",
+    ]);
+    const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));
+    const sj = JSON.parse(await readFile(path.join(outDir, "server.json"), "utf-8"));
+    assert.equal(pkg.version, "3.1.4", "flag overrides spec info.version in package.json");
+    assert.equal(sj.version, "3.1.4", "flag overrides spec info.version in server.json");
+    assert.equal(sj.packages[0].version, "3.1.4", "package-level version aligned");
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("klaridian generate: a non-semver --server-version fails loudly", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-ver-bad-"));
+  try {
+    await assert.rejects(
+      execFileAsync("node", [
+        CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
+        "--name", "ver", "--base-url", "https://x/api", "--license", "none",
+        "--server-version", "v2",
+      ]),
+      /not a valid semantic version/i
+    );
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+});
+
+// MCPFO-111 (§97): without --registry-name the project is non-publishable —
+// package.json stays private and server.json declares no npm packages[].
+test("klaridian generate: non-publishable default keeps package.json private and server.json package-less", async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-nopublish-"));
+  try {
+    await execFileAsync("node", [
+      CLI_ENTRYPOINT, "generate", "--spec", PETSTORE_SPEC_PATH, "--out", outDir,
+      "--name", "np", "--base-url", "https://x/api", "--license", "none",
+    ]);
+    const pkg = JSON.parse(await readFile(path.join(outDir, "package.json"), "utf-8"));
+    const sj = JSON.parse(await readFile(path.join(outDir, "server.json"), "utf-8"));
+    assert.equal(pkg.private, true, "default project stays private (unpublishable)");
+    assert.ok(!("packages" in sj), "default server.json declares no npm packages[]");
+    // Both still carry the derived version (petstore = 1.0.27).
+    assert.equal(pkg.version, "1.0.27", "version still derived from spec");
+    assert.equal(sj.version, "1.0.27", "server.json version still derived from spec");
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }

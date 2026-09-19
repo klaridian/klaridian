@@ -47,7 +47,7 @@ function resolvePython(): string {
   throw new Error("No Python >=3.10 interpreter found on PATH (tried python3.11, python3, python).");
 }
 
-async function emitInto(outDir: string, opts: { transport: "stdio" | "streamable-http"; port?: number }) {
+async function emitInto(outDir: string, opts: { transport: "stdio" | "streamable-http"; port?: number; version?: string }) {
   const tools = await getToolsFromOwnEngine(PETSTORE_SPEC_PATH, { dereference: true });
   const files = pythonTarget.emitProject({
     serverName: "petstore-py-e2e",
@@ -55,6 +55,7 @@ async function emitInto(outDir: string, opts: { transport: "stdio" | "streamable
     baseUrl: PETSTORE_BASE_URL,
     transport: opts.transport,
     port: opts.port,
+    version: opts.version,
   });
   for (const [rel, content] of Object.entries(files)) {
     const full = path.join(outDir, rel);
@@ -105,8 +106,16 @@ test(
     const py = resolvePython();
     const outDir = await mkdtemp(path.join(tmpdir(), "klaridian-py-e2e-"));
     try {
-      const toolCount = await emitInto(outDir, { transport: "stdio" });
+      const toolCount = await emitInto(outDir, { transport: "stdio", version: "4.2.0" });
       const venvPy = await setupVenv(py, outDir);
+
+      // MCPFO-107 (§97) GATE A (Python): the version threads into pyproject.toml
+      // and the live server's serverInfo — the Python peer of the TS alignment
+      // proof in engine-v2.test.ts.
+      const pyproject = await import("node:fs/promises").then((fs) =>
+        fs.readFile(path.join(outDir, "pyproject.toml"), "utf-8")
+      );
+      assert.match(pyproject, /^version = "4\.2\.0"$/m, "pyproject.toml carries the resolved version");
 
       const proc = spawn(venvPy, ["server.py"], {
         cwd: outDir,
@@ -120,6 +129,7 @@ test(
         assert.equal(initResp.id, 1);
         assert.ok(initResp.result, "initialize returns a result");
         assert.equal(initResp.result.protocolVersion, "2025-11-25");
+        assert.equal(initResp.result.serverInfo?.version, "4.2.0", "runtime serverInfo.version aligned with pyproject (Gate A)");
 
         sendJsonRpc(proc, { jsonrpc: "2.0", method: "notifications/initialized" });
 

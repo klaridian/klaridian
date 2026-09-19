@@ -141,7 +141,8 @@ See [MCP Registry](/docs/how-to/mcp-registry) for the full guide.
 
 | Flag | What it does |
 |---|---|
-| `--registry-name <name>` | Reverse-DNS name for the official MCP Registry, for example io.github.&lt;you&gt;/&lt;server&gt;. When set, the emitted server.json and package.json mcpName use it. |
+| `--registry-name <name>` | Reverse-DNS name for the official MCP Registry, for example io.github.&lt;you&gt;/&lt;server&gt;. When set, the emitted server.json and package.json mcpName use it, and the project is emitted as publishable (package.json is not private and server.json declares an npm packages[] entry). |
+| `--server-version <version>` | Semantic version (for example 1.2.3) stamped onto the generated server's package.json, server.json, and runtime. Defaults to the spec's info.version if it is valid SemVer, otherwise 1.0.0. The MCP Registry requires a concrete SemVer string (no ranges). |
 
 ## klaridian init
 

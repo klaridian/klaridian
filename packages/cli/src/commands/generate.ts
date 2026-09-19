@@ -43,6 +43,7 @@ import type { OpenAPIV3 } from "openapi-types";
 import { getLicenseText, getPackageJsonLicenseField, isSupportedLicense, SUPPORTED_LICENSES } from "../render/license.js";
 import { isSwagger2Document, convertSwagger2ToOpenApi3, Swagger2ConversionError } from "../spec/swagger2-conversion.js";
 import { loadConfigFile, ConfigFileError, CONFIG_FILE_NAME } from "../config/config-file.js";
+import { resolveServerVersion } from "../server-version.js";
 import { createCliOutput, stageOf } from "../cli-output.js";
 import {
   parsePluginConfigFlags,
@@ -149,7 +150,7 @@ export const GENERATE_FLAG_DOC_GROUPS: {
     docPage: "/docs/how-to/oauth",
     flags: ["--oauth-issuer", "--oauth-jwks-uri", "--oauth-audience", "--oauth-required-scopes"],
   },
-  { category: "MCP Registry", docPage: "/docs/how-to/mcp-registry", flags: ["--registry-name"] },
+  { category: "MCP Registry", docPage: "/docs/how-to/mcp-registry", flags: ["--registry-name", "--server-version"] },
 ];
 
 export function registerGenerateCommand(program: Command): void {
@@ -266,7 +267,15 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--registry-name <name>",
-      "Reverse-DNS name for the official MCP Registry, for example io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it."
+      "Reverse-DNS name for the official MCP Registry, for example io.github.<you>/<server>. When set, the emitted server.json and package.json mcpName use it, and the project is emitted as publishable (package.json is not private and server.json declares an npm packages[] entry)."
+    )
+    .option(
+      // MCPFO-107 (§97): the generated server's SemVer version. Precedence:
+      // this flag > the spec's info.version > 1.0.0. Validated as SemVer at
+      // generation time (fail-loud); stamped onto the McpServer factory,
+      // package.json, and server.json (server + package level) as ONE value.
+      "--server-version <version>",
+      "Semantic version (for example 1.2.3) stamped onto the generated server's package.json, server.json, and runtime. Defaults to the spec's info.version if it is valid SemVer, otherwise 1.0.0. The MCP Registry requires a concrete SemVer string (no ranges)."
     )
     .option(
       // MCPFO-22.
@@ -356,6 +365,7 @@ export function registerGenerateCommand(program: Command): void {
         oauthAudience?: string;
         oauthRequiredScopes?: string;
         serverDescription?: string;
+        serverVersion?: string;
         force: boolean;
         json: boolean;
         quiet: boolean;
@@ -643,6 +653,19 @@ export function registerGenerateCommand(program: Command): void {
           // quiet. Only writes a temp spec when preparation actually changed
           // something, so the common path is untouched.
           const originalDoc = (await SwaggerParser.parse(specPath)) as OpenAPIV3.Document;
+          // MCPFO-107 (§97): resolve the generated server's version ONCE, here,
+          // from the clean parsed spec. Precedence: --server-version > spec
+          // info.version > 1.0.0, validated as SemVer (fail-loud) — a non-semver
+          // value would be mishandled by the MCP Registry (marked "latest").
+          const versionResolution = resolveServerVersion({
+            override: opts.serverVersion,
+            specVersion: originalDoc.info?.version,
+          });
+          if (!versionResolution.ok) {
+            fail(versionResolution.reason, "resolve-version");
+            return;
+          }
+          const serverVersion = versionResolution.version;
           const metaByOperationId = extractOperationMetaByOperationId(originalDoc);
           // MCPFO-33 (ARCHITECTURE.md §83): recover each operation's success
           // response schema with klaridian's OWN extraction — the embryo of the
@@ -855,6 +878,13 @@ export function registerGenerateCommand(program: Command): void {
             extraDependencies,
             description: opts.serverDescription,
             registryName: opts.registryName,
+            version: serverVersion,
+            // MCPFO-111 (§97): a --registry-name signals publish intent, so the
+            // project is emitted publishable (package.json not private +
+            // server.json declares an npm packages[] entry). Without it, the
+            // project stays private and server.json carries no packages[] — the
+            // two files never contradict each other.
+            publishable: Boolean(opts.registryName),
             auth: authConfig,
             forwardHeaders,
             authHook,

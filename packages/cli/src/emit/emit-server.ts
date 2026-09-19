@@ -68,6 +68,20 @@ export interface EmitOptions {
   /** Reverse-DNS MCP Registry name, e.g. "io.github.acme/petstore" (MCPFO-25).
    *  When set, package.json gains an `mcpName` and server.json uses it. */
   registryName?: string;
+  /** MCPFO-107 (§97): the SemVer version stamped onto the generated server —
+   *  the McpServer factory, package.json, and server.json (server + package
+   *  level) all use this ONE value. Resolved by generate.ts (flag > spec
+   *  info.version > default) and validated as SemVer before it gets here.
+   *  Defaults to 1.0.0 only if a caller omits it. */
+  version?: string;
+  /** MCPFO-111 (§97): whether the emitted project is meant to be PUBLISHED as a
+   *  package. When true, package.json is publishable (no `private: true`) and
+   *  server.json declares a matching npm `packages[]` entry. When false (the
+   *  default), package.json stays `private: true` and server.json carries NO
+   *  `packages[]` — so the two files never contradict each other about
+   *  publishability. Set true by generate.ts when a --registry-name signals
+   *  publish intent. */
+  publishable?: boolean;
   /** OAuth 2.1 Resource Server config (MCPFO-22). streamable-http only. */
   auth?: OAuthConfig;
   /** MCPFO-105 feature B: inbound HTTP header names to forward to the upstream
@@ -158,7 +172,7 @@ const SUPPORTED_PROTOCOL_VERSIONS = ["2026-07-28", "2025-11-25"];
 // other host (e.g. a Cloudflare Worker) call this to build a server instance.
 export function buildServer() {
   const server = new McpServer(
-    { name: ${JSON.stringify(opts.serverName)}, version: "1.0.0" },
+    { name: ${JSON.stringify(opts.serverName)}, version: ${JSON.stringify(opts.version ?? "1.0.0")} },
     { supportedProtocolVersions: SUPPORTED_PROTOCOL_VERSIONS }
   );
 
@@ -395,7 +409,7 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
     extractApiHost(opts.baseUrl);
   }
   const files: EmittedProject = {
-    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName, Boolean(opts.auth)),
+    "package.json": emitPackageJson(opts.serverName, transport, opts.extraDependencies, opts.registryName, Boolean(opts.auth), opts.version, Boolean(opts.publishable)),
     "tsconfig.json": emitTsconfig(),
     "src/server-factory.ts": emitServerFactoryModule(opts),
     "src/index.ts": emitIndex(opts),
@@ -405,6 +419,8 @@ export function emitServerProject(opts: EmitOptions): EmittedProject {
       description: opts.description ?? "",
       transport,
       registryName: opts.registryName,
+      version: opts.version,
+      publishable: Boolean(opts.publishable),
     }),
   };
   // MCPFO-102: for the HTTP transport, vendor the built-in test client as a

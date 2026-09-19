@@ -1,17 +1,56 @@
 ---
 title: Publishing to the MCP Registry
-description: Give your server a reverse-DNS name for the official MCP Registry.
+description: Name and version your server for the official MCP Registry.
 ---
 
 ## What this does
 
-The [official MCP Registry](https://modelcontextprotocol.io) expects servers to identify themselves with a reverse-DNS-style name, like `io.github.you/server-name`. Setting `--registry-name` at generation time writes that name into the generated `server.json` and into `package.json`'s `mcpName` field.
+The [official MCP Registry](https://modelcontextprotocol.io) expects servers to identify themselves with a reverse-DNS-style name, like `io.github.you/server-name`. Setting `--registry-name` at generation time writes that name into the generated `server.json` and `package.json`'s `mcpName` field — and marks the project as publishable (see below).
 
 ```bash
 npx klaridian generate --spec ./api.yaml --out ./my-server \
   --registry-name io.github.yourname/your-server
 ```
 
-## What this doesn't do
+## Versioning
 
-`--registry-name` only sets the name in the generated files. It doesn't publish anything—actually submitting your server to the registry is a separate step you do yourself, using the registry's own tools.
+Every generated server carries a version. klaridian **derives** it rather than inventing one, and stamps the *same* value into three places so they can never drift: the runtime the server reports at handshake, `package.json`, and `server.json` (both the server-level `version` and the package entry's).
+
+The version is resolved with this precedence:
+
+1. `--server-version <x.y.z>` — an explicit override.
+2. The spec's `info.version`, if it's valid [SemVer](https://semver.org).
+3. `1.0.0`, if neither is available.
+
+```bash
+# Use the spec's info.version automatically:
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --registry-name io.github.yourname/your-server
+
+# Or set it explicitly:
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --registry-name io.github.yourname/your-server \
+  --server-version 2.1.0
+```
+
+### Rules the registry enforces
+
+- **Use SemVer.** The registry parses `version` as SemVer to sort releases and pick which one is "latest." A value it can't parse is *always* marked latest, so a single non-SemVer version sinks your real ones. klaridian fails at generation time if your version isn't valid SemVer — pass `--server-version` to fix it rather than shipping something the registry mishandles.
+- **No ranges.** `^1.2.3`, `~1.2.3`, `>=1.2.3`, `1.2.*` are rejected — a version is one concrete point, not a range.
+- **Each version is unique and immutable.** Once you publish a version you can't edit or replace it; you supersede it by publishing a new one. There's no un-publish.
+- **Server version aligns with package version.** klaridian keeps `server.json` and `package.json` on the same number for you.
+
+### Cutting a new version
+
+klaridian is a generator, so a new version of your server is a **regenerate**: bump your spec's `info.version` (or pass a new `--server-version`), run `generate` again, and the new number flows into every manifest. Then republish. The registry's immutability rule is your safety net — it refuses to republish a version you've already shipped.
+
+## Publishing
+
+`--registry-name` prepares the files; it doesn't publish. Publishing is a step you run yourself once the project is generated:
+
+- **The package** goes to its package registry (for the TypeScript target, `npm publish`). Because you set `--registry-name`, the generated `package.json` is publishable and `server.json` declares a matching npm package entry.
+- **The registry metadata** goes to the MCP Registry with the [`mcp-publisher`](https://modelcontextprotocol.io) CLI: `mcp-publisher login github && mcp-publisher publish`.
+
+### Without `--registry-name`
+
+If you don't pass `--registry-name`, the server is generated to *run*, not to publish: `package.json` stays `private` and `server.json` declares no package entry (it still carries a valid name, description, and version). This keeps the two files honest — a private package is never paired with metadata claiming a published one.

@@ -75,15 +75,19 @@ async function detectProject(dir: string): Promise<
     if (!(await fileExists(path.join(dir, "server.json")))) {
       return { ok: false, reason: `No server.json in ${dir} — this doesn't look like a klaridian-generated project.` };
     }
-    // Transport lives in server.json (packages[0].transport.type).
+    // Transport is a CODE fact, recovered from the emitted entrypoint — NOT
+    // from server.json. server.json's packages[] (which used to carry
+    // transport.type) is only emitted for a publishable project (MCPFO-111),
+    // so reading it there would misdetect every non-publishable server as
+    // stdio. src/index.ts uses serveStdio for stdio and createMcpHandler for
+    // streamable-http; that distinction is always present regardless of
+    // publishability.
     let transport = "stdio";
     try {
-      const sj = JSON.parse(await readFile(path.join(dir, "server.json"), "utf-8")) as {
-        packages?: { transport?: { type?: string } }[];
-      };
-      transport = sj.packages?.[0]?.transport?.type ?? "stdio";
+      const indexSrc = await readFile(path.join(dir, "src", "index.ts"), "utf-8");
+      transport = /createMcpHandler/.test(indexSrc) ? "streamable-http" : "stdio";
     } catch {
-      return { ok: false, reason: `${path.join(dir, "server.json")} is not readable JSON. Is this a klaridian generate --out directory?` };
+      return { ok: false, reason: `${path.join(dir, "src", "index.ts")} is not readable. Is this a klaridian generate --out directory?` };
     }
     const port = await recoverPort(path.join(dir, "src", "index.ts"), /KLARIDIAN_PORT\s*\|\|\s*(\d+)\)/);
     const hasAuth = await fileExists(path.join(dir, "src", "auth.ts"));

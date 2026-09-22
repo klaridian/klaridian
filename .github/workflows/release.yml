@@ -11,8 +11,6 @@ name: Release
 # in platform-tagged wheels — so `pip install klaridian` needs zero Node. The
 # `--language python` generator target is the OUTPUT users emit (built on the
 # official mcp SDK, ships INSIDE this CLI); it is NOT what PyPI publishes.
-# packages/python-posthog-middleware is a FastMCP add-on deliberately NOT
-# published (see ARCHITECTURE.md §23).
 on:
   push:
     tags:

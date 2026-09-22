@@ -26,7 +26,3 @@ Tracing has one open standard—OpenTelemetry—so one `otel` plugin works with 
 ## One plugin at a time
 
 Today you can pick one plugin per server—`otel`, or one of the analytics plugins, not both together. Combining an engineering plugin and a product plugin on the same server is planned, not built yet.
-
-## Using FastMCP instead?
-
-If you're building with Python's FastMCP directly rather than generating with klaridian, there's a standalone [`PostHogMiddleware`](https://github.com/klaridian/klaridian/tree/main/packages/python-posthog-middleware) you can add with `mcp.add_middleware(PostHogMiddleware(...))`.

@@ -106,14 +106,13 @@ The generated server authenticates to the upstream API using **the actual OpenAP
 ```
 klaridian/
 ├── packages/
-│   ├── cli/                        # the klaridian CLI
-│   │   ├── src/
-│   │   │   ├── emit/               # emits the stateless SDK-v2 MCP server project from tool data
-│   │   │   ├── plugins/            # ObservabilityPlugin interface + otel/posthog/amplitude/mixpanel
-│   │   │   ├── curation/           # tool curation + interactive prompt
-│   │   │   └── commands/           # generate, deploy, start, init
-│   │   └── test/                   # end-to-end tests (real npm install + build + run)
-│   └── python-posthog-middleware/  # FastMCP-native PostHog middleware (see ARCHITECTURE.md §23)
+│   └── cli/                        # the klaridian CLI
+│       ├── src/
+│       │   ├── emit/               # emits the stateless SDK-v2 MCP server project from tool data
+│       │   ├── plugins/            # ObservabilityPlugin interface + otel/posthog/amplitude/mixpanel
+│       │   ├── curation/           # tool curation + interactive prompt
+│       │   └── commands/           # generate, deploy, start, init
+│       └── test/                   # end-to-end tests (real npm install + build + run)
 ├── examples/                       # petstore (test fixture) + annotated (x-klaridian demo)
 ├── spikes/                         # throwaway spikes that validated risky mechanics
 ├── PLAN.md                         # business/strategy plan

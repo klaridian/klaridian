@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       cli: ${{ steps.filter.outputs.cli }}
-      pymw: ${{ steps.filter.outputs.pymw }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -32,9 +31,6 @@ jobs:
           filters: |
             cli:
               - 'packages/cli/**'
-              - '.github/workflows/ci.yml'
-            pymw:
-              - 'packages/python-posthog-middleware/**'
               - '.github/workflows/ci.yml'
 
   cli:
@@ -62,26 +58,6 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: "Build + test (real E2E: npm install/build/run a generated server)"
         run: npm test
-
-  python-posthog-middleware:
-    name: Python PostHog middleware
-    needs: changes
-    if: ${{ needs.changes.outputs.pymw == 'true' }}
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/python-posthog-middleware
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: Test
-        run: pytest tests/
 
   docs-style:
     name: Documentation style (Vale, non-blocking)
@@ -114,8 +90,7 @@ jobs:
           VALE_STYLES_PATH: ${{ github.workspace }}/.github/vale/styles
         run: |
           vale README.md AGENTS.md PLAN.md ARCHITECTURE.md CONTRIBUTING.md \
-            SECURITY.md CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs \
-            packages/python-posthog-middleware/README.md
+            SECURITY.md CODE_OF_CONDUCT.md STYLE.md packages/site/content/docs
         continue-on-error: true
 
   docs-flags-sync:

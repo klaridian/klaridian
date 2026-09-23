@@ -3,7 +3,8 @@
 name: spike-no-network
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [feat/verifiable-no-phone-home]
 
 jobs:
   spike:

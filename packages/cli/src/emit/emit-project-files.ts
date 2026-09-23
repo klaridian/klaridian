@@ -85,14 +85,19 @@ export interface ServerJsonOptions {
   /** Reverse-DNS registry name, e.g. "io.github.acme/petstore". Defaults to a
    *  documented placeholder the author must customize before publishing. */
   registryName?: string;
-  /** npm package identifier to publish as; defaults to the server name. */
+  /** Package identifier to publish as; defaults to the server name. For npm this
+   *  is the package name; for PyPI the distribution name. */
   npmIdentifier?: string;
+  /** Which code registry the published package lives in. Drives registryType +
+   *  registryBaseUrl + runtimeHint in the packages[] entry. Defaults to "npm"
+   *  (the TypeScript target); the Python target passes "pypi". */
+  registryType?: "npm" | "pypi";
   version?: string;
-  /** MCPFO-111 (§97): when true, emit an npm `packages[]` entry (the project is
+  /** MCPFO-111 (§97): when true, emit a `packages[]` entry (the project is
    *  publishable). When false (default), omit `packages[]` entirely — a valid,
    *  package-less server.json (name/description/version are the only required
-   *  fields per the 2025-12-11 schema) that does NOT claim an npm package the
-   *  `private: true` package.json can't publish. */
+   *  fields per the 2025-12-11 schema) that does NOT claim a package the
+   *  `private: true` package.json / unpublished dist can't back. */
   publishable?: boolean;
 }
 
@@ -106,18 +111,27 @@ export function emitServerJson(opts: ServerJsonOptions): string {
   const registryName = opts.registryName ?? `io.github.OWNER/${opts.serverName}`;
   const version = opts.version ?? "1.0.0";
   const identifier = opts.npmIdentifier ?? opts.serverName;
-  // MCPFO-111 (§97): the npm packages[] entry is emitted ONLY for a publishable
-  // project, so a package-less (non-publishable) server never claims an npm
-  // package that its `private: true` package.json cannot publish. name +
+  const registryType = opts.registryType ?? "npm";
+  // Only the official public registries are accepted by the MCP Registry's
+  // package-ownership validator (registry.modelcontextprotocol.io); npm proves
+  // ownership via package.json `mcpName`, PyPI via an `mcp-name:` line in the
+  // README (the package description). runtimeHint tells clients how to launch
+  // the published package one-shot (npx / uvx).
+  const registryBaseUrl = registryType === "pypi" ? "https://pypi.org" : "https://registry.npmjs.org";
+  const runtimeHint = registryType === "pypi" ? "uvx" : "npx";
+  // MCPFO-111 (§97): the packages[] entry is emitted ONLY for a publishable
+  // project, so a package-less (non-publishable) server never claims a package
+  // that its `private: true` package.json / unpublished dist cannot back. name +
   // description + version are the only fields the 2025-12-11 schema requires,
   // so a packages-free server.json is fully valid.
   const packages = opts.publishable
     ? [
         {
-          registryType: "npm",
-          registryBaseUrl: "https://registry.npmjs.org",
+          registryType,
+          registryBaseUrl,
           identifier,
           version,
+          runtimeHint,
           transport: { type: opts.transport },
           environmentVariables: [
             {

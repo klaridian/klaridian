@@ -19,7 +19,7 @@
 - **The latest MCP protocol**—serves `2026-07-28` (via `server/discover`) and keeps `2025-11-25` clients working, on one server.
 - **Observability, one flag**—OpenTelemetry (`--plugin otel`, spans over OTLP to Datadog/Grafana/Honeycomb/New Relic/any OTLP backend) or product analytics (`--plugin posthog|amplitude|mixpanel`, an event per tool call). One plugin per server today.
 - **Tool curation**—choose which operations become tools by tag, path, or HTTP method, or interactively—so a large spec doesn't ship every operation as a tool.
-- **Structured, annotated tools**—each tool advertises an `outputSchema` + returns `structuredContent` (JSON Schema 2020-12), and carries a title plus read-only / destructive / idempotent / open-world hints.
+- **Structured, annotated tools**—each tool advertises an `outputSchema` + returns `structuredContent` (JSON Schema 2020-12), and carries a title plus read-only / destructive / idempotent / open-world hints. Binary/download responses (files, images, audio) come back as MCP resource links or inline media, never decoded into the model's context.
 - **Real upstream auth**—the generated server authenticates using each operation's actual OpenAPI `securityScheme`, from environment variables. [Details below.](#upstream-authentication)
 - **Ships where you deploy**—a built-in HTML test client for streamable-http servers, plus `deploy --target docker|cloudflare|fly`.
 - **Runs everywhere**—one CLI on npm, PyPI, and Homebrew, with prebuilt native binaries for macOS, Linux, and Windows.

@@ -21,6 +21,7 @@
 import type { JSONSchema7 } from "json-schema";
 import type { OpenAPIV3 } from "openapi-types";
 import { toJsonSchema2020 } from "./json-schema-dialect.js";
+import type { BinaryResponseMeta } from "./response-schema.js";
 
 /**
  * Author-supplied MCP annotations from klaridian's `x-klaridian` OpenAPI vendor
@@ -103,6 +104,11 @@ export interface OperationMeta {
    *  engine carries no response data at all. Present only when the success
    *  body is a JSON object (the gate that makes it a valid MCP `outputSchema`). */
   outputSchema?: JSONSchema7;
+  /** The operation's binary/download classification (MCPFO-78), when its success
+   *  response body is non-textual (image/audio/octet-stream/pdf/…). Drives the
+   *  spec-native binary handler (resource_link / inline image|audio) instead of
+   *  the default text proxy. Absent → text proxy (unchanged). */
+  binaryResponse?: BinaryResponseMeta;
 }
 
 /**
@@ -266,6 +272,12 @@ export interface ToolIR {
    *  Present only when the success body is a JSON object; the emitter advertises
    *  it as the tool's `outputSchema` and populates `structuredContent`. */
   outputSchema?: JSONSchema7;
+  /** The operation's binary/download classification (MCPFO-78), recovered from
+   *  the raw spec. Present only when the success body is non-textual; the
+   *  emitter then emits the spec-native binary handler (no-auto-redirect fetch →
+   *  `resource_link` for a Location/large body, inline `image`/`audio` for a
+   *  small media body) instead of decoding bytes into a text block. */
+  binaryResponse?: BinaryResponseMeta;
 }
 
 /**
@@ -315,6 +327,10 @@ export function mapMcpToolDefinitionToIR(
       meta?.outputSchema === undefined
         ? undefined
         : (toJsonSchema2020(meta.outputSchema) as JSONSchema7),
+    // MCPFO-78: binary/download classification. NOT a JSON Schema, so it is
+    // copied as-is (no 2020-12 re-dialect) — it only tells the emitter which
+    // handler shape to emit.
+    binaryResponse: meta?.binaryResponse,
   };
 }
 

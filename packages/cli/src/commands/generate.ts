@@ -29,7 +29,7 @@ import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../e
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
 import { getToolsFromOwnEngine } from "../engine/own-engine.js";
-import { extractOutputSchemasByOperationId } from "../emit/response-schema.js";
+import { extractOutputSchemasByOperationId, extractBinaryResponsesByOperationId } from "../emit/response-schema.js";
 import { resolvePluginConfig } from "../plugins/plugin.interface.js";
 import { otelPlugin } from "../plugins/otel/otel.plugin.js";
 import { posthogPlugin } from "../plugins/posthog/posthog.plugin.js";
@@ -680,6 +680,18 @@ export function registerGenerateCommand(program: Command): void {
             if (existing) existing.outputSchema = outputSchema;
             else metaByOperationId.set(operationId, { outputSchema });
           }
+          // MCPFO-78 (ARCHITECTURE.md §99): classify each operation whose success
+          // response body is non-textual (image/audio/octet-stream/pdf/…) so the
+          // emitter emits the spec-native binary handler (no-auto-redirect fetch →
+          // resource_link / inline image|audio) instead of decoding bytes into a
+          // text block. Same own-extraction, fail-soft seam as the outputSchema
+          // recovery above; merged onto the same per-operationId meta map.
+          const binaryResponses = await extractBinaryResponsesByOperationId(specPath, opts.allowExternalRefs);
+          for (const [operationId, binaryResponse] of binaryResponses) {
+            const existing = metaByOperationId.get(operationId);
+            if (existing) existing.binaryResponse = binaryResponse;
+            else metaByOperationId.set(operationId, { binaryResponse });
+          }
           const preparedDoc = prepareSpecForEngine(originalDoc);
           if (JSON.stringify(preparedDoc) !== JSON.stringify(originalDoc)) {
             const { dir, specPath: preparedPath } = await writeTempSpec(
@@ -786,6 +798,21 @@ export function registerGenerateCommand(program: Command): void {
               "curation-empty"
             );
             return;
+          }
+
+          // MCPFO-78 (ARCHITECTURE.md §99): fail-loud VISIBILITY of which
+          // surviving tools were classified as binary/download — their handlers
+          // return a resource_link / inline image|audio instead of the response
+          // bytes as text. Reported (not silent) like the base-URL / mapping
+          // warnings, so the author can confirm the classification matches intent.
+          const binaryTools = tools.filter((t) => t.binaryResponse);
+          if (binaryTools.length > 0) {
+            const names = binaryTools
+              .map((t) => `${t.name} (${t.binaryResponse!.kind})`)
+              .join(", ");
+            warn(
+              `Binary/download responses (returned as resource_link / inline media, not decoded text): ${names}`
+            );
           }
 
           // klaridian's own emitter (MCPFO-21, ARCHITECTURE.md sections 38/49).

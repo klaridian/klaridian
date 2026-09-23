@@ -1,0 +1,36 @@
+---
+title: Binary and download responses
+description: How generated tools return files, images, and audio without flooding the model context.
+---
+
+Some API operations return a **binary body**—a file download, an image, an audio recording, a PDF—rather than JSON or text. Returning those bytes as a text block would dump a decoded binary blob straight into the model's context: useless to the model, often large, and liable to blow past a client's tool-response size limit.
+
+klaridian detects these operations from your OpenAPI spec and generates a handler that surfaces the result the **MCP-native** way instead—a [resource link](https://modelcontextprotocol.io/specification/2026-07-28/server/resources) the client can fetch, or an inline image/audio block—never the raw bytes as text. This is identical in the TypeScript and Python targets, from the same spec.
+
+## When a tool is treated as a download
+
+A tool gets the binary handler when its success response (preferring `200`, then `201`, then any other `2xx`, then `default`) declares response content whose media types are **all non-textual**. Textual types—`text/*`, `application/json` (and `+json` variants), XML, `application/javascript`, form-encoded—always win and keep the normal text/JSON behavior, so there is no change for existing tools. Non-textual types—`image/*`, `audio/*`, `video/*`, `application/octet-stream`, `application/pdf`, `application/x-ndjson`, fonts, archives—trigger the download handler.
+
+At generation time klaridian prints which tools were classified, so you can confirm it matches your intent:
+
+```
+Binary/download responses (returned as resource_link / inline media, not decoded text): getRecordingAudio (audio), downloadFile (binary), getAvatar (image)
+```
+
+## What the generated tool returns
+
+The handler requests the upstream **without following redirects** and never decodes the body into a text block. It then picks, at runtime, based on the live response:
+
+- **A redirect to a download URL** (`3xx` with a `Location`, the common pre-signed-URL pattern for S3/blob storage): the tool returns a `resource_link` pointing at that resolved URL. Because klaridian doesn't follow the redirect, the URL is handed to the client as-is and the server's own credentials are never sent to the storage host.
+- **A small image or audio body** (`image/*` or `audio/*` with `Content-Length` ≤ 1 MB): the tool returns an inline `image` or `audio` content block (base64), so the model can actually see or hear it.
+- **Any other successful body** (a large file, a PDF, `application/octet-stream`): the tool returns a `resource_link` to the upstream URL, plus a note that fetching it needs the same credentials as the server. This is a best-effort link: when the upstream streams the bytes directly under authentication rather than issuing a pre-signed redirect, there is no public URL to hand back, so the client re-fetches with the same auth. klaridian never proxies the bytes through the model.
+- **An error** (`4xx`/`5xx`): the tool returns a short text message with the status and a truncated snippet of the error body, marked as a tool error—never the binary payload.
+
+## Why not just base64 the bytes into the result
+
+Inlining large binaries as base64 is the naive approach, and it breaks in production: base64 inflates the payload ~33%, the bytes crowd out the model's actual context, many clients cap tool-response sizes, and round-tripping a file through the model risks corruption. Returning a link (or a small, bounded inline block only for genuinely small media) keeps the file out of the context window while still giving the model a way to reach it. This mirrors how shipping vendor MCP servers handle file downloads.
+
+## Limitations
+
+- klaridian can only expose what the upstream offers. If an operation streams authenticated bytes with no pre-signed redirect, the returned link requires the same credentials—it's not a public URL.
+- Detection is driven by the spec's declared response media types. An operation that returns binary bytes but declares (or omits) a JSON response type in its spec will be treated as text; fix the spec's `content` types to get the download handler.

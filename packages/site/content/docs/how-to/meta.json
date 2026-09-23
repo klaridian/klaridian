@@ -9,6 +9,7 @@
     "curation",
     "code-mode",
     "target-language",
+    "binary-responses",
     "external-refs",
     "---Run & deploy---",
     "running-the-server",

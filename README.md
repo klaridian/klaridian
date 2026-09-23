@@ -45,6 +45,18 @@ paths:
 
 Building an MCP server means writing the server, then hand-wiring tracing and analytics from scratch. Datadog, PostHog, and Grafana ship MCP servers that let an agent *query* their platforms—they don't instrument a *new* server you're building. `klaridian` closes that gap.
 
+## No phone-home, and here's the proof
+
+klaridian collects no telemetry. The CLI has no analytics, no usage counter, no update check, no license ping—it never contacts any endpoint we operate. This matters most if you generate servers for regulated or sensitive APIs (healthcare, finance, EU data), where a tool that quietly phones home is exactly what a security review flags.
+
+The promise is verifiable, not just stated. `scripts/verify-no-phone-home.sh` runs `klaridian generate` from a local spec inside a network namespace with **no connectivity at all**, and checks a server is still produced—if the generator reached out anywhere it wasn't told to, an air-gapped run would fail. It runs on every CI build (the *No phone-home* check), and you can run it yourself:
+
+```bash
+bash scripts/verify-no-phone-home.sh
+```
+
+The only network calls the generator ever makes are ones you ask for by flag: a `--spec <url>` fetches that URL, `--oauth-issuer` does one OIDC discovery request to your identity provider, and `--allow-external-refs` (off by default) resolves remote `$ref`s in your spec. With a local spec and none of those, generating is fully offline. (Two things this doesn't cover, so we don't overstate it: the *generated server* does make network calls—that's its job, proxying your API and exporting to the OTel/analytics backends you configure—and installing klaridian downloads it from your package registry like any other package. The promise is about running the generator, and it holds.)
+
 ## Install
 
 klaridian is one CLI on every major channel—pick whichever fits your toolchain:

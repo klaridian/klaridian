@@ -119,3 +119,30 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Regenerate CLI reference and diff against the committed file
         run: npm run docs:check
+
+  no-phone-home:
+    name: No phone-home (offline generate proof)
+    needs: changes
+    if: ${{ needs.changes.outputs.cli == 'true' }}
+    runs-on: ubuntu-latest
+    # MCPFO-43: proves the "zero telemetry, ever" promise is REAL, not just
+    # stated. Runs `klaridian generate` from a LOCAL spec inside a network
+    # namespace with NO connectivity (sudo unshare -n) and asserts a server is
+    # still produced. If the generator phoned home (telemetry / update check /
+    # analytics beacon), an air-gapped generate would fail here. The same script
+    # is committed at scripts/verify-no-phone-home.sh so any user can reproduce
+    # this on their own machine -- the verification method is the trust pitch
+    # (README "No phone-home, and here's the proof"), not a claim to take on
+    # faith. Gated on the cli filter: only CLI code can change this behavior.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build CLI
+        working-directory: packages/cli
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Verify the generator makes zero unsolicited network calls
+        run: bash scripts/verify-no-phone-home.sh

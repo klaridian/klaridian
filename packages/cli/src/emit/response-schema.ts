@@ -130,6 +130,129 @@ export function pickSuccessObjectSchema(
 }
 
 /**
+ * MCPFO-78: how a binary/download operation's result should be surfaced. The
+ * `kind` is advisory (drives the generation-time report only); the emitted
+ * runtime handler is UNIFORM across kinds — it inspects the live response and
+ * decides between an inline `image`/`audio` block (small) and a `resource_link`
+ * (everything else / redirects). `contentType` is the first declared success
+ * content type, used only for the report.
+ */
+export interface BinaryResponseMeta {
+  kind: "image" | "audio" | "binary";
+  contentType: string;
+}
+
+/**
+ * Is this response media type TEXTUAL — i.e. safe to return to the model as a
+ * text block (the default proxy behaviour)? Textual = anything the LLM can read
+ * directly: `text/*`, JSON (`application/json`, `application/*+json`), XML,
+ * `application/javascript`, form-encoded. Everything else (image/audio/video,
+ * `application/octet-stream`, `application/pdf`, `application/x-ndjson`, fonts,
+ * archives) is BINARY and must not be decoded into the context.
+ *
+ * Case-insensitive; ignores any `; charset=...` parameter.
+ */
+export function isTextualContentType(contentType: string): boolean {
+  const ct = contentType.split(";")[0]!.trim().toLowerCase();
+  if (!ct) return false;
+  if (ct.startsWith("text/")) return true;
+  if (ct === "application/json" || /^application\/[a-z0-9.\-]*\+json$/.test(ct)) return true;
+  if (ct === "application/xml" || /^application\/[a-z0-9.\-]*\+xml$/.test(ct)) return true;
+  if (ct === "application/javascript" || ct === "application/ecmascript") return true;
+  if (ct === "application/x-www-form-urlencoded") return true;
+  return false;
+}
+
+/**
+ * Classify one operation's SUCCESS response as binary/download, or undefined
+ * when it should keep the default text proxy. Uses the same status-code
+ * precedence as `pickSuccessObjectSchema` (`200` → `201` → other `2xx` →
+ * `default`). A response is binary when it declares response content AND EVERY
+ * declared media type is non-textual — so a JSON (or text/xml) success body
+ * always wins and is never treated as binary (no regression to existing tools).
+ * A success response with NO `content` (e.g. `204`, or a bare description) is
+ * NOT binary — there is nothing to download.
+ *
+ * `kind` picks `image`/`audio` from the first declared type's top-level type,
+ * else `binary`; it only labels the generation-time report.
+ */
+export function detectBinaryResponse(
+  responses: OpenAPIV3.ResponsesObject | undefined
+): BinaryResponseMeta | undefined {
+  if (!responses || typeof responses !== "object") return undefined;
+  const codes = Object.keys(responses);
+  const ordered: string[] = [];
+  if (responses["200"]) ordered.push("200");
+  if (responses["201"]) ordered.push("201");
+  for (const c of codes) {
+    if (c === "200" || c === "201") continue;
+    if (/^2\d\d$/.test(c) || c === "2XX" || c === "2xx") ordered.push(c);
+  }
+  if (responses.default) ordered.push("default");
+
+  for (const code of ordered) {
+    const response = responses[code] as OpenAPIV3.ResponseObject | undefined;
+    const content = response?.content;
+    if (!content || typeof content !== "object") continue;
+    const mediaTypes = Object.keys(content);
+    if (mediaTypes.length === 0) continue;
+    // Any textual media type on this success response → treat as text (win).
+    if (mediaTypes.some(isTextualContentType)) return undefined;
+    // All non-textual → binary. Label the kind from the first declared type.
+    const first = mediaTypes[0]!.split(";")[0]!.trim().toLowerCase();
+    const kind: BinaryResponseMeta["kind"] = first.startsWith("image/")
+      ? "image"
+      : first.startsWith("audio/")
+        ? "audio"
+        : "binary";
+    return { kind, contentType: first };
+  }
+  return undefined;
+}
+
+/**
+ * MCPFO-78 (ARCHITECTURE.md §99): walk an OpenAPI spec and collect, per
+ * operationId, the operations whose SUCCESS response is a binary/download body
+ * (see `detectBinaryResponse`). Same own-extraction seam + fail-soft contract
+ * as `extractOutputSchemasByOperationId` (the engine carries no response data):
+ * a spec that won't dereference returns an empty map, so every tool keeps the
+ * default text proxy. A missing classification is lossless; guessing is not.
+ *
+ * Dereferenced so a `$ref`'d response object still exposes its `content`.
+ * SSRF-hardened identically (MCPFO-106): remote http(s) `$ref` fetches blocked
+ * by default; a remote `$ref` makes dereference throw → caught → empty map.
+ */
+export async function extractBinaryResponsesByOperationId(
+  specPath: string,
+  allowExternalRefs = false
+): Promise<Map<string, BinaryResponseMeta>> {
+  const map = new Map<string, BinaryResponseMeta>();
+  let doc: OpenAPIV3.Document;
+  try {
+    doc = (await SwaggerParser.dereference(
+      specPath,
+      allowExternalRefs
+        ? { resolve: { http: { safeUrlResolver: false } } }
+        : { resolve: { http: false } }
+    )) as OpenAPIV3.Document;
+  } catch {
+    return map;
+  }
+  for (const pathItem of Object.values(doc.paths ?? {})) {
+    if (!pathItem || typeof pathItem !== "object") continue;
+    for (const method of HTTP_METHODS) {
+      const op = (pathItem as Record<string, OpenAPIV3.OperationObject | undefined>)[method];
+      if (!op || typeof op !== "object") continue;
+      const operationId = op.operationId;
+      if (!operationId) continue;
+      const binary = detectBinaryResponse(op.responses);
+      if (binary) map.set(operationId, binary);
+    }
+  }
+  return map;
+}
+
+/**
  * Walk an OpenAPI spec (by path — dereferenced here via swagger-parser) and
  * collect the advertisable output schema per operationId. Keyed by operationId
  * to match how the rest of the emit pipeline threads recovered per-operation

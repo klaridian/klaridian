@@ -72,7 +72,7 @@ klaridian reads the response schema from the spec itself—including resolving `
 **When it doesn't** (the tool stays text-only, exactly as before):
 
 - the success body is an array, a primitive, or a top-level `oneOf`/`anyOf`/`allOf` (ambiguous to honour faithfully);
-- the operation has no JSON success body (for example a `204 No Content` or a binary download);
+- the operation has no JSON success body (for example a `204 No Content`, or a [binary download](/docs/how-to/binary-responses) returned as a resource link);
 - the operation declares no success response schema at all.
 
 This is deliberate. The MCP spec requires an `outputSchema` root to be an object, and the TypeScript SDK validates a successful result's `structuredContent` against the advertised schema. klaridian only advertises a schema it can faithfully honour: on a successful call the handler attaches the parsed body; on an error response it returns a tool error (no structured content expected); and if a response body isn't valid JSON, it falls back to a plain text result. You get precise output typing where the spec supports it, and no spurious validation failures where it doesn't.

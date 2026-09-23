@@ -215,6 +215,65 @@ function emitHandlerBody(tool: ToolIR, emitOpts?: ToolEmitOptions): string {
   if (hasBody) {
     lines.push(`      headers["Content-Type"] = ${JSON.stringify(tool.requestBodyContentType)};`);
   }
+
+  if (tool.binaryResponse) {
+    // MCPFO-78 (ARCHITECTURE.md §99): this operation's success body is binary
+    // (image/audio/octet-stream/pdf/…). Returning the decoded bytes as a text
+    // block would flood the model context and can exceed the client's tool-
+    // response cap. Instead we surface it the spec-native way, WITHOUT following
+    // redirects (so a pre-signed Location is handed back as a link, and the
+    // Bearer is never leaked to the storage host):
+    //   • 3xx + Location  → resource_link to the resolved download URL
+    //   • 2xx small image/audio (Content-Length ≤ 1 MB) → inline image|audio block
+    //   • 2xx otherwise    → resource_link to the (authenticated) upstream URL
+    //                        + a note that it needs the same credentials
+    //   • 4xx/5xx          → short text error (truncated body), never the bytes
+    lines.push(`      const resp = await fetch(url, {`);
+    lines.push(`        method: ${JSON.stringify(method)},`);
+    lines.push(`        headers,`);
+    lines.push(`        redirect: "manual" as const,`);
+    if (hasBody) {
+      lines.push(`        body: (args as Record<string, unknown>).requestBody !== undefined ? JSON.stringify((args as Record<string, unknown>).requestBody) : undefined,`);
+    }
+    lines.push(`      });`);
+    lines.push(`      const linkName = ${JSON.stringify(tool.name)};`);
+    // Redirect → link to the Location (pre-signed / public download URL).
+    lines.push(`      const location = resp.headers.get("location");`);
+    lines.push(`      if (resp.status >= 300 && resp.status < 400 && location) {`);
+    lines.push(`        const resolved = new URL(location, url).toString();`);
+    lines.push(`        return { content: [`);
+    lines.push(`          { type: "text" as const, text: "Binary/download response. Fetch the file at the resource link below." },`);
+    lines.push(`          { type: "resource_link" as const, name: linkName, uri: resolved, mimeType: resp.headers.get("content-type") ?? undefined },`);
+    lines.push(`        ] };`);
+    lines.push(`      }`);
+    // Error → short text, never the binary body.
+    lines.push(`      if (!resp.ok) {`);
+    lines.push(`        let errText = "";`);
+    lines.push(`        try { errText = (await resp.text()).slice(0, 500); } catch { errText = ""; }`);
+    lines.push(`        return { content: [{ type: "text" as const, text: "Upstream returned " + resp.status + (errText ? ": " + errText : "") }], isError: true };`);
+    lines.push(`      }`);
+    // 2xx: decide inline (small image/audio) vs link (everything else).
+    lines.push(`      const contentType = (resp.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();`);
+    lines.push(`      const lenHeader = resp.headers.get("content-length");`);
+    lines.push(`      const contentLength = lenHeader ? Number(lenHeader) : undefined;`);
+    lines.push(`      const inlineable = (contentType.startsWith("image/") || contentType.startsWith("audio/")) && contentLength !== undefined && contentLength <= 1_000_000;`);
+    lines.push(`      if (inlineable) {`);
+    lines.push(`        const bytes = new Uint8Array(await resp.arrayBuffer());`);
+    lines.push(`        let binary = "";`);
+    lines.push(`        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);`);
+    lines.push(`        const data = btoa(binary);`);
+    lines.push(`        const kind = contentType.startsWith("image/") ? "image" as const : "audio" as const;`);
+    lines.push(`        return { content: [{ type: kind, data, mimeType: contentType || ${JSON.stringify(tool.binaryResponse.contentType)} }] };`);
+    lines.push(`      }`);
+    // Large / non-media 2xx: link to the upstream URL (needs the same creds).
+    lines.push(`      if (typeof (resp.body as ReadableStream | null)?.cancel === "function") { try { await (resp.body as ReadableStream).cancel(); } catch { /* ignore */ } }`);
+    lines.push(`      return { content: [`);
+    lines.push(`        { type: "text" as const, text: "Binary/download response. Fetch it from the resource link below using the same credentials as this server (the upstream did not issue a pre-signed redirect)." },`);
+    lines.push(`        { type: "resource_link" as const, name: linkName, uri: url.toString(), mimeType: contentType || ${JSON.stringify(tool.binaryResponse.contentType)} },`);
+    lines.push(`      ] };`);
+    return lines.join("\n");
+  }
+
   lines.push(`      const resp = await fetch(url, {`);
   lines.push(`        method: ${JSON.stringify(method)},`);
   lines.push(`        headers,`);

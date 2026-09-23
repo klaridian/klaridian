@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Binary Fixture", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.example.com" }],
+  "paths": {
+    "/recordings/{id}/audio": {
+      "get": {
+        "operationId": "getRecordingAudio",
+        "summary": "Download a recording",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The audio file",
+            "content": { "audio/mpeg": { "schema": { "type": "string", "format": "binary" } } }
+          }
+        }
+      }
+    },
+    "/files/{id}": {
+      "get": {
+        "operationId": "downloadFile",
+        "summary": "Download a file",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file bytes",
+            "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } }
+          }
+        }
+      }
+    },
+    "/avatars/{id}": {
+      "get": {
+        "operationId": "getAvatar",
+        "summary": "Get an avatar image",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The avatar",
+            "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } }
+          }
+        }
+      }
+    },
+    "/pets": {
+      "get": {
+        "operationId": "listPets",
+        "summary": "List pets (JSON, must stay text)",
+        "responses": {
+          "200": {
+            "description": "A list of pets",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "pets": { "type": "array", "items": { "type": "string" } } } } } }
+          }
+        }
+      }
+    }
+  }
+}

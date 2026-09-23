@@ -184,6 +184,62 @@ function emitToolProxy(tool: ToolIR, fnName: string, emitOpts?: PythonToolEmitOp
     lines.push(`    body = arguments.get("requestBody")`);
     lines.push(`    content = json.dumps(body) if body is not None else None`);
   }
+
+  if (tool.binaryResponse) {
+    // MCPFO-78 (ARCHITECTURE.md §99): binary/download success body. Mirror the
+    // TS target: stream WITHOUT following redirects, never decode the bytes into
+    // a text block. 3xx+Location → resource_link to the download URL; small
+    // image/audio (Content-Length ≤ 1 MB) → inline image|audio; otherwise →
+    // resource_link to the (authenticated) upstream URL; 4xx/5xx → short text.
+    const ctFallback = pyStr(tool.binaryResponse.contentType);
+    lines.push(`    link_name = ${pyStr(tool.name)}`);
+    lines.push(`    async with httpx.AsyncClient(follow_redirects=False) as client:`);
+    lines.push(`        async with client.stream(`);
+    lines.push(`            ${pyStr(method)}, url, params=query, headers=headers,`);
+    lines.push(`            content=${hasBody ? "content" : "None"}, timeout=30.0,`);
+    lines.push(`        ) as resp:`);
+    // Redirect → link to Location.
+    lines.push(`            location = resp.headers.get("location")`);
+    lines.push(`            if 300 <= resp.status_code < 400 and location:`);
+    lines.push(`                resolved = str(httpx.URL(str(url)).join(location))`);
+    lines.push(`                return types.CallToolResult(content=[`);
+    lines.push(`                    types.TextContent(type="text", text="Binary/download response. Fetch the file at the resource link below."),`);
+    lines.push(`                    types.ResourceLink(type="resource_link", name=link_name, uri=resolved, mime_type=resp.headers.get("content-type")),`);
+    lines.push(`                ])`);
+    // Error → short text (read a little of the body), never the bytes.
+    lines.push(`            if not resp.is_success:`);
+    lines.push(`                try:`);
+    lines.push(`                    err_bytes = await resp.aread()`);
+    lines.push(`                    err_text = err_bytes[:500].decode("utf-8", "replace")`);
+    lines.push(`                except Exception:`);
+    lines.push(`                    err_text = ""`);
+    lines.push(`                return types.CallToolResult(`);
+    lines.push(`                    content=[types.TextContent(type="text", text="Upstream returned " + str(resp.status_code) + ((": " + err_text) if err_text else ""))],`);
+    lines.push(`                    is_error=True,`);
+    lines.push(`                )`);
+    // 2xx: inline small image/audio, else link.
+    lines.push(`            content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()`);
+    lines.push(`            len_header = resp.headers.get("content-length")`);
+    lines.push(`            content_length = int(len_header) if len_header and len_header.isdigit() else None`);
+    lines.push(`            inlineable = content_type.startswith(("image/", "audio/")) and content_length is not None and content_length <= 1_000_000`);
+    lines.push(`            if inlineable:`);
+    lines.push(`                raw = await resp.aread()`);
+    lines.push(`                data = base64.b64encode(raw).decode("ascii")`);
+    lines.push(`                kind = "image" if content_type.startswith("image/") else "audio"`);
+    lines.push(`                mime = content_type or ${ctFallback}`);
+    lines.push(`                if kind == "image":`);
+    lines.push(`                    block = types.ImageContent(type="image", data=data, mimeType=mime)`);
+    lines.push(`                else:`);
+    lines.push(`                    block = types.AudioContent(type="audio", data=data, mimeType=mime)`);
+    lines.push(`                return types.CallToolResult(content=[block])`);
+    // Large / non-media 2xx → link to upstream URL (needs same creds).
+    lines.push(`            return types.CallToolResult(content=[`);
+    lines.push(`                types.TextContent(type="text", text="Binary/download response. Fetch it from the resource link below using the same credentials as this server (the upstream did not issue a pre-signed redirect)."),`);
+    lines.push(`                types.ResourceLink(type="resource_link", name=link_name, uri=str(url), mime_type=(content_type or ${ctFallback})),`);
+    lines.push(`            ])`);
+    return lines.join("\n");
+  }
+
   lines.push(`    async with httpx.AsyncClient() as client:`);
   lines.push(`        resp = await client.request(`);
   lines.push(`            ${pyStr(method)}, url, params=query, headers=headers,`);

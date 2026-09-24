@@ -34,10 +34,24 @@ jobs:
               - '.github/workflows/ci.yml'
 
   cli:
-    name: CLI (Node)
+    # Two legs: the supported FLOOR and the newest line for each runtime a
+    # generated server targets (src/emit/runtime-versions.ts, MCPFO-121). A
+    # floor that CI never runs is an untested promise; runtime-versions.test.ts
+    # fails if this matrix stops including the declared floors.
+    name: CLI (Node ${{ matrix.node }}, Python ${{ matrix.python }})
     needs: changes
     if: ${{ needs.changes.outputs.cli == 'true' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: "22"
+            python: "3.11"
+          - node: "24"
+            python: "3.13"
+    env:
+      KLARIDIAN_TEST_PYTHON: python
     defaults:
       run:
         working-directory: packages/cli
@@ -45,11 +59,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node }}
       - name: Install Python (MCPFO-60.3 -- emit-python-e2e tests pip-install + spawn a generated Python MCP server)
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
       - name: Install Deno (MCPFO-30 -- execute_code sandbox E2E tests spawn a real deno subprocess)
         uses: denoland/setup-deno@v2
         with:

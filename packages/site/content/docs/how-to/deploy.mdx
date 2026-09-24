@@ -15,8 +15,8 @@ klaridian deploy ./my-server --target docker
 
 This writes a `Dockerfile` and `.dockerignore` into the project. The Dockerfile is vendor-neutral — it runs on Fly, Render, Railway, Cloud Run, or a self-hosted box. It's an ephemeral build input, not a maintained part of your generated project.
 
-- **TypeScript projects** get a multi-stage build: `npm run build` produces a self-contained bundle, and the runtime image carries only that bundle on a slim Node base.
-- **Python projects** get a slim Python image that installs `requirements.txt` and runs `server.py`.
+- **TypeScript projects** get a multi-stage build: `npm run build` produces a self-contained bundle, and the runtime image carries only that bundle on `node:24-slim`, the active Node.js LTS.
+- **Python projects** get a `python:3.13-slim` image that installs `requirements.txt` and runs `server.py`.
 
 Build and run it locally:
 

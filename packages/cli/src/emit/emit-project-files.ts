@@ -7,12 +7,13 @@
 // in spikes/021-sdk-v2-streamable-http.
 
 import type { Transport } from "./emit-server.js";
+import { NODE_FLOOR_MAJOR } from "./runtime-versions.js";
 
 const SDK_SERVER_VERSION = "^2.0.0";
 const SDK_NODE_VERSION = "^2.0.0";
 const ZOD_VERSION = "^4.2.0";
 const JOSE_VERSION = "^6.2.0";
-const ESBUILD_VERSION = "^0.24.0";
+const ESBUILD_VERSION = "^0.28.0";
 
 export function emitPackageJson(
   serverName: string,
@@ -64,13 +65,15 @@ export function emitPackageJson(
     scripts: {
       build: "tsc -p tsconfig.json && npm run bundle",
       bundle:
-        "esbuild dist/index.js --bundle --platform=node --target=node20 --format=esm --outfile=dist/server.bundle.js",
+        `esbuild dist/index.js --bundle --platform=node --target=node${NODE_FLOOR_MAJOR} --format=esm --outfile=dist/server.bundle.js`,
       start: "node dist/server.bundle.js",
     },
-    engines: { node: ">=20.0.0" },
+    engines: { node: `>=${NODE_FLOOR_MAJOR}` },
     dependencies,
     devDependencies: {
-      "@types/node": "^22.10.5",
+      // @types/node tracks the engines floor so the typings never offer an API
+      // the oldest supported Node lacks.
+      "@types/node": `^${NODE_FLOOR_MAJOR}.0.0`,
       typescript: "^5.7.3",
       esbuild: ESBUILD_VERSION,
     },

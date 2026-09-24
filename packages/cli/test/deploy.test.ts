@@ -23,8 +23,8 @@ const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstor
 test("docker: TypeScript project gets a multi-stage node Dockerfile over the bundle", () => {
   const files = emitDockerArtifacts({ language: "typescript", port: 3000 });
   const df = files["Dockerfile"];
-  assert.match(df, /FROM node:22-slim AS build/, "has a build stage");
-  assert.match(df, /FROM node:22-slim AS runtime/, "has a runtime stage");
+  assert.match(df, /FROM node:24-slim AS build/, "has a build stage");
+  assert.match(df, /FROM node:24-slim AS runtime/, "has a runtime stage");
   assert.match(df, /npm run build/, "builds the bundle");
   assert.match(df, /dist\/server\.bundle\.js/, "runs the self-contained bundle");
   assert.match(df, /KLARIDIAN_BIND_HOST=0\.0\.0\.0/, "binds all interfaces so the container is reachable");
@@ -35,7 +35,7 @@ test("docker: TypeScript project gets a multi-stage node Dockerfile over the bun
 test("docker: Python project gets a python-slim Dockerfile that installs requirements", () => {
   const files = emitDockerArtifacts({ language: "python", port: 8080 });
   const df = files["Dockerfile"];
-  assert.match(df, /FROM python:3\.12-slim/, "python base satisfies requires-python >=3.10");
+  assert.match(df, /FROM python:3\.13-slim/, "python base satisfies requires-python >=3.11");
   assert.match(df, /pip install --no-cache-dir -r requirements\.txt/, "installs deps into the image");
   assert.match(df, /server\.py.*--transport.*streamable-http/s, "runs server.py in http mode");
   assert.match(df, /KLARIDIAN_BIND_HOST=0\.0\.0\.0/, "binds all interfaces");
@@ -230,7 +230,7 @@ test("fly: emits the Docker artifacts plus a fly.toml that builds from the Docke
 
 test("fly: works for the Python target (a container is language-neutral)", () => {
   const files = emitFlyArtifacts({ language: "python", port: 8080, appName: "py-server" });
-  assert.match(files["Dockerfile"], /FROM python:3\.12-slim/, "Python container base");
+  assert.match(files["Dockerfile"], /FROM python:3\.13-slim/, "Python container base");
   assert.match(files["fly.toml"], /internal_port = 8080/, "internal_port matches the generated Python port");
 });
 

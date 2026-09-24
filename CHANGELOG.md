@@ -12,6 +12,7 @@ these are always called out under **Changed** or **Removed**.
 
 ### Changed
 
+- **Generated servers now require Node.js 22+ or Python 3.11+** (were Node 20+ and Python 3.10+). Node 20 is past end of life and Python 3.10 reaches it on 2026-10-31. klaridian's CI now runs the full end-to-end suite on both the oldest and newest supported line of each runtime. `klaridian deploy` images move to `node:24-slim` and `python:3.13-slim`, and generated TypeScript projects use esbuild 0.28.
 - The npm and PyPI package pages now describe both generation targets (TypeScript and Python), and the PyPI page shows the full project README, derived from the root README like the npm one, instead of a short stub. PyPI metadata gains OS classifiers, an SPDX license expression, and Documentation/Changelog/Issues links.
 
 ## [0.3.0] - 2026-09-18

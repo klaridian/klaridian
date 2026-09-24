@@ -40,6 +40,13 @@ npx klaridian generate --spec ./api.yaml --out ./my-server \
 python server.py --transport streamable-http --port 3000
 ```
 
+## Runtime requirements
+
+- **TypeScript servers** need Node.js 22 or later (`engines` in the generated `package.json`).
+- **Python servers** need Python 3.11 or later (`requires-python` in the generated `pyproject.toml`).
+
+These are the oldest release lines that are still supported upstream, and klaridian's CI runs its end-to-end suite on both the oldest and the newest supported line of each runtime. `klaridian deploy` builds on newer images: `node:24-slim` for TypeScript and `python:3.13-slim` for Python.
+
 ## What's the same across both languages
 
 - **Tools.** One tool per OpenAPI operation, with identical names and input schemas.

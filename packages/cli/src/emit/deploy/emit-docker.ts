@@ -21,14 +21,16 @@
 //     runtime stage copies ONLY that bundle onto a slim node base. No
 //     node_modules layer to carry.
 //   - Python: install requirements.txt into the image, then run server.py with
-//     an explicit ≥3.10 interpreter (generated projects declare
-//     requires-python >=3.10).
+//     a supported interpreter (base images and floors live in
+//     ../runtime-versions.ts, MCPFO-121).
 //
 // Both set the deploy-contract env the step-1 refactor (§79) reads so the
 // container is actually reachable: KLARIDIAN_BIND_HOST=0.0.0.0 (bind all
 // interfaces, not loopback) and EXPOSE/PORT. KLARIDIAN_ALLOWED_HOSTS is left to
 // deploy time (the public hostname isn't known at emit time) — the emitted
 // Dockerfile documents it.
+
+import { NODE_DOCKER_IMAGE, PYTHON_DOCKER_IMAGE, PYTHON_FLOOR } from "../runtime-versions.js";
 
 export type DeployLanguage = "typescript" | "python";
 
@@ -59,7 +61,7 @@ __pycache__
 `;
 }
 
-/** TypeScript: multi-stage build → run only the esbuild bundle on node:22-slim. */
+/** TypeScript: multi-stage build → run only the esbuild bundle on NODE_DOCKER_IMAGE. */
 function emitDockerfileTypeScript(port: number): string {
   return `# Emitted by \`klaridian deploy --target docker\` (ephemeral build input,
 # not a maintained part of the generated project — see klaridian ARCHITECTURE.md §78).
@@ -69,7 +71,7 @@ function emitDockerfileTypeScript(port: number): string {
 # node_modules needed at runtime), so the runtime stage stays small.
 
 # ---- build stage ----
-FROM node:22-slim AS build
+FROM ${NODE_DOCKER_IMAGE} AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --no-audit --no-fund
@@ -78,7 +80,7 @@ COPY src ./src
 RUN npm run build
 
 # ---- runtime stage ----
-FROM node:22-slim AS runtime
+FROM ${NODE_DOCKER_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/dist/server.bundle.js ./dist/server.bundle.js
@@ -97,15 +99,15 @@ CMD ["node", "dist/server.bundle.js"]
 `;
 }
 
-/** Python: install requirements into the image, run server.py on python:3.12-slim. */
+/** Python: install requirements into the image, run server.py on PYTHON_DOCKER_IMAGE. */
 function emitDockerfilePython(port: number): string {
   return `# Emitted by \`klaridian deploy --target docker\` (ephemeral build input,
 # not a maintained part of the generated project — see klaridian ARCHITECTURE.md §78).
 #
-# The generated Python project declares requires-python >=3.10; python:3.12-slim
+# The generated Python project declares requires-python >=${PYTHON_FLOOR}; ${PYTHON_DOCKER_IMAGE}
 # satisfies it. Dependencies are installed into the image from requirements.txt.
 
-FROM python:3.12-slim AS runtime
+FROM ${PYTHON_DOCKER_IMAGE} AS runtime
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt ./

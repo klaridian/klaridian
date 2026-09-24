@@ -10,7 +10,7 @@
 // wrong audience (401, RFC 8707), expired token (401), missing required scope
 // (403), and a valid token (200, real tool list).
 //
-// Requires a Python 3.10+ interpreter on PATH (python3.11/python3/python) — the
+// Requires a Python 3.11+ interpreter on PATH (python3.11/python3/python) — the
 // same discipline as emit-python-e2e.test.ts: throw loudly, never silently skip.
 
 import { test } from "node:test";
@@ -30,18 +30,21 @@ const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstor
 const ISSUER = "https://example-idp.test";
 const AUDIENCE = "https://mcp.example.com/mcp";
 
-/** Resolve a usable Python 3.10+ interpreter, or throw loudly (no silent skip). */
+/** Resolve a usable Python 3.11+ interpreter, or throw loudly (no silent skip). */
 function resolvePython(): string {
-  for (const candidate of ["python3.11", "python3", "python"]) {
+  // KLARIDIAN_TEST_PYTHON pins the interpreter (CI sets it per matrix leg, so
+  // the floor AND the newest Python are each really exercised, MCPFO-121).
+  const pinned = process.env.KLARIDIAN_TEST_PYTHON;
+  for (const candidate of pinned ? [pinned] : ["python3.11", "python3", "python"]) {
     try {
       const v = execFileSync(candidate, ["--version"], { encoding: "utf-8" });
       const m = v.match(/Python (\d+)\.(\d+)/);
-      if (m && (Number(m[1]) > 3 || (Number(m[1]) === 3 && Number(m[2]) >= 10))) return candidate;
+      if (m && (Number(m[1]) > 3 || (Number(m[1]) === 3 && Number(m[2]) >= 11))) return candidate;
     } catch {
       /* try next */
     }
   }
-  throw new Error("No Python >=3.10 interpreter found on PATH (tried python3.11, python3, python).");
+  throw new Error("No Python >=3.11 interpreter found on PATH (tried python3.11, python3, python).");
 }
 
 /** Starts a throwaway HTTP server serving one JWKS document. */

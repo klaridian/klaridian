@@ -10,9 +10,20 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-24
+
+### Added
+
+- `--server-version <semver>`: sets the generated server's version. By default it's now derived from the spec's `info.version` when that's valid SemVer, falling back to `1.0.0`, instead of always `1.0.0`. The version is identical in `package.json`/`pyproject.toml`, `server.json`, and the version the running server reports. A non-SemVer value stops generation with an error, because the MCP Registry mis-ranks versions it can't parse.
+- Binary and download responses (files, images, audio, PDF documents) are returned MCP-native instead of being decoded into text. A pre-signed redirect becomes a `resource_link` (your API credentials are never sent to the storage host). Small images and audio come back inline. Anything else becomes a link to the upstream URL. TypeScript and Python targets at parity.
+- The Python target now emits a registry-ready `server.json` (PyPI package, `uvx` runtime hint) and the PyPI ownership proof (`mcp-name:` in the generated README), so a Python server can be published to the MCP Registry like a TypeScript one.
+- Every generated code file now starts with a DO-NOT-EDIT header, including the TypeScript entry point, server factory, and Cloudflare Worker.
+- `scripts/verify-no-phone-home.sh`: runs `klaridian generate` from a local spec with no network access and checks that a server is still produced. You can run it yourself. CI runs it on every build.
+
 ### Changed
 
 - **Generated servers now require Node.js 22+ or Python 3.11+** (were Node 20+ and Python 3.10+). Node 20 is past end of life and Python 3.10 reaches it on 2026-10-31. klaridian's CI now runs the full end-to-end suite on both the oldest and newest supported line of each runtime. `klaridian deploy` images move to `node:24-slim` and `python:3.13-slim`, and generated TypeScript projects use esbuild 0.28.
+- The generated `package.json` is marked `private` and `server.json` omits `packages[]` unless you pass `--registry-name`. The two files no longer disagree about whether the server is publishable.
 - The npm and PyPI package pages now describe both generation targets (TypeScript and Python), and the PyPI page shows the full project README, derived from the root README like the npm one, instead of a short stub. PyPI metadata gains OS classifiers, an SPDX license expression, and Documentation/Changelog/Issues links.
 
 ## [0.3.0] - 2026-09-18

@@ -8,7 +8,7 @@
 
 > ⚡ Generate MCP servers with engineering + product observability built in—no manual instrumentation.
 
-**Status:** v0.3.0. `klaridian` is a CLI that turns an OpenAPI spec into a real, runnable [Model Context Protocol](https://modelcontextprotocol.io) server—in TypeScript or Python—with observability and tool curation wired in from the start. See [PLAN.md](PLAN.md) for strategy and [ARCHITECTURE.md](ARCHITECTURE.md) for design + decision history.
+**Status:** v0.4.0. `klaridian` is a CLI that turns an OpenAPI spec into a real, runnable [Model Context Protocol](https://modelcontextprotocol.io) server—in TypeScript or Python—with observability and tool curation wired in from the start. See [PLAN.md](PLAN.md) for strategy and [ARCHITECTURE.md](ARCHITECTURE.md) for design + decision history.
 
 **Contents:** [What you get](#what-you-get) · [Why](#why) · [Install](#install) · [Quickstart](#quickstart) · [Upstream auth](#upstream-authentication) · [Repository layout](#repository-layout) · [Tests](#running-the-tests) · [Development](#development-environment) · [License](#license) · [Contributing](#contributing)
 

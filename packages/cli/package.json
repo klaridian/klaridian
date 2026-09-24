@@ -1,6 +1,6 @@
 {
   "name": "klaridian",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "description": "Generate MCP servers in TypeScript or Python from an OpenAPI spec, with OpenTelemetry or product analytics and tool curation built in.",
   "keywords": [

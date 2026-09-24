@@ -1,28 +1,36 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "klaridian"
 version = "0.3.0"
-description = "Generate MCP servers from an OpenAPI spec, with observability and tool curation — native binary, no Node required."
+description = "Generate MCP servers in Python or TypeScript from an OpenAPI spec, with observability and tool curation. Native binary, no Node.js required."
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = "MIT"  # PEP 639 SPDX expression (needs hatchling>=1.27)
 authors = [{ name = "Ricardo Vasconcelos" }]
-keywords = ["mcp", "mcp-server", "model-context-protocol", "openapi", "swagger", "code-generator", "codegen", "observability", "opentelemetry", "ai-agents", "cli"]
+keywords = ["mcp", "mcp-server", "model-context-protocol", "openapi", "swagger", "code-generator", "codegen", "observability", "opentelemetry", "posthog", "amplitude", "mixpanel", "python", "typescript", "ai-agents", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Programming Language :: Python :: 3",
+  "Programming Language :: JavaScript",
   "Topic :: Software Development :: Code Generators",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: System :: Monitoring",
 ]
 
 [project.urls]
 Homepage = "https://klaridian.dev"
+Documentation = "https://klaridian.dev/docs"
 Repository = "https://github.com/klaridian/klaridian"
+Changelog = "https://github.com/klaridian/klaridian/blob/main/CHANGELOG.md"
+Issues = "https://github.com/klaridian/klaridian/issues"
 
 # The console script points at the shim, which execs the embedded binary.
 [project.scripts]

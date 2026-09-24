@@ -40,6 +40,8 @@ Versioning follows [semantic versioning](https://semver.org). The project is pre
 
 The `klaridian` CLI is published on npm (`npm i -g klaridian`, or `npx klaridian`) and on PyPI (`pip install klaridian` / `uv tool install klaridian` / `pipx install klaridian`). A Homebrew tap serving the same binary is rendered from `packaging/homebrew/klaridian.rb` (see `render-formula.sh`).
 
+Both registry pages show a README **derived from the root `README.md`**. Don't hand-edit a per-registry copy. `packages/cli/scripts/generate-readme.mjs` writes the npm README at `npm pack`/`npm publish` time, and the PyPI one (`--target pypi`) when the release builds each wheel. Both copies are git-ignored. The package *description* and *keywords* do live per registry, in `packages/cli/package.json` and `packaging/pypi/pyproject.toml`, so keep those two in step.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).

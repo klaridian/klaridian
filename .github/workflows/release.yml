@@ -212,6 +212,9 @@ jobs:
           KLARIDIAN_WHEEL_PLAT: ${{ matrix.wheel_plat }}
           KLARIDIAN_BINARY: ${{ github.workspace }}/dist/binary/klaridian${{ matrix.wheel_plat == 'win_amd64' && '.exe' || '' }}
         run: |
+          # The wheel's README (PyPI long_description) is derived from the root
+          # README, never hand-maintained (MCPFO-120).
+          node packages/cli/scripts/generate-readme.mjs --target pypi
           python -m pip install --upgrade pip build hatchling
           python -m build --wheel --outdir dist/wheels packaging/pypi
           ls -lh dist/wheels/

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// Generate packages/cli/README.md from the repository-root README.md so the npm
-// package page has a README (npm only renders a README that ships INSIDE the
-// published package, and the CLI package had none — see ARCHITECTURE.md).
+// Generate the registry READMEs from the repository-root README.md:
+//   --target npm  (default) -> packages/cli/README.md, so the npm package page
+//                   has a README (npm only renders a README that ships INSIDE
+//                   the published package, and the CLI package had none).
+//   --target pypi -> packaging/pypi/README.md, the wheel's long_description
+//                   (MCPFO-120; was a hand-written stub that drifted).
 //
 // The root README uses repo-relative links (assets/banner.png, ARCHITECTURE.md,
 // LICENSE, ...) that resolve on GitHub but 404 on npm. This rewrites every
@@ -46,7 +49,27 @@ function toAbsolute(target, base) {
   return `${base}/${path}${anchor}`;
 }
 
+// Target registry: `npm` (default, packages/cli/README.md) or `pypi`
+// (packaging/pypi/README.md, the wheel's long_description). Both derive from the
+// SAME root README so the two registry pages can't drift apart (MCPFO-120).
+const target = process.argv.includes("--target")
+  ? process.argv[process.argv.indexOf("--target") + 1]
+  : "npm";
+if (target !== "npm" && target !== "pypi") {
+  throw new Error(`generate-readme: unknown --target "${target}" (expected npm or pypi)`);
+}
+
 let md = readFileSync(join(repoRoot, "README.md"), "utf8");
+
+// PyPI's renderer (readme_renderer) doesn't give headings anchor ids, so
+// in-page `#section` links would go nowhere there. Point them at the same
+// anchor on the GitHub README instead. npm renders anchors, so it keeps them.
+if (target === "pypi") {
+  md = md.replace(
+    /\]\((#[^)\s]+)\)/g,
+    (match, anchor) => `](${blobBase}/README.md${anchor})`,
+  );
+}
 
 // Rewrite Markdown image/link targets: the `!` prefix distinguishes an image
 // (raw URL, must render) from a link (blob URL, must navigate).
@@ -68,7 +91,27 @@ md = md.replace(
     isAbsolute(target) ? match : `](${toAbsolute(target, blobBase)})`,
 );
 
-writeFileSync(join(cliDir, "README.md"), md);
+// PyPI: add a channel note right under the tagline (the first `> ` quote),
+// because a pip user needs to know this wheel is a native binary, not a
+// Python library, before reading the npx-first install section.
+if (target === "pypi") {
+  const note =
+    "> **This PyPI package is the klaridian CLI as a prebuilt native binary**—no Node.js, nothing to compile. " +
+    "Install it with `pip install klaridian`, `uv tool install klaridian`, or `pipx install klaridian`. " +
+    "It's the same CLI published to npm, shipped as platform-tagged wheels (the pattern ruff and uv use).";
+  const taglineAt = md.search(/^> .*$/m);
+  if (taglineAt === -1) {
+    throw new Error("generate-readme: no `> ` tagline found in the root README to anchor the PyPI note");
+  }
+  const lineEnd = md.indexOf("\n", taglineAt);
+  md = `${md.slice(0, lineEnd + 1)}\n${note}\n${md.slice(lineEnd + 1)}`;
+}
+
+const outPath =
+  target === "pypi"
+    ? join(repoRoot, "packaging", "pypi", "README.md")
+    : join(cliDir, "README.md");
+writeFileSync(outPath, md);
 console.log(
-  `generate-readme: wrote packages/cli/README.md (links pinned to ${ref})`,
+  `generate-readme: wrote ${outPath.slice(repoRoot.length + 1)} (links pinned to ${ref})`,
 );

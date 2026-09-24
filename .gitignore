@@ -23,6 +23,8 @@ __pycache__/
 # Generated from the root README.md by packages/cli/scripts/generate-readme.mjs
 # (prepack) so the npm package ships a README. Derived artifact — do not commit.
 packages/cli/README.md
+# Same generator (--target pypi) builds the PyPI wheel's README at release time.
+packaging/pypi/README.md
 
 # Throwaway design mockups (sketch skill) — not shipped
 /sketches/

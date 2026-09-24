@@ -16,6 +16,9 @@ export PATH="$HOME/.bun/bin:$PATH"
 echo "==> tsc build of the CLI"
 ( cd "$CLI_DIR" && npm run build >/dev/null )
 
+echo "==> derive the PyPI README from the root README"
+node "$CLI_DIR/scripts/generate-readme.mjs" --target pypi
+
 echo "==> bun --compile (host target) -> dist/binary/klaridian"
 mkdir -p "$REPO_ROOT/dist/binary"
 bun build "$CLI_DIR/dist/src/index.js" --compile \

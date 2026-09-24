@@ -10,6 +10,10 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Changed
+
+- The npm and PyPI package pages now describe both generation targets (TypeScript and Python), and the PyPI page shows the full project README, derived from the root README like the npm one, instead of a short stub. PyPI metadata gains OS classifiers, an SPDX license expression, and Documentation/Changelog/Issues links.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added

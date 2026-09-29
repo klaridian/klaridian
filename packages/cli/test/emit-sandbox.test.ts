@@ -32,7 +32,18 @@ test("buildDenoPermissionFlags scopes network access to exactly the API host, no
     "--allow-net=api.example.com",
     "--allow-read=/tmp/proj/dist",
     "--allow-env=KLARIDIAN_BASE_URL,KLARIDIAN_AUTH_TOKEN",
+    "--no-remote",
   ]);
+});
+
+test("the emitted sandbox runner disables remote imports and caps time and heap", () => {
+  // --allow-net does not govern module imports: without --no-remote, model code
+  // could leak data through an import URL on Deno's default import host list.
+  const src = emitSandboxRunner();
+  assert.match(src, /"--no-remote"/);
+  assert.match(src, /--max-old-space-size=/);
+  assert.match(src, /KLARIDIAN_SANDBOX_TIMEOUT/);
+  assert.match(src, /child\.kill\("SIGKILL"\)/);
 });
 
 test("buildDenoPermissionFlags never includes --allow-write, --allow-run, or --allow-ffi", () => {

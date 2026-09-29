@@ -33,6 +33,8 @@ import { emitServerJson } from "../emit-project-files.js";
 import { emitDispatchWrap } from "../plugin-dispatch/python.js";
 import { PYTHON_FLOOR } from "../runtime-versions.js";
 import { planUpstreamAuth, type UpstreamAuthDirective } from "../upstream-auth.js";
+import { extractApiHost } from "../emit-sandbox.js";
+import { emitPythonCodeModeFiles, DENO_PIP_SPEC } from "./emit-python-codemode.js";
 
 /** mcp SDK pin — the version validated end to end in spike 059. */
 const MCP_SDK_VERSION = "2.1.1";
@@ -715,7 +717,7 @@ function emitPyproject(
   opts: EmitOptions,
   extraDeps: string[],
   authEnabled: boolean,
-  extraModules?: { serverHeaders?: boolean; authHook?: boolean }
+  extraModules?: { serverHeaders?: boolean; authHook?: boolean; sandboxRunner?: boolean }
 ): string {
   const deps = [
     `"mcp==${MCP_SDK_VERSION}"`,
@@ -731,6 +733,7 @@ function emitPyproject(
     ...(authEnabled ? ["auth"] : []),
     ...(extraModules?.serverHeaders ? ["server_headers"] : []),
     ...(extraModules?.authHook ? ["auth_hook"] : []),
+    ...(extraModules?.sandboxRunner ? ["sandbox_runner"] : []),
   ];
   return `[project]
 name = ${pyStr(opts.serverName)}
@@ -766,7 +769,7 @@ function emitRequirements(extraDeps: string[], authEnabled: boolean): string {
   ].join("\n");
 }
 
-function emitReadme(opts: EmitOptions): string {
+function emitReadme(opts: EmitOptions, codeMode = false): string {
   const transport = opts.transport ?? "stdio";
   const runLine =
     transport === "streamable-http"
@@ -789,12 +792,30 @@ ${mcpNameProof}
 \`\`\`bash
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-export KLARIDIAN_BASE_URL=${opts.baseUrl || "https://api.example.com"}
+${codeMode ? CODE_MODE_INSTALL_LINE : ""}export KLARIDIAN_BASE_URL=${opts.baseUrl || "https://api.example.com"}
 # export KLARIDIAN_AUTH_TOKEN=... # if the upstream API needs a Bearer token
 ${runLine}
 \`\`\`
-`;
+${codeMode ? CODE_MODE_README_SECTION : ""}`;
 }
+
+const CODE_MODE_INSTALL_LINE = "python sandbox_runner.py --install   # once: installs the code sandbox's dependencies\n";
+
+const CODE_MODE_README_SECTION = [
+  "",
+  "## Code mode",
+  "",
+  "This server exposes two tools instead of one per API operation:",
+  "`search_docs` finds the right client function, and `execute_code` runs",
+  "TypeScript the model writes against the typed client in `sandbox/client.ts`.",
+  "",
+  "The code runs in Deno (installed by pip from the `deno` package), with",
+  "network access limited to the API host, read access limited to `sandbox/`,",
+  "no write access, and no module downloads at run time. See",
+  "`sandbox_runner.py` for the exact permissions and the",
+  "`KLARIDIAN_SANDBOX_TIMEOUT` / `KLARIDIAN_SANDBOX_MAX_HEAP_MB` limits.",
+  "",
+].join("\n");
 
 /**
  * MCPFO-105 feature B/C support: emits `server_headers.py`, a tiny per-request
@@ -885,11 +906,12 @@ export function emitPythonProject(opts: EmitOptions): EmittedProject {
       "OAuth (opts.auth) is only supported for --transport streamable-http on the Python target."
     );
   }
-  if ((opts.architecture ?? "tools") === "code-mode") {
-    // code-mode for Python is its own ticket (MCPFO-60.35).
-    throw new Error(
-      "The Python target does not support --architecture code-mode yet (tracked as MCPFO-60.35). Use the default 'tools' architecture, or --language typescript for code-mode."
-    );
+  // MCPFO-55 (§104): code mode runs model-written TypeScript in a Deno sandbox
+  // (emit-python-codemode.ts). extractApiHost fails loudly on a relative or
+  // missing base URL, as the TS target does.
+  const codeMode = (opts.architecture ?? "tools") === "code-mode";
+  if (codeMode) {
+    extractApiHost(opts.baseUrl);
   }
 
   // Extra Python deps a plugin contributes (pip requirement strings), passed
@@ -897,6 +919,9 @@ export function emitPythonProject(opts: EmitOptions): EmittedProject {
   const extraDeps = Object.entries(opts.extraDependencies ?? {}).map(([name, spec]) =>
     spec && spec.trim() ? `${name}${spec}` : name
   );
+  if (codeMode) {
+    extraDeps.push(`deno${DENO_PIP_SPEC}`);
+  }
 
   // MCPFO-79: auth is only ever wired for streamable-http (the stdio+auth
   // combination is rejected above). authEnabled gates the auth.py file, the
@@ -921,9 +946,10 @@ export function emitPythonProject(opts: EmitOptions): EmittedProject {
     "pyproject.toml": emitPyproject(opts, extraDeps, authEnabled, {
       serverHeaders: captureHeaders,
       authHook: authHookEnabled,
+      sandboxRunner: codeMode,
     }),
     "requirements.txt": emitRequirements(extraDeps, authEnabled),
-    "README.md": emitReadme(opts),
+    "README.md": emitReadme(opts, codeMode),
     // MCPFO-101: registry-ready output — a server.json so a Python-generated
     // server is one `mcp-publisher publish` away from the official MCP Registry,
     // same as the TypeScript target. registryType "pypi" so the packages[] entry
@@ -953,6 +979,12 @@ export function emitPythonProject(opts: EmitOptions): EmittedProject {
   // validation), the Python peer of the TS target's src/auth.ts.
   if (authEnabled) {
     files["auth.py"] = emitPythonAuthModule(opts.auth!);
+  }
+
+  // MCPFO-55: code mode replaces the per-operation tools.py with the
+  // search_docs + execute_code pair and adds the Deno sandbox files.
+  if (codeMode) {
+    Object.assign(files, emitPythonCodeModeFiles(opts.tools, opts.baseUrl));
   }
 
   // Plugin instrumentation files (src/instrumentation/<id>.py etc.) and any

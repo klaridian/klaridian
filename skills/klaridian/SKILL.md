@@ -38,7 +38,7 @@ By default every operation becomes a tool, so a large spec produces a large tool
 
 Tag filters and path/method filters combine: an operation must pass both. The result JSON tells you what happened: `toolCount` is what was emitted and `curatedFromTotal` is the operation count before filtering (`null` when nothing was filtered).
 
-To see the size first, generate into a scratch directory and read `toolCount`, then regenerate with filters. Ask the user which areas of the API the agent needs rather than guessing. If they need most of a large API, suggest `--architecture code-mode` instead: it emits two tools (`search_docs`, `execute_code`) over a typed client run in a Deno sandbox. Code-mode is TypeScript-only, needs an absolute `--base-url`, and the generated server needs Deno installed to run.
+To see the size first, generate into a scratch directory and read `toolCount`, then regenerate with filters. Ask the user which areas of the API the agent needs rather than guessing. If they need most of a large API, suggest `--architecture code-mode` instead: it emits two tools (`search_docs`, `execute_code`) over a typed client run in a Deno sandbox. Code-mode needs an absolute `--base-url`. With `--language typescript` the server needs Deno installed to run; with `--language python` Deno comes from `pip`, and the server needs `python sandbox_runner.py --install` once after `pip install`. In both, the model writes TypeScript.
 
 Never pass `--interactive` yourself. It needs a human at a terminal and fails with `INTERACTIVE_REQUIRES_TTY` when standard input isn't a TTY.
 

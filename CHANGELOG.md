@@ -13,6 +13,13 @@ these are always called out under **Changed** or **Removed**.
 ### Added
 
 - An [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) for the klaridian CLI, so coding agents such as Claude Code, Codex, or Cursor curate tools, read `--json` results, and run the generated server correctly. Install it with `npx skills add klaridian/klaridian`.
+- `--architecture code-mode` now works with `--language python`. The model still writes TypeScript, run by the same Deno sandbox as the TypeScript target. Deno is installed by `pip` (the official `deno` package), so a Python project needs no separate install step: `pip install -r requirements.txt`, then `python sandbox_runner.py --install` once.
+- Code-mode scripts are now limited to 30 seconds and a 256 MB heap by default (`KLARIDIAN_SANDBOX_TIMEOUT`, `KLARIDIAN_SANDBOX_MAX_HEAP_MB`), so one script can't hang or exhaust the server.
+
+### Fixed
+
+- `klaridian deploy --target docker` (and `fly`) produced a broken image for a code-mode server: the image had no Deno and no compiled client, so the first `execute_code` call failed. Code-mode images now include both.
+- The code-mode sandbox could still load modules from Deno's default import hosts (such as `esm.sh` and `jsr.io`), which `--allow-net` does not cover, so model code could send data to those hosts in an import URL. Remote imports are now disabled.
 
 ## [0.4.0] - 2026-09-24
 

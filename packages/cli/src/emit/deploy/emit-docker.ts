@@ -30,7 +30,7 @@
 // deploy time (the public hostname isn't known at emit time) — the emitted
 // Dockerfile documents it.
 
-import { NODE_DOCKER_IMAGE, PYTHON_DOCKER_IMAGE, PYTHON_FLOOR } from "../runtime-versions.js";
+import { DENO_DOCKER_IMAGE, NODE_DOCKER_IMAGE, PYTHON_DOCKER_IMAGE, PYTHON_FLOOR } from "../runtime-versions.js";
 
 export type DeployLanguage = "typescript" | "python";
 
@@ -42,6 +42,10 @@ export interface DockerEmitOptions {
   language: DeployLanguage;
   /** The port the server listens on (the generated default; PORT overrides at runtime). */
   port: number;
+  /** A code-mode project: execute_code spawns a Deno subprocess, so the image
+   *  must ship Deno (TS: copied from DENO_DOCKER_IMAGE; Python: the pip
+   *  `deno` package plus `sandbox_runner.py --install` at build time). */
+  codeMode?: boolean;
 }
 
 /**
@@ -61,8 +65,29 @@ __pycache__
 `;
 }
 
+/**
+ * Code mode (TS): execute_code runs model code with `deno run`, and the
+ * sandbox reads the compiled client from dist/. The bundle alone is not
+ * enough — copy the compiled client + sandbox runner and the Deno binary.
+ */
+const TS_CODE_MODE_LAYER = `# Code mode: execute_code spawns Deno against the compiled typed client, so the
+# image needs the Deno binary and dist/client.js (+ its zod dependency).
+COPY --from=${DENO_DOCKER_IMAGE} /deno /usr/local/bin/deno
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+`;
+
+/**
+ * Code mode (Python): Deno arrives with requirements.txt (the pip `deno`
+ * package); install the sandbox's npm dependency at build time so the running
+ * container needs no module downloads (the sandbox runs --no-remote).
+ */
+const PY_CODE_MODE_LAYER = `# Code mode: install the Deno sandbox's dependencies at build time.
+RUN python sandbox_runner.py --install
+`;
+
 /** TypeScript: multi-stage build → run only the esbuild bundle on NODE_DOCKER_IMAGE. */
-function emitDockerfileTypeScript(port: number): string {
+function emitDockerfileTypeScript(port: number, codeMode = false): string {
   return `# Emitted by \`klaridian deploy --target docker\` (ephemeral build input,
 # not a maintained part of the generated project — see klaridian ARCHITECTURE.md §78).
 #
@@ -85,7 +110,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/dist/server.bundle.js ./dist/server.bundle.js
 COPY package.json ./
-
+${codeMode ? TS_CODE_MODE_LAYER : ""}
 # Deploy contract (read by the generated server, klaridian ARCHITECTURE.md §79):
 #  - PORT           platform-injected; the server binds it (falls back to ${port}).
 #  - KLARIDIAN_BIND_HOST=0.0.0.0  bind all interfaces so the container is reachable.
@@ -100,7 +125,7 @@ CMD ["node", "dist/server.bundle.js"]
 }
 
 /** Python: install requirements into the image, run server.py on PYTHON_DOCKER_IMAGE. */
-function emitDockerfilePython(port: number): string {
+function emitDockerfilePython(port: number, codeMode = false): string {
   return `# Emitted by \`klaridian deploy --target docker\` (ephemeral build input,
 # not a maintained part of the generated project — see klaridian ARCHITECTURE.md §78).
 #
@@ -113,7 +138,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-
+${codeMode ? PY_CODE_MODE_LAYER : ""}
 # Deploy contract (read by the generated server, klaridian ARCHITECTURE.md §79):
 #  - PORT           platform-injected; the server binds it (falls back to ${port}).
 #  - KLARIDIAN_BIND_HOST=0.0.0.0  bind all interfaces so the container is reachable.
@@ -136,9 +161,9 @@ CMD ["python", "server.py", "--transport", "streamable-http"]
 export function emitDockerArtifacts(opts: DockerEmitOptions): DeployArtifacts {
   let dockerfile: string;
   if (opts.language === "typescript") {
-    dockerfile = emitDockerfileTypeScript(opts.port);
+    dockerfile = emitDockerfileTypeScript(opts.port, Boolean(opts.codeMode));
   } else if (opts.language === "python") {
-    dockerfile = emitDockerfilePython(opts.port);
+    dockerfile = emitDockerfilePython(opts.port, Boolean(opts.codeMode));
   } else {
     throw new Error(
       `Docker deploy: unsupported language "${opts.language as string}". Expected "typescript" or "python".`

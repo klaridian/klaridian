@@ -89,10 +89,11 @@ klaridian start .
 
 `klaridian start` launches the Python server through the project's own `.venv` interpreter, so activating the virtual environment first isn't required for `start` — it finds `.venv` on its own. If you'd rather run it directly, `python server.py` (with the venv active) does the same thing.
 
-Two things are TypeScript-only for now, and `generate` tells you so rather than silently doing nothing:
+One thing is TypeScript-only for now, and `generate` tells you so rather than silently doing nothing:
 
 - **`--install`.** The Python prepare step (create the venv, `pip install`) is a manual step today — run the three prepare commands above. `klaridian start` still refuses to run them for you, exactly as it refuses `npm install` for TypeScript: preparing touches the network, and running must not.
-- **`--architecture code-mode` and OAuth (`--oauth-*`).** Not yet supported for Python — see [Target language](/docs/how-to/target-language) for the current parity list.
+
+A Python code-mode server has one extra prepare step: `python sandbox_runner.py --install`, run once after `pip install`. See [Code-mode](/docs/how-to/code-mode#python-servers).
 
 ## Configuring a running server
 

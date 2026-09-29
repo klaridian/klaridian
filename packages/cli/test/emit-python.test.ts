@@ -164,10 +164,11 @@ test("python target's streamable-http variant emits the ASGI app + uvicorn entry
 
 test("python target fails loudly on out-of-scope configurations", async () => {
   const tools = await petstoreTools();
+  // MCPFO-55: code-mode is supported, but needs an absolute base URL to scope
+  // the sandbox's network permission (same fail-loud rule as the TS target).
   assert.throws(
-    () => pythonTarget.emitProject({ serverName: "x", tools, baseUrl: "https://h", architecture: "code-mode" }),
-    /code-mode/,
-    "code-mode is MCPFO-60.35, not this ticket"
+    () => pythonTarget.emitProject({ serverName: "x", tools, baseUrl: "/relative", architecture: "code-mode" }),
+    /not a valid absolute URL/
   );
   // MCPFO-79: OAuth on stdio is rejected (a stdio server MUST NOT implement
   // authorization per the MCP spec — it reads credentials from its environment).
@@ -247,4 +248,41 @@ test("every shipped plugin has a Python contribution (launch parity)", () => {
     assert.match(content, /async def wrapped\(tool_name, arguments, meta=None\)/, `${plugin.id} covers every call and receives request _meta`);
     assert.ok(Object.keys(plugin.python!.getDependencies()).length >= 1, `${plugin.id} declares Python deps`);
   }
+});
+
+// MCPFO-55 (§104): Python code mode = TypeScript run by a pip-installed Deno.
+test("python code-mode emits the sandbox files, the two-tool registry and the deno pip pin", async () => {
+  const tools = await petstoreTools();
+  const files = pythonTarget.emitProject({
+    serverName: "petstore-py-cm",
+    tools,
+    baseUrl: "https://petstore3.swagger.io/api/v3",
+    architecture: "code-mode",
+  });
+  for (const f of ["sandbox_runner.py", "sandbox/client.ts", "sandbox/deno.json", "tools.py", "server.py"]) {
+    assert.ok(files[f], `emits ${f}`);
+  }
+  // tools.py registers exactly search_docs + execute_code, not one per operation.
+  const names = [...files["tools.py"].matchAll(/^        "name": "([^"]+)"/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(names, ["execute_code", "search_docs"]);
+  assert.match(files["tools.py"], /API_HOST = "petstore3\.swagger\.io"/);
+  // Deno arrives via pip; the sandbox runner is a declared module.
+  assert.match(files["requirements.txt"], /^deno>=2\.9,<3$/m);
+  assert.match(files["pyproject.toml"], /"deno>=2\.9,<3"/);
+  assert.match(files["pyproject.toml"], /"sandbox_runner"/);
+  // The sandbox permissions match the TS target's model.
+  const runner = files["sandbox_runner.py"];
+  for (const flag of ["--no-remote", "--cached-only", "--allow-net={api_host}", "--allow-read={SANDBOX_DIR}", "--allow-env=KLARIDIAN_BASE_URL,KLARIDIAN_AUTH_TOKEN"]) {
+    assert.ok(runner.includes(flag), `sandbox_runner.py passes ${flag}`);
+  }
+  assert.doesNotMatch(runner, /--allow-(write|run|ffi|sys|all)/);
+  assert.match(files["sandbox/deno.json"], /"zod": "npm:zod@/);
+  assert.match(files["README.md"], /sandbox_runner\.py --install/);
+});
+
+test("python tools-architecture output is unchanged by code mode (no deno, no sandbox)", async () => {
+  const tools = await petstoreTools();
+  const files = pythonTarget.emitProject({ serverName: "p", tools, baseUrl: "https://petstore3.swagger.io/api/v3" });
+  assert.equal(files["sandbox_runner.py"], undefined);
+  assert.doesNotMatch(files["requirements.txt"], /deno/);
 });

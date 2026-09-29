@@ -252,7 +252,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option(
       "--architecture <id>",
-      "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
+      "tools (default) emits one MCP tool per OpenAPI operation; code-mode emits two tools (search_docs, execute_code): the model writes TypeScript against a typed client, run in a Deno-sandboxed subprocess (TypeScript and Python servers alike), for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec).",
       "tools"
     )
     .option(
@@ -485,15 +485,9 @@ export function registerGenerateCommand(program: Command): void {
             return;
           }
           const language = opts.language as TargetLanguage;
-          // Fail loudly on a language/architecture or language/oauth combination
-          // the target can't emit, at validation time rather than mid-emit.
-          if (language === "python" && architecture === "code-mode") {
-            fail(
-              `--language python does not support --architecture code-mode yet (tracked as MCPFO-60.35). Use the default 'tools' architecture, or --language typescript for code-mode.`,
-              "validate-language"
-            );
-            return;
-          }
+          // Fail loudly on a language/oauth combination the target can't emit,
+          // at validation time rather than mid-emit. (Python code-mode is
+          // supported since MCPFO-55: TypeScript run by a pip-installed Deno.)
           // MCPFO-22 (TypeScript) + MCPFO-79 (Python): OAuth resource-server
           // validation. stdio servers MUST
           // NOT implement authorization per spec (they get credentials from
@@ -952,7 +946,7 @@ export function registerGenerateCommand(program: Command): void {
           const transportSuffix = transport === "streamable-http" ? ` [streamable-http, port ${port}]` : "";
           const pluginSuffix = plugins.length > 0 ? ` + ${plugins.map((p) => p.id).join(", ")}` : "";
           const architectureSuffix = architecture === "code-mode" ? " [code-mode: execute_code + typed client, Deno-sandboxed]" : "";
-          const toolCountLabel = architecture === "code-mode" ? `1 tool (execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
+          const toolCountLabel = architecture === "code-mode" ? `2 tools (search_docs + execute_code, wrapping ${tools.length} operation(s))` : `${tools.length} tool(s)`;
           // The SDK/runtime blurb differs per target language (MCPFO-60.3).
           const runtimeLabel =
             language === "python"
@@ -964,7 +958,9 @@ export function registerGenerateCommand(program: Command): void {
           const httpRunArgs = transport === "streamable-http" ? ` --transport streamable-http --port ${port}` : "";
           const nextSteps =
             language === "python"
-              ? `cd ${opts.out} && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python server.py${httpRunArgs}`
+              ? architecture === "code-mode"
+                ? `cd ${opts.out} && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python sandbox_runner.py --install && python server.py${httpRunArgs}`
+                : `cd ${opts.out} && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python server.py${httpRunArgs}`
               : architecture === "code-mode"
               ? `cd ${opts.out} && npm install && npm run build && (install Deno if needed: https://deno.com/) && npm start`
               : `cd ${opts.out} && npm install && npm run build && npm start`;

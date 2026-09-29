@@ -22,6 +22,8 @@ export interface FlyEmitOptions {
   port: number;
   /** App name — the fly.toml `app` and the default allowed public host. */
   appName: string;
+  /** Code-mode project: the Dockerfile must ship Deno (see emit-docker.ts). */
+  codeMode?: boolean;
 }
 
 /** Files the fly target contributes: the Docker artifacts + fly.toml. */
@@ -70,7 +72,7 @@ primary_region = "cdg"
  */
 export function emitFlyArtifacts(opts: FlyEmitOptions): FlyArtifacts {
   return {
-    ...emitDockerArtifacts({ language: opts.language, port: opts.port }),
+    ...emitDockerArtifacts({ language: opts.language, port: opts.port, codeMode: opts.codeMode }),
     "fly.toml": emitFlyToml(opts),
   };
 }

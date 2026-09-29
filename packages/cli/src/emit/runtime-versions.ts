@@ -25,3 +25,8 @@ export const PYTHON_FLOOR = "3.11";
 
 /** Base image for `klaridian deploy --target docker|fly` on Python projects. */
 export const PYTHON_DOCKER_IMAGE = "python:3.13-slim";
+
+/** Deno image the TypeScript code-mode Dockerfile copies the `deno` binary from
+ *  (distroless variant: just the binary). The Python target gets Deno from the
+ *  `deno` pip package instead (emit-python-codemode.ts). */
+export const DENO_DOCKER_IMAGE = "denoland/deno:bin-2.9.7";

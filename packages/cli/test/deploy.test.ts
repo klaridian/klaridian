@@ -271,3 +271,18 @@ test(
     }
   }
 );
+
+// MCPFO-55: a code-mode server's execute_code spawns Deno, so the image must ship it.
+test("docker artifacts: code-mode images ship Deno (TS copies the binary + compiled client, Python installs the sandbox)", () => {
+  const ts = emitDockerArtifacts({ language: "typescript", port: 3000, codeMode: true })["Dockerfile"];
+  assert.match(ts, /COPY --from=denoland\/deno:bin-[0-9.]+ \/deno \/usr\/local\/bin\/deno/);
+  assert.match(ts, /COPY --from=build \/app\/dist \.\/dist/);
+  assert.match(ts, /COPY --from=build \/app\/node_modules \.\/node_modules/);
+  const py = emitDockerArtifacts({ language: "python", port: 3000, codeMode: true })["Dockerfile"];
+  assert.match(py, /RUN python sandbox_runner\.py --install/);
+  // Non-code-mode images are unchanged.
+  assert.doesNotMatch(emitDockerArtifacts({ language: "typescript", port: 3000 })["Dockerfile"], /deno/i);
+  assert.doesNotMatch(emitDockerArtifacts({ language: "python", port: 3000 })["Dockerfile"], /sandbox_runner/);
+  // fly reuses the docker emitter, so it inherits the layer.
+  assert.match(emitFlyArtifacts({ language: "python", port: 3000, appName: "x", codeMode: true })["Dockerfile"], /sandbox_runner\.py --install/);
+});

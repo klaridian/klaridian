@@ -28,7 +28,30 @@ Code passed to `execute_code` runs in an isolated **Deno subprocess**, not insid
 - Reading the generated client's own files—nothing else
 - No file writes, no subprocess spawning, no arbitrary file reads
 
-These boundaries are tested directly, not just declared: a cross-host request is blocked, a file write attempt is blocked, and reading outside the client's directory is blocked.
+- No module downloads while running (Deno's default import hosts are blocked too)
+
+These boundaries are tested directly, not just declared: a cross-host request is blocked, a file write attempt is blocked, reading outside the client's directory is blocked, and a remote import is blocked.
+
+Each script is also limited in time and memory, so one bad script can't hang or exhaust the server: 30 seconds and a 256 MB heap by default. Set `KLARIDIAN_SANDBOX_TIMEOUT` (seconds) and `KLARIDIAN_SANDBOX_MAX_HEAP_MB` on the server to change them.
+
+## Python servers
+
+Code-mode works with `--language python` too. The code the model writes is still **TypeScript**, run by the same Deno sandbox, because the model writes it, not you, and Python has no sandbox that can limit network access to one host the way Deno does.
+
+You don't install Deno yourself: it comes from the official [`deno` package on PyPI](https://pypi.org/project/deno/) listed in `requirements.txt`.
+
+```bash
+npx klaridian generate --spec ./api.yaml --out ./my-server \
+  --language python --architecture code-mode \
+  --base-url https://api.example.com
+cd my-server
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+python sandbox_runner.py --install   # once: installs the typed client's dependency
+python server.py
+```
+
+`sandbox_runner.py` shows the exact Deno permissions.
 
 ## Why this design
 
@@ -36,6 +59,7 @@ Independent benchmarks compared three approaches for letting an agent call a lar
 
 ## Things to know
 
+- A TypeScript code-mode server needs Deno installed where it runs. A Python one gets it from `pip`. `klaridian deploy --target docker` includes it in the image for both.
 - `--base-url` must be an absolute URL. The sandbox's network permission is fixed at generation time, so there's no way to fall back if it's missing.
 - Plugins (`--plugin otel`, `--plugin posthog`) aren't supported with code-mode yet—there's no per-operation hook to attach them to in the collapsed `execute_code` tool.
 - You pick one architecture per server. `tools` and `code-mode` don't mix in a single generation.

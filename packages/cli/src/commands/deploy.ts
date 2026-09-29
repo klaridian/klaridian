@@ -112,7 +112,9 @@ async function detectProject(dir: string): Promise<
     }
     const port = await recoverPort(serverPy, /KLARIDIAN_PORT"\)\s*or\s*(\d+)\)/);
     const hasAuth = await fileExists(path.join(dir, "auth.py"));
-    return { ok: true, language: "python", transport, port, hasAuth, isCodeMode: false };
+    // MCPFO-55: a Python code-mode project ships sandbox_runner.py.
+    const isCodeMode = await fileExists(path.join(dir, "sandbox_runner.py"));
+    return { ok: true, language: "python", transport, port, hasAuth, isCodeMode };
   }
 
   return {
@@ -241,9 +243,10 @@ export function registerDeployCommand(program: Command): void {
             language: detected.language,
             port: detected.port,
             appName: await serverNameFor(detected, dir),
+            codeMode: detected.isCodeMode,
           });
         } else {
-          artifacts = emitDockerArtifacts({ language: detected.language, port: detected.port });
+          artifacts = emitDockerArtifacts({ language: detected.language, port: detected.port, codeMode: detected.isCodeMode });
         }
         const names = Object.keys(artifacts);
 

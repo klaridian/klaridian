@@ -78,7 +78,7 @@ See [Architecture](/docs/how-to/code-mode) for the full guide.
 
 | Flag | What it does |
 |---|---|
-| `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits a single execute_code tool backed by a typed client, run in a Deno-sandboxed subprocess, for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
+| `--architecture <id>` | tools (default) emits one MCP tool per OpenAPI operation; code-mode emits two tools (search_docs, execute_code): the model writes TypeScript against a typed client, run in a Deno-sandboxed subprocess (TypeScript and Python servers alike), for large APIs where one-tool-per-operation is the wrong default. Requires an absolute --base-url (or an absolute server URL in the spec). |
 
 ### Target language
 

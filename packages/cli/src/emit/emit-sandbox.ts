@@ -18,6 +18,22 @@
 // without writing a temp file to disk per invocation.
 
 import { typescriptPluginDispatch } from "./plugin-dispatch/typescript.js";
+import { API_CALL_MARKER, API_CALLS_META_KEY } from "./emit-client.js";
+
+/** execute_code's hints; derive them with codeModeAnnotations(tools) (emit-tool.ts). */
+export interface ExecuteCodeAnnotations {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+/** Used only when no operation set is known: the MCP spec defaults (may modify, may destroy). */
+export const CONSERVATIVE_EXECUTE_CODE_ANNOTATIONS: ExecuteCodeAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: true,
+};
 
 /**
  * Extracts the `host` or `host:port` portion from an absolute base URL, in
@@ -94,10 +110,46 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TIMEOUT_MS = Number(process.env.KLARIDIAN_SANDBOX_TIMEOUT ?? "30") * 1000;
 const MAX_HEAP_MB = Number(process.env.KLARIDIAN_SANDBOX_MAX_HEAP_MB ?? "256");
 
+/** One upstream API call made by the script through the typed client (MCPFO-134). */
+export interface ApiCallRecord {
+  operation: string;
+  method: string;
+  path: string;
+  host: string;
+  status: number;
+  started_at: number;
+  duration_ms: number;
+}
+
 export interface SandboxResult {
   ok: boolean;
   stdout: string;
   stderr: string;
+  /** Upstream calls the script made, in order (at most MAX_API_CALLS). */
+  apiCalls: ApiCallRecord[];
+}
+
+const API_CALL_MARKER = ${JSON.stringify(API_CALL_MARKER)};
+const MAX_API_CALLS = 1000;
+
+/**
+ * Splits the typed client's per-call marker lines out of the script's stderr.
+ * A script could print a fake marker line itself; that only affects its own
+ * call's telemetry, never the sandbox boundary.
+ */
+function splitApiCalls(stderr: string): { stderr: string; apiCalls: ApiCallRecord[] } {
+  const apiCalls: ApiCallRecord[] = [];
+  const rest: string[] = [];
+  for (const line of stderr.split("\\n")) {
+    if (line.startsWith(API_CALL_MARKER)) {
+      if (apiCalls.length < MAX_API_CALLS) {
+        try { apiCalls.push(JSON.parse(line.slice(API_CALL_MARKER.length))); } catch { /* malformed: drop */ }
+      }
+    } else {
+      rest.push(line);
+    }
+  }
+  return { stderr: rest.join("\\n"), apiCalls };
 }
 
 /**
@@ -148,7 +200,7 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
     child.stderr.on("data", (c: Buffer) => { stderr += c.toString("utf-8"); });
     child.on("error", (err) => {
       // Deno binary not found, or failed to spawn at all.
-      resolve({ ok: false, stdout, stderr: stderr + \`\\\\nSandbox spawn error: \${err.message}\` });
+      resolve({ ok: false, stdout, stderr: stderr + \`\\\\nSandbox spawn error: \${err.message}\`, apiCalls: [] });
     });
     // Wall-clock limit: a hung script (e.g. an infinite loop) is killed.
     const timer = setTimeout(() => {
@@ -157,11 +209,12 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
     }, TIMEOUT_MS);
     child.on("close", (exitCode) => {
       clearTimeout(timer);
+      const split = splitApiCalls(stderr);
       if (timedOut) {
-        resolve({ ok: false, stdout, stderr: stderr + \`Execution timed out after \${TIMEOUT_MS / 1000}s.\` });
+        resolve({ ok: false, stdout, stderr: split.stderr + \`Execution timed out after \${TIMEOUT_MS / 1000}s.\`, apiCalls: split.apiCalls });
         return;
       }
-      resolve({ ok: exitCode === 0, stdout, stderr });
+      resolve({ ok: exitCode === 0, stdout, stderr: split.stderr, apiCalls: split.apiCalls });
     });
 
     child.stdin.write(code);
@@ -185,7 +238,11 @@ export async function runInSandbox(code: string, apiHost: string): Promise<Sandb
  * which runs in an isolated Deno subprocess with no access to the parent
  * process's OTel/PostHog SDK instances).
  */
-export function emitExecuteCodeToolBlock(apiHost: string, wrap?: { fn: string }): string {
+export function emitExecuteCodeToolBlock(
+  apiHost: string,
+  wrap?: { fn: string },
+  annotations: ExecuteCodeAnnotations = CONSERVATIVE_EXECUTE_CODE_ANNOTATIONS
+): string {
   const wiring = wrap ? { importStatement: "", wrapFunctionName: wrap.fn } : undefined;
   const handlerOpen = typescriptPluginDispatch.wrapHandlerOpen("execute_code", wiring);
   const handlerClose = typescriptPluginDispatch.wrapHandlerClose(wiring);
@@ -198,13 +255,20 @@ export function emitExecuteCodeToolBlock(apiHost: string, wrap?: { fn: string })
         "Code runs in an isolated sandbox with network access restricted to the API host only " +
         "(${apiHost}) and no filesystem write access. console.log(...) output is returned as the result.",
       inputSchema: z.object({ code: z.string().describe("TypeScript module body. Import functions from \\"./client.js\\" and console.log(...) the result.") }),
-      annotations: { title: "Execute Code", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      annotations: { title: "Execute Code", readOnlyHint: ${annotations.readOnlyHint}, destructiveHint: ${annotations.destructiveHint}, idempotentHint: ${annotations.idempotentHint}, openWorldHint: ${annotations.openWorldHint} },
     },
     ${handlerOpen}
       const { runInSandbox } = await import("./sandbox-runner.js");
       const result = await runInSandbox((args as { code: string }).code, ${JSON.stringify(apiHost)});
       const text = result.stdout + (result.stderr ? \`\\nstderr:\\n\${result.stderr}\` : "");
-      return { content: [{ type: "text" as const, text: text || "(no output)" }], isError: !result.ok };
+      // MCPFO-134: the upstream calls the script made ride in the result _meta,
+      // so a plugin wrapping this handler can record one child span / event
+      // per API operation. MCP clients ignore _meta keys they don't know.
+      return {
+        content: [{ type: "text" as const, text: text || "(no output)" }],
+        isError: !result.ok,
+        ...(result.apiCalls.length ? { _meta: { ${JSON.stringify(API_CALLS_META_KEY)}: result.apiCalls } } : {}),
+      };
 ${handlerClose},
   );`;
 }

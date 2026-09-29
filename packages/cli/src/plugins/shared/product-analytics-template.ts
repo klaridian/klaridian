@@ -17,6 +17,8 @@
 // emitted artifact. The output is byte-for-byte a normal, readable file a user
 // can audit; it just isn't hand-assembled three times inside klaridian.
 
+import { API_CALLS_META_KEY } from "../../emit/emit-client.js";
+
 /** The provider-specific pieces each analytics plugin supplies. */
 export interface ProductAnalyticsTemplate {
   /** Plugin id, e.g. "posthog" — only used in the generated header comment. */
@@ -71,6 +73,9 @@ export interface ProductAnalyticsTemplate {
  * generated project's `src/instrumentation/<id>.ts`.
  */
 export function buildProductAnalyticsInstrumentationFile(t: ProductAnalyticsTemplate): string {
+  // MCPFO-134: code mode — summarize the upstream calls execute_code's script
+  // made (from the result _meta) as two extra event properties. Empty for
+  // ordinary tools, so their events are unchanged.
   const flushBlock = t.flushHandlers ? `\n${t.flushHandlers}\n` : "";
   const stdioSafety = t.stdioSafetyLines.map((l) => `// ${l}`).join("\n");
 
@@ -93,6 +98,13 @@ if (!${t.credentialConstName}) {
 
 ${t.initStatements}
 ${flushBlock}
+/** Extra event properties for a code-mode execute_code result: which API operations the script called. */
+function apiCallProps(result: unknown): Record<string, unknown> {
+  const calls = (result as { _meta?: Record<string, unknown> } | undefined)?._meta?.[${JSON.stringify(API_CALLS_META_KEY)}];
+  if (!Array.isArray(calls) || calls.length === 0) return {};
+  return { api_call_count: calls.length, api_operations: calls.map((c: { operation: string }) => c.operation) };
+}
+
 /**
  * Wraps an MCP tool handler to capture a ${t.pluginId} product-analytics event
  * per call. Every generated tool is wired through this — no per-tool custom
@@ -106,8 +118,10 @@ export function ${t.wrapFunctionName}<T extends (args: any) => Promise<unknown>>
     // client, not a logged-in human) — every event is attributed to the
     // server itself. Revisit if/when per-caller identity becomes available.
     const ${t.identityConstName} = "mcp-server";
+    let apiProps: Record<string, unknown> = {};
     try {
       const result = await handler(args);
+      apiProps = apiCallProps(result);
       ${t.captureStatement({ identityConst: t.identityConstName, success: true })}
       return result;
     } catch (err) {

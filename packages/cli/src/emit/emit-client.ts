@@ -52,12 +52,23 @@ export function dedupeFunctionNames(names: string[]): string[] {
   });
 }
 
+/**
+ * Prefix of the stderr line the typed client writes per upstream call
+ * (MCPFO-134). The TS and Python sandbox runners strip these lines from the
+ * script's stderr and return them as structured records, which execute_code
+ * puts in its result's _meta under API_CALLS_META_KEY.
+ */
+export const API_CALL_MARKER = "@@klaridian-api-call@@ ";
+
+/** The execute_code result _meta key carrying the per-call records (MCP _meta naming: reverse-DNS prefix + name). */
+export const API_CALLS_META_KEY = "dev.klaridian/api-calls";
+
 /** Capitalizes the first character (used to derive a TS type name from a function name). */
 function capitalize(s: string): string {
   return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function emitFunctionBody(tool: ToolIR, inputTypeName: string): string {
+function emitFunctionBody(tool: ToolIR, inputTypeName: string, fnName: string): string {
   const params = (tool.executionParameters ?? []) as Array<{ name: string; in: string }>;
   const pathParams = params.filter((p) => p.in === "path");
   const queryParams = params.filter((p) => p.in === "query");
@@ -96,16 +107,27 @@ function emitFunctionBody(tool: ToolIR, inputTypeName: string): string {
   if (hasBody) {
     lines.push(`  headers["Content-Type"] = ${JSON.stringify(tool.requestBodyContentType)};`);
   }
-  lines.push(`  const resp = await fetch(url, {`);
-  lines.push(`    method: ${JSON.stringify(method)},`);
-  lines.push(`    headers,`);
+  // MCPFO-134: one record per upstream call, so a plugin wrapping execute_code
+  // sees which operations the script called (see recordApiCall below).
+  const callArgs = [JSON.stringify(fnName), JSON.stringify(method), JSON.stringify(tool.pathTemplate)].join(", ");
+  lines.push(`  const startedAt = Date.now();`);
+  lines.push(`  let resp: Response;`);
+  lines.push(`  try {`);
+  lines.push(`    resp = await fetch(url, {`);
+  lines.push(`      method: ${JSON.stringify(method)},`);
+  lines.push(`      headers,`);
   if (hasBody) {
     lines.push(
-      `    body: (parsed as Record<string, unknown>).requestBody !== undefined ? JSON.stringify((parsed as Record<string, unknown>).requestBody) : undefined,`
+      `      body: (parsed as Record<string, unknown>).requestBody !== undefined ? JSON.stringify((parsed as Record<string, unknown>).requestBody) : undefined,`
     );
   }
-  lines.push(`  });`);
+  lines.push(`    });`);
+  lines.push(`  } catch (err) {`);
+  lines.push(`    recordApiCall(${callArgs}, url, 0, startedAt);`);
+  lines.push(`    throw err;`);
+  lines.push(`  }`);
   lines.push(`  const text = await resp.text();`);
+  lines.push(`  recordApiCall(${callArgs}, url, resp.status, startedAt);`);
   lines.push(`  let data: unknown = text;`);
   lines.push(`  try { data = text ? JSON.parse(text) : undefined; } catch { /* non-JSON response body, keep as text */ }`);
   lines.push(`  if (!resp.ok) throw new ApiError(resp.status, resp.statusText, data);`);
@@ -133,7 +155,7 @@ export function emitClientModule(tools: ToolIR[]): string {
 export type ${inputTypeName} = z.infer<typeof ${inputTypeName}Schema>;
 
 export async function ${fnName}(args: ${inputTypeName}): Promise<ApiResult> {
-${emitFunctionBody(tool, inputTypeName)}
+${emitFunctionBody(tool, inputTypeName, fnName)}
 }`;
   });
 
@@ -164,6 +186,23 @@ export class ApiError extends Error {
 export interface ApiResult {
   status: number;
   data: unknown;
+}
+
+/**
+ * One line per upstream call on stderr, prefixed with a marker the sandbox
+ * runner strips out (MCPFO-134). It lets observability plugins wrapping
+ * execute_code record which API operations a script called, with status and
+ * timing. Only the operation, method, path template, host, port, status and
+ * timing are recorded: never arguments, headers or bodies.
+ */
+const API_CALL_MARKER = "${API_CALL_MARKER}";
+function recordApiCall(operation: string, method: string, path: string, url: URL, status: number, startedAt: number): void {
+  try {
+    const port = Number(url.port) || (url.protocol === "http:" ? 80 : 443);
+    console.error(API_CALL_MARKER + JSON.stringify({ operation, method, path, host: url.hostname, port, status, started_at: startedAt, duration_ms: Date.now() - startedAt }));
+  } catch {
+    // Recording must never break the call itself.
+  }
 }
 
 ${blocks.join("\n\n")}

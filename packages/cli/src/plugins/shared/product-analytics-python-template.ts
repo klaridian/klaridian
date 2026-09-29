@@ -15,6 +15,8 @@
 // plugin still emits its own readable, auditable module (section 7). Only
 // klaridian's own generator code is deduplicated.
 
+import { API_CALLS_META_KEY } from "../../emit/emit-client.js";
+
 /** The provider-specific pieces each Python analytics plugin supplies. */
 export interface PythonProductAnalyticsTemplate {
   /** Plugin id, e.g. "posthog" — used only in the generated header comment. */
@@ -79,6 +81,17 @@ if not ${t.credentialConstName}:
 
 ${t.initStatements}
 ${flushBlock}
+API_CALLS_META_KEY = ${JSON.stringify(API_CALLS_META_KEY)}
+
+
+def _api_call_props(result):
+    """MCPFO-134: extra event properties for a code-mode execute_code result
+    (which API operations the script called). Empty for ordinary tools."""
+    calls = (getattr(result, "meta", None) or {}).get(API_CALLS_META_KEY)
+    if not isinstance(calls, list) or not calls:
+        return {}
+    return {"api_call_count": len(calls), "api_operations": [c.get("operation") for c in calls]}
+
 
 def wrap_dispatch(dispatch):
     """Wrap the server's shared _dispatch(tool_name, arguments, meta) to capture a
@@ -93,8 +106,10 @@ def wrap_dispatch(dispatch):
         # server has no end-user identity (the caller is an MCP client, not a
         # logged-in human) — every event is attributed to the server itself.
         ${t.identityConstName} = "mcp-server"
+        api_props = {}
         try:
             result = await dispatch(tool_name, arguments, meta)
+            api_props = _api_call_props(result)
             ${t.captureStatement({ identityConst: t.identityConstName, success: true })}
             return result
         except Exception as err:  # noqa: BLE001

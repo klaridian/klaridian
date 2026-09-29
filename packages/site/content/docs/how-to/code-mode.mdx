@@ -61,5 +61,6 @@ Independent benchmarks compared three approaches for letting an agent call a lar
 
 - A TypeScript code-mode server needs Deno installed where it runs. A Python one gets it from `pip`. `klaridian deploy --target docker` includes it in the image for both.
 - `--base-url` must be an absolute URL. The sandbox's network permission is fixed at generation time, so there's no way to fall back if it's missing.
-- Plugins (`--plugin otel`, `--plugin posthog`) aren't supported with code-mode yet—there's no per-operation hook to attach them to in the collapsed `execute_code` tool.
+- Plugins work with code mode in both languages. `--plugin otel` records a span for each `execute_code` call and, under it, one child span for each API call the script made. The analytics plugins (`posthog`, `amplitude`, `mixpanel`) add the operations the script called to the event. Arguments and response bodies are never recorded.
+- `execute_code`'s annotations describe every operation it can reach. If any exposed operation deletes or replaces data, `execute_code` is marked destructive, so a client that asks for confirmation on destructive tools will ask for every script. To get a read-only `execute_code`, generate with only read operations (for example `--include-methods GET`).
 - You pick one architecture per server. `tools` and `code-mode` don't mix in a single generation.

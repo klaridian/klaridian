@@ -14,10 +14,13 @@ these are always called out under **Changed** or **Removed**.
 
 - An [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) for the klaridian CLI, so coding agents such as Claude Code, Codex, or Cursor curate tools, read `--json` results, and run the generated server correctly. Install it with `npx skills add klaridian/klaridian`.
 - `--architecture code-mode` now works with `--language python`. The model still writes TypeScript, run by the same Deno sandbox as the TypeScript target. Deno is installed by `pip` (the official `deno` package), so a Python project needs no separate install step: `pip install -r requirements.txt`, then `python sandbox_runner.py --install` once.
+- Observability plugins now see inside code mode's `execute_code`. `--plugin otel` adds one child span per API call the script made (`GET /pet/{petId}`, with operation, host, port, and status). `posthog`, `amplitude`, and `mixpanel` add `api_call_count` and `api_operations` to the event. Arguments and bodies are never recorded. TypeScript and Python targets at parity.
 - Code-mode scripts are now limited to 30 seconds and a 256 MB heap by default (`KLARIDIAN_SANDBOX_TIMEOUT`, `KLARIDIAN_SANDBOX_MAX_HEAP_MB`), so one script can't hang or exhaust the server.
 
 ### Fixed
 
+- Code mode's `execute_code` always claimed it was not destructive, even when the API had DELETE or PUT operations. Its annotations are now derived from the operations it exposes: destructive if any operation is, read-only only when all are.
+- A TypeScript server built with `--plugin otel` crashed at startup when run as `npm start` (the esbuild bundle). The bundle now provides `require` to the CommonJS OpenTelemetry packages. The TypeScript OTel plugin also logged a "duplicate registration" error on every start, and the Python one could lose a tool's span when the server exited right after the call. Both are fixed.
 - `klaridian deploy --target docker` (and `fly`) produced a broken image for a code-mode server: the image had no Deno and no compiled client, so the first `execute_code` call failed. Code-mode images now include both.
 - The code-mode sandbox could still load modules from Deno's default import hosts (such as `esm.sh` and `jsr.io`), which `--allow-net` does not cover, so model code could send data to those hosts in an import URL. Remote imports are now disabled.
 

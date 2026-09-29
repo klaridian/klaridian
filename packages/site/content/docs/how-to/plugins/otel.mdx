@@ -21,6 +21,10 @@ When an MCP client sends W3C trace context in the request `_meta` (the `tracepar
 
 You don't configure anything for this. The server registers the W3C trace-context and baggage propagators and extracts the parent context from every request that carries one. A request without trace context still produces a normal root span.
 
+## Code mode
+
+With `--architecture code-mode`, the model's script can call several API operations in one `execute_code` call. The `execute_code` span gets one child span per call, named after the HTTP method and path template (for example `GET /pet/{petId}`), with the operation name, host, port, and response status as attributes, following the OpenTelemetry HTTP client conventions. A call that returns an error status is marked as an error. Arguments and bodies aren't recorded.
+
 ## Point it at your backend
 
 The generated server reads standard OpenTelemetry environment variables—no klaridian-specific config:

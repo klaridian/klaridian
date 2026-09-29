@@ -95,3 +95,21 @@ test("emitExecuteCodeToolBlock with a wrap applies it to the execute_code handle
   assert.match(block, /wrapTool\("execute_code", async \(args\) => \{/);
   assert.match(block, /\}\)\)?,\s*\n\s*\);/s);
 });
+
+test("codeModeAnnotations: execute_code carries the worst case of the operations it can reach (MCPFO-134)", async () => {
+  const { codeModeAnnotations } = await import("../src/emit/emit-tool.js");
+  const op = (method: string, klaridian?: Record<string, boolean>) => ({ name: method, method, klaridian }) as any;
+  assert.deepEqual(codeModeAnnotations([op("get"), op("get")]), { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true });
+  assert.deepEqual(codeModeAnnotations([op("get"), op("post")]), { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+  assert.equal(codeModeAnnotations([op("get"), op("post"), op("delete")]).destructiveHint, true, "any DELETE makes execute_code destructive");
+  assert.equal(codeModeAnnotations([op("get"), op("put")]).idempotentHint, true, "GET+PUT are all idempotent");
+  assert.equal(codeModeAnnotations([op("post", { readOnly: true })]).readOnlyHint, true, "x-klaridian readOnly on a search POST counts");
+  assert.equal(codeModeAnnotations([op("get"), op("delete", { destructive: false })]).destructiveHint, false, "x-klaridian destructive:false counts");
+  assert.deepEqual(codeModeAnnotations([]), { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+});
+
+test("emitExecuteCodeToolBlock renders the given annotations, conservative (destructive) by default", () => {
+  assert.match(emitExecuteCodeToolBlock("api.example.com"), /readOnlyHint: false, destructiveHint: true/);
+  const ro = emitExecuteCodeToolBlock("api.example.com", undefined, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true });
+  assert.match(ro, /readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true/);
+});

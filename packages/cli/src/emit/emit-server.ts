@@ -27,7 +27,7 @@
 // use for the first time.
 
 import type { ToolIR } from "./ir.js";
-import { emitToolBlock } from "./emit-tool.js";
+import { emitToolBlock, codeModeAnnotations } from "./emit-tool.js";
 import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames } from "./emit-client.js";
 import { emitSandboxRunner, emitExecuteCodeToolBlock, extractApiHost } from "./emit-sandbox.js";
 import { buildOperationDocs, emitDocsDataModule, emitSearchDocsToolBlock } from "./emit-docs.js";
@@ -147,7 +147,7 @@ function emitServerFactoryModule(opts: EmitOptions): string {
   const toolEmitOpts = { forwardHeaders: opts.forwardHeaders, authHook: opts.authHook };
   const toolBlocks =
     architecture === "code-mode"
-      ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl), wrap), emitSearchDocsToolBlock()].join("\n\n")
+      ? [emitExecuteCodeToolBlock(extractApiHost(opts.baseUrl), wrap, codeModeAnnotations(opts.tools)), emitSearchDocsToolBlock()].join("\n\n")
       : opts.tools.map((t) => emitToolBlock(t, wrap, toolEmitOpts)).join("\n\n");
 
   const imports = [`import { McpServer } from "@modelcontextprotocol/server";`, `import * as z from "zod/v4";`];

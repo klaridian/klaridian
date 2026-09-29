@@ -114,6 +114,34 @@ export function resolveAnnotations(tool: ToolIR): {
   };
 }
 
+/**
+ * Annotations for code mode's execute_code (MCPFO-134). One tool fronts every
+ * exposed operation, so its hints must be true of the WHOLE set, never of a
+ * typical call. The MCP schema defines destructiveHint=false as "the tool
+ * performs only additive updates" and readOnlyHint=true as "does not modify
+ * its environment" (schema/2025-11-25/schema.ts, ToolAnnotations):
+ *   - readOnlyHint:    true only if every operation is read-only;
+ *   - destructiveHint: true if any operation is destructive;
+ *   - idempotentHint:  true only if every operation is idempotent;
+ *   - openWorldHint:   true — the script calls an external API.
+ * Built on resolveAnnotations, so x-klaridian overrides count here too.
+ */
+export function codeModeAnnotations(tools: ToolIR[]): {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+} {
+  const all = tools.map(resolveAnnotations);
+  const readOnly = all.length > 0 && all.every((a) => a.readOnlyHint);
+  return {
+    readOnlyHint: readOnly,
+    destructiveHint: !readOnly && all.some((a) => !a.readOnlyHint && a.destructiveHint),
+    idempotentHint: all.length > 0 && all.every((a) => a.readOnlyHint || a.idempotentHint),
+    openWorldHint: true,
+  };
+}
+
 /** Renders the TS statements that apply one upstream-auth directive (MCPFO-105).
  *  Header/cookie directives mutate `headers`; the query directive mutates `url`. */
 function emitAuthDirectiveTs(d: UpstreamAuthDirective): string[] {

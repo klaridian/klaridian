@@ -63,6 +63,7 @@ process.on("SIGTERM", () => flush().promise.finally(() => process.exit(0)));`,
           tool_name: toolName,
           duration_ms: Date.now() - startedAt,
           success: ${success},${success ? "" : "\n          error_message: String(err),"}
+          ...apiProps,
         },
         { device_id: ${identityConst} }
       );`,
@@ -102,6 +103,7 @@ atexit.register(amplitude.flush)`,
                         "tool_name": tool_name,
                         "duration_ms": int((time.monotonic() - started_at) * 1000),
                         "success": ${success ? "True" : "False"},${success ? "" : '\n                        "error_message": str(err),'}
+                        **api_props,
                     },
                 )
             )`,

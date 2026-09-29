@@ -70,7 +70,10 @@ test("MCPFO-90: otel TS instrumentation continues the caller's W3C trace from re
   const otel = contribs.find((c) => c.path === "src/instrumentation/otel.ts")!;
   const src = otel.content as string;
   // A W3C propagator is registered explicitly (don't rely on NodeSDK default).
-  assert.match(src, /setGlobalPropagator/, "registers a global propagator");
+  // Passed to NodeSDK (not setGlobalPropagator after start(): start() registers
+  // the global propagator itself, and a second registration is rejected).
+  assert.match(src, /textMapPropagator: new CompositePropagator/, "registers the W3C propagators via NodeSDK");
+  assert.doesNotMatch(src, /setGlobalPropagator/, "no second global registration (duplicate-registration error)");
   assert.match(src, /W3CTraceContextPropagator/, "uses the W3C trace context propagator");
   // The wrap reads the request _meta and extracts a parent context from it.
   assert.match(src, /ctx\.mcpReq\._meta/, "reads trace context from request _meta");

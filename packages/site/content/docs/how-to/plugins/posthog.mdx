@@ -23,6 +23,10 @@ node dist/src/index.js
 
 Tracing has one open standard—OpenTelemetry—so one `otel` plugin works with every backend. Product analytics doesn't have that: PostHog, Amplitude, and Mixpanel each need their own integration. `posthog` is the first; `amplitude` and `mixpanel` work the same way.
 
+## Code mode
+
+With `--architecture code-mode`, the `execute_code` event also carries `api_call_count` and `api_operations`: how many API calls the script made and which operations they were. Arguments and response bodies aren't sent.
+
 ## One plugin at a time
 
 Today you can pick one plugin per server—`otel`, or one of the analytics plugins, not both together. Combining an engineering plugin and a product plugin on the same server is planned, not built yet.

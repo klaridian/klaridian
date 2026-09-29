@@ -20,6 +20,7 @@ import type {
   ResolvedPluginConfig,
   TemplateContribution,
 } from "../plugin.interface.js";
+import { API_CALLS_META_KEY } from "../../emit/emit-client.js";
 
 const CONFIG_SCHEMA: PluginConfigField[] = [
   {
@@ -89,7 +90,7 @@ function generateInstrumentationFile(config: ResolvedPluginConfig): string {
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { trace, context as otelContext, propagation, SpanStatusCode, diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
+import { trace, context as otelContext, propagation, SpanKind, SpanStatusCode, diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
 import { CompositePropagator, W3CTraceContextPropagator, W3CBaggagePropagator } from "@opentelemetry/core";
 
 // Route OTel's own internal diagnostics to stderr explicitly — never stdout,
@@ -98,30 +99,63 @@ diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ERROR);
 
 const OTLP_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || ${JSON.stringify(config.otlpEndpoint)};
 
+// MCPFO-90: the W3C propagators are set explicitly (don't rely on the NodeSDK
+// default) so incoming trace context in an MCP request's _meta is understood.
+// The MCP spec (2026-07-28, SEP-414) carries W3C Trace Context in the request
+// _meta keys traceparent/tracestate/baggage; extracting them lets a generated
+// server's tool spans join the caller's distributed trace. Passed to NodeSDK
+// rather than set after sdk.start(): start() registers the global propagator
+// itself, and a second registration is rejected ("duplicate registration").
 const sdk = new NodeSDK({
   serviceName: ${JSON.stringify(config.serviceName)},
   traceExporter: new OTLPTraceExporter({ url: OTLP_ENDPOINT }),
+  textMapPropagator: new CompositePropagator({
+    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
+  }),
 });
 
 sdk.start();
 
-// MCPFO-90: register the W3C propagators explicitly (don't rely on the NodeSDK
-// default) so incoming trace context in an MCP request's _meta is understood.
-// The MCP spec (2026-07-28, SEP-414) carries W3C Trace Context in the request
-// _meta keys traceparent/tracestate/baggage; extracting them here lets a
-// generated server's tool spans join the caller's distributed trace.
-propagation.setGlobalPropagator(
-  new CompositePropagator({
-    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
-  })
-);
-
 // Ensure spans are flushed on exit, whether the process ends normally or is
 // signaled — the default batch processor can otherwise lose spans on exit.
-process.on("SIGINT", () => sdk.shutdown().finally(() => process.exit(0)));
-process.on("SIGTERM", () => sdk.shutdown().finally(() => process.exit(0)));
+// "Normally" includes the MCP stdio shutdown: the client closes stdin, the
+// event loop drains and the process would exit without exporting. beforeExit
+// fires then and lets the async shutdown run (guarded: it re-fires after).
+let sdkShutdown: Promise<void> | undefined;
+const shutdownSdk = () => (sdkShutdown ??= sdk.shutdown().catch(() => undefined));
+process.on("beforeExit", () => void shutdownSdk());
+process.on("SIGINT", () => shutdownSdk().finally(() => process.exit(0)));
+process.on("SIGTERM", () => shutdownSdk().finally(() => process.exit(0)));
 
 const tracer = trace.getTracer(${JSON.stringify(config.serviceName)});
+
+/**
+ * MCPFO-134: code mode. execute_code runs a script that may call several API
+ * operations; the result's _meta carries one record per upstream call. Each
+ * becomes a CLIENT child span of the tool span, named per the OTel HTTP
+ * semantic conventions ("{method} {url.template}"), with the call's real
+ * start time and duration. Records carry no arguments or bodies.
+ */
+function recordApiCallSpans(result: unknown): void {
+  const calls = (result as { _meta?: Record<string, unknown> } | undefined)?._meta?.[${JSON.stringify(API_CALLS_META_KEY)}];
+  if (!Array.isArray(calls)) return;
+  for (const c of calls) {
+    const span = tracer.startSpan(\`\${c.method} \${c.path}\`, {
+      kind: SpanKind.CLIENT,
+      startTime: c.started_at,
+      attributes: {
+        "http.request.method": c.method,
+        "url.template": c.path,
+        "server.address": c.host,
+        "server.port": c.port,
+        "http.response.status_code": c.status,
+        "klaridian.api.operation": c.operation,
+      },
+    });
+    if (!c.status || c.status >= 400) span.setStatus({ code: SpanStatusCode.ERROR });
+    span.end(c.started_at + c.duration_ms);
+  }
+}
 
 /**
  * Wraps an MCP tool handler in an OTel span. Every generated tool is wired
@@ -142,6 +176,7 @@ export function wrapTool<T extends (args: any, ctx?: any) => Promise<unknown>>(t
 ${emitArgumentCapture(config)}
         try {
           const result = await handler(args, ctx);
+          recordApiCallSpans(result);
           span.setStatus({ code: SpanStatusCode.OK });
           return result;
         } catch (err) {
@@ -214,7 +249,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.trace import StatusCode
+from opentelemetry.trace import SpanKind, StatusCode
 
 OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or ${pyStr(config.otlpEndpoint ?? "http://localhost:4318/v1/traces")}
 
@@ -223,6 +258,37 @@ _provider = TracerProvider(resource=_resource)
 _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=OTLP_ENDPOINT)))
 trace.set_tracer_provider(_provider)
 _tracer = trace.get_tracer(${pyStr(config.serviceName ?? "mcp-server")})
+
+API_CALLS_META_KEY = ${pyStr(API_CALLS_META_KEY)}
+
+
+def _record_api_call_spans(result):
+    """MCPFO-134: code mode. The execute_code result _meta carries one record
+    per upstream call the script made; each becomes a CLIENT child span of the
+    current tool span, named per the OTel HTTP semantic conventions
+    ("{method} {url.template}"), with the call's real start time and duration.
+    Records carry no arguments or bodies."""
+    calls = (getattr(result, "meta", None) or {}).get(API_CALLS_META_KEY)
+    if not isinstance(calls, list):
+        return
+    for c in calls:
+        start_ns = int(c["started_at"]) * 1_000_000
+        span = _tracer.start_span(
+            f"{c['method']} {c['path']}",
+            kind=SpanKind.CLIENT,
+            start_time=start_ns,
+            attributes={
+                "http.request.method": c["method"],
+                "url.template": c["path"],
+                "server.address": c["host"],
+                "server.port": c["port"],
+                "http.response.status_code": c["status"],
+                "klaridian.api.operation": c["operation"],
+            },
+        )
+        if not c["status"] or c["status"] >= 400:
+            span.set_status(StatusCode.ERROR)
+        span.end(end_time=start_ns + int(c["duration_ms"]) * 1_000_000)
 
 
 def wrap_dispatch(dispatch):
@@ -243,18 +309,20 @@ def wrap_dispatch(dispatch):
 ${emitPythonArgumentCapture(config)}
                 try:
                     result = await dispatch(tool_name, arguments, meta)
+                    _record_api_call_spans(result)
                     span.set_status(StatusCode.OK)
                     return result
                 except Exception as err:  # noqa: BLE001
                     span.set_status(StatusCode.ERROR, str(err))
                     span.record_exception(err)
                     raise
-                finally:
-                    # Flush this span promptly; a short-lived stdio server may exit
-                    # right after a call, and BatchSpanProcessor can otherwise lose it.
-                    _provider.force_flush()
         finally:
             detach(token)
+            # Flush promptly, AFTER the tool span has ended (the with block
+            # above), so a short-lived stdio server that exits right after a
+            # call doesn't lose it. Flushing inside the with block exported
+            # only already-ended child spans and left the tool span buffered.
+            _provider.force_flush()
 
     return wrapped
 `;

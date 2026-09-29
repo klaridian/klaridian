@@ -26,9 +26,10 @@
 // server.py, conformance.py and plugin dispatch wrapping are unchanged.
 
 import type { ToolIR } from "../ir.js";
-import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames } from "../emit-client.js";
+import { emitClientModule, sanitizeFunctionName, dedupeFunctionNames, API_CALL_MARKER, API_CALLS_META_KEY } from "../emit-client.js";
 import { buildOperationDocs } from "../emit-docs.js";
 import { extractApiHost } from "../emit-sandbox.js";
+import { codeModeAnnotations } from "../emit-tool.js";
 
 /** Deno pip pin for a code-mode Python project. The wheel ships the official
  *  Deno binary; the lower bound is the version the sandbox flags were verified on. */
@@ -76,6 +77,7 @@ export function emitSandboxRunnerPy(): string {
 # \`python sandbox_runner.py --install\` once, with network access, to install the
 # client's one npm dependency (zod) into sandbox/node_modules.
 import asyncio
+import json
 import os
 import shutil
 import subprocess
@@ -90,6 +92,30 @@ DENO_DIR = SANDBOX_DIR / ".deno"
 # script from exhausting the server's memory.
 TIMEOUT_SECONDS = float(os.environ.get("KLARIDIAN_SANDBOX_TIMEOUT", "30"))
 MAX_HEAP_MB = int(os.environ.get("KLARIDIAN_SANDBOX_MAX_HEAP_MB", "256"))
+
+# MCPFO-134: the typed client writes one marker line per upstream call to
+# stderr (operation, method, path template, host, status, timing; never
+# arguments or bodies). They are split out here and returned as records.
+API_CALL_MARKER = ${pyStr(API_CALL_MARKER)}
+MAX_API_CALLS = 1000
+
+
+def split_api_calls(stderr: str) -> tuple[str, list[dict]]:
+    """Separates the client's per-call records from the script's own stderr.
+    A script could print a fake marker line; that only affects its own call's
+    telemetry, never the sandbox boundary."""
+    calls: list[dict] = []
+    rest: list[str] = []
+    for line in stderr.split("\\n"):
+        if line.startswith(API_CALL_MARKER):
+            if len(calls) < MAX_API_CALLS:
+                try:
+                    calls.append(json.loads(line[len(API_CALL_MARKER):]))
+                except ValueError:
+                    pass
+        else:
+            rest.append(line)
+    return "\\n".join(rest), calls
 
 
 def deno_bin() -> str:
@@ -122,14 +148,15 @@ def install() -> None:
     subprocess.run([deno_bin(), "install"], cwd=SANDBOX_DIR, env=_base_env(), check=True)
 
 
-async def run_in_sandbox(code: str, api_host: str) -> tuple[bool, str, str]:
-    """Runs code in Deno. Returns (ok, stdout, stderr); never raises for a
-    failed script, so the tool can report it to the model as a tool error."""
+async def run_in_sandbox(code: str, api_host: str) -> tuple[bool, str, str, list[dict]]:
+    """Runs code in Deno. Returns (ok, stdout, stderr, api_calls); never raises
+    for a failed script, so the tool can report it to the model as a tool error."""
     if not is_installed():
         return (
             False,
             "",
             "The code sandbox is not installed. Run \`python sandbox_runner.py --install\` once in the server directory.",
+            [],
         )
     args = [
         deno_bin(),
@@ -159,8 +186,9 @@ async def run_in_sandbox(code: str, api_host: str) -> tuple[bool, str, str]:
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
-        return False, "", f"Execution timed out after {TIMEOUT_SECONDS:g}s."
-    return proc.returncode == 0, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+        return False, "", f"Execution timed out after {TIMEOUT_SECONDS:g}s.", []
+    stderr, api_calls = split_api_calls(err.decode("utf-8", "replace"))
+    return proc.returncode == 0, out.decode("utf-8", "replace"), stderr, api_calls
 
 
 if __name__ == "__main__":
@@ -176,6 +204,9 @@ if __name__ == "__main__":
 /** tools.py for a code-mode project: the search_docs + execute_code pair, in the TOOLS shape server.py consumes. */
 export function emitCodeModeToolsModule(tools: ToolIR[], baseUrl: string): string {
   const apiHost = extractApiHost(baseUrl);
+  // MCPFO-134: hints true of every exposed operation (see codeModeAnnotations).
+  const ann = codeModeAnnotations(tools);
+  const py = (b: boolean) => (b ? "True" : "False");
   const functionNames = dedupeFunctionNames(tools.map((t) => sanitizeFunctionName(t.operationId || t.name)));
   const docs = buildOperationDocs(tools, functionNames);
 
@@ -200,6 +231,7 @@ from mcp import types
 from sandbox_runner import run_in_sandbox
 
 API_HOST = ${pyStr(apiHost)}
+API_CALLS_META_KEY = ${pyStr(API_CALLS_META_KEY)}
 
 # Per-operation docs for search_docs, computed at generation time from the spec
 # (structural summary when the spec has no description; no LLM involved).
@@ -230,11 +262,15 @@ async def _call_search_docs(arguments: dict) -> types.CallToolResult:
 
 
 async def _call_execute_code(arguments: dict) -> types.CallToolResult:
-    ok, stdout, stderr = await run_in_sandbox(arguments.get("code", ""), API_HOST)
+    ok, stdout, stderr, api_calls = await run_in_sandbox(arguments.get("code", ""), API_HOST)
     text = stdout + (f"\\nstderr:\\n{stderr}" if stderr else "")
+    # MCPFO-134: the upstream calls the script made ride in the result _meta,
+    # so a plugin wrapping the dispatch can record one child span / event per
+    # API operation. MCP clients ignore _meta keys they don't know.
     return types.CallToolResult(
         content=[types.TextContent(type="text", text=text or "(no output)")],
         is_error=not ok,
+        meta={API_CALLS_META_KEY: api_calls} if api_calls else None,
     )
 
 
@@ -256,10 +292,10 @@ TOOLS: list[dict] = [
         "output_schema": None,
         "annotations": types.ToolAnnotations(
             title="Execute Code",
-            read_only_hint=False,
-            destructive_hint=False,
-            idempotent_hint=False,
-            open_world_hint=True,
+            read_only_hint=${py(ann.readOnlyHint)},
+            destructive_hint=${py(ann.destructiveHint)},
+            idempotent_hint=${py(ann.idempotentHint)},
+            open_world_hint=${py(ann.openWorldHint)},
         ),
         "call": _call_execute_code,
     },

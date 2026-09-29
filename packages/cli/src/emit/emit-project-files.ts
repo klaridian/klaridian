@@ -64,8 +64,13 @@ export function emitPackageJson(
     ...(registryName ? { mcpName: registryName } : {}),
     scripts: {
       build: "tsc -p tsconfig.json && npm run bundle",
+      // The banner gives the ESM bundle a real require(): CommonJS deps such
+      // as the OpenTelemetry SDK call require("util") etc., which esbuild's
+      // ESM output otherwise turns into a "Dynamic require is not supported"
+      // crash at startup (MCPFO-134 found it with --plugin otel).
       bundle:
-        `esbuild dist/index.js --bundle --platform=node --target=node${NODE_FLOOR_MAJOR} --format=esm --outfile=dist/server.bundle.js`,
+        `esbuild dist/index.js --bundle --platform=node --target=node${NODE_FLOOR_MAJOR} --format=esm --outfile=dist/server.bundle.js ` +
+        `"--banner:js=import { createRequire as __klaridianCreateRequire } from 'node:module'; const require = __klaridianCreateRequire(import.meta.url);"`,
       start: "node dist/server.bundle.js",
     },
     engines: { node: `>=${NODE_FLOOR_MAJOR}` },

@@ -10,6 +10,10 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Added
+
+- An [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) for the klaridian CLI, so coding agents such as Claude Code, Codex, or Cursor curate tools, read `--json` results, and run the generated server correctly. Install it with `npx skills add klaridian/klaridian`.
+
 ## [0.4.0] - 2026-09-24
 
 ### Added

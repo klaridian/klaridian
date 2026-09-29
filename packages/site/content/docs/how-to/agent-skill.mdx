@@ -1,0 +1,40 @@
+---
+title: Use klaridian from an AI agent
+description: Install the klaridian Agent Skill so coding agents such as Claude Code, Codex, or Cursor run the CLI correctly.
+---
+
+klaridian ships an [Agent Skill](https://agentskills.io): a `SKILL.md` file that teaches a coding agent how to drive the CLI. With it installed, an agent asked to "turn this OpenAPI spec into an MCP server" curates the tools first, passes `--json`, reads the result's error `code` instead of guessing from prose, and never passes `--interactive` without a person at the terminal.
+
+The skill follows the open Agent Skills format, so it isn't tied to one agent.
+
+## Install the skill
+
+With the [`skills` CLI](https://github.com/vercel-labs/skills), from the repository:
+
+```bash
+npx skills add klaridian/klaridian
+```
+
+Or from this site, through its discovery index:
+
+```bash
+npx skills add https://klaridian.dev
+```
+
+Both install the same file. To install it by hand, copy [`skills/klaridian/SKILL.md`](https://github.com/klaridian/klaridian/blob/main/skills/klaridian/SKILL.md) into your agent's skills directory, for example `~/.claude/skills/klaridian/SKILL.md` for Claude Code.
+
+## What the skill covers
+
+- Checking the tool count before generating, and narrowing it with the [curation](/docs/how-to/curation) flags or `x-klaridian`
+- The flags agents need most, including language, transport, plugins, and `--install`
+- Reading the [JSON output](/docs/how-to/json-output) and branching on its error `code`
+- The environment variables a generated server reads for [upstream authentication](/docs/how-to/upstream-auth)
+- Running, inspecting, and deploying the generated server
+
+It doesn't list every flag. For those it points the agent at `klaridian generate --help` and the [CLI reference](/docs/reference/cli-reference).
+
+## Where it lives
+
+The skill has one source, `skills/klaridian/SKILL.md` in the repository. This site serves the same bytes at `/.well-known/agent-skills/klaridian/SKILL.md` and lists it in `/.well-known/agent-skills/index.json`, following the Agent Skills discovery draft. A test fails the build if the skill mentions a flag, error code, or environment variable that the CLI doesn't have, so it can't drift from the CLI it describes.
+
+For reading the docs rather than driving the CLI, agents can use [`llms.txt`](https://klaridian.dev/llms.txt).

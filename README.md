@@ -77,6 +77,14 @@ brew tap klaridian/klaridian && brew install klaridian
 
 The PyPI and Homebrew channels ship a **standalone native binary** (compiled with `bun --compile`, byte-identical to the Node build), so they run with zero Node.js—the same pattern [ruff](https://pypi.org/project/ruff/) and [uv](https://pypi.org/project/uv/) use. Every [GitHub Release](https://github.com/klaridian/klaridian/releases/latest) also attaches a raw binary per platform (macOS arm64/x64, Linux arm64/x64, Windows x64). To build from source, see [Development](#development-environment).
 
+### Using an AI coding agent?
+
+Install the klaridian [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) so the agent curates tools, reads `--json` results, and runs the generated server correctly:
+
+```bash
+npx skills add klaridian/klaridian
+```
+
 ## Quickstart
 
 ```bash

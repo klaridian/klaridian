@@ -37,7 +37,7 @@ import { extractApiHost } from "../emit-sandbox.js";
 import { emitPythonCodeModeFiles, DENO_PIP_SPEC } from "./emit-python-codemode.js";
 
 /** mcp SDK pin — the version validated end to end in spike 059. */
-const MCP_SDK_VERSION = "2.1.1";
+const MCP_SDK_VERSION = "2.3.0";
 /** httpx: the async HTTP client the generated proxies use. */
 const HTTPX_SPEC = ">=0.27,<0.29";
 /** PyJWT (with cryptography extra) — JWKS-backed JWT validation for the OAuth

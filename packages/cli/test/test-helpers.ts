@@ -32,3 +32,19 @@ export const CLI_ENTRYPOINT = path.resolve(__dirname, "../src/index.js");
 export function sendJsonRpc(proc: ReturnType<typeof spawn>, msg: unknown): void {
   proc.stdin!.write(JSON.stringify(msg) + "\n");
 }
+
+/**
+ * MCPFO-92: the documented tools/list order (curation.mdx "Tool order") —
+ * spec path order, then GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE.
+ */
+export function expectedToolOrder(spec: { paths: Record<string, Record<string, { operationId?: string }>> }): string[] {
+  const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+  const names: string[] = [];
+  for (const pathItem of Object.values(spec.paths)) {
+    for (const m of methods) {
+      const id = pathItem[m]?.operationId;
+      if (id) names.push(id);
+    }
+  }
+  return names;
+}

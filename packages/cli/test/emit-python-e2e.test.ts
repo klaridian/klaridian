@@ -16,7 +16,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
+import { expectedToolOrder } from "./test-helpers.js";
 import { tmpdir } from "node:os";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
@@ -139,6 +140,9 @@ test(
         sendJsonRpc(proc, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
         const listResp = await readOneJsonRpcLine(proc);
         assert.equal(listResp.result.tools.length, toolCount, "all tools listed");
+        // MCPFO-92: same documented, deterministic order as the TS target.
+        const petstore = JSON.parse(await readFile(PETSTORE_SPEC_PATH, "utf-8"));
+        assert.deepEqual(listResp.result.tools.map((t: any) => t.name), expectedToolOrder(petstore), "tools/list in documented order");
         const getPet = listResp.result.tools.find((t: any) => t.name === "getPetById");
         assert.ok(getPet, "getPetById present");
         assert.equal(getPet.annotations?.readOnlyHint, true, "GET tool annotated read-only (camelCase on the wire)");
@@ -164,7 +168,7 @@ test(
       }
 
       // MCPFO-93 coexistence (leg 2, Python): the MODERN path on the SAME
-      // emitted server. The official mcp Python SDK (mcp==2.1.1) is
+      // emitted server. The official mcp Python SDK (mcp==2.3.0) is
       // 2026-07-28-native and registers `server/discover` unconditionally, so
       // NO opt-in is needed on the Python side — TS/Python parity, not
       // asymmetry. Like TS stdio, the SDK pins one era per connection, so a

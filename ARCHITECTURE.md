@@ -2053,3 +2053,9 @@ PLAN.md §3 (Aug 30) committed klaridian to collecting NO CLI telemetry — not 
 
 **Trade-off.** Users on macOS 11 and 12 lose the native channels. They never had a working binary there, and npm still works for them on Node.js 22 or later.
 
+## 107. The emitted Python SDK stays an exact pin, bumped deliberately (MCPFO-123, MCPFO-94, Oct 18, 2026)
+
+**Decision.** Generated Python servers pin `mcp==2.3.0` exactly, up from 2.1.1. An exact pin keeps a regenerated server reproducible and keeps the conformance surface (`-32602` versus `isError`, `server/discover`, output-schema validation) the one the E2E suite proved. A range such as `>=2.3,<3` would let a user's install pick up an SDK minor that the suite never ran. The cost is that a person has to bump the pin, so the bump is an explicit change that runs the Python E2E, not something that happens on its own.
+
+**Verified.** Read the 2.2.0 and 2.3.0 release notes: idle streamable-HTTP sessions now expire (the emitted server is stateless, so it's unaffected), two new deprecation warnings, a null `structuredContent` is now validated against the output schema, and invalid `x-mcp-header` annotations are rejected. The Python E2E tests (stdio and HTTP, both protocol eras, OAuth, plugins, code mode, conformance) pass on 2.3.0. A generated petstore server starts and lists its tools under `PYTHONWARNINGS=error -X dev` on Python 3.11 and 3.14 with no warnings.
+

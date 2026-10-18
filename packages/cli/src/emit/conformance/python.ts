@@ -11,7 +11,7 @@
 // imports and routes every unknown-tool / invalid-arguments / tool-execution
 // failure through.
 //
-// Verified against the real SDK (mcp==2.1.1, see the emit-python-e2e test):
+// Verified against the real SDK (mcp==2.3.0, see the emit-python-e2e test):
 //   - unknownTool → raise MCPError(INVALID_PARAMS). The SDK's
 //     `handler_exception_to_error_data` maps a raised MCPError to its own
 //     ErrorData, so the wire response is a JSON-RPC protocol error -32602 —

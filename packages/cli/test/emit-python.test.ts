@@ -75,7 +75,7 @@ test("python target emits a complete, coherent project from real tool data", asy
   assert.match(files["tools.py"], /read_only_hint=True/);
   assert.match(files["tools.py"], /open_world_hint=True/);
   // requirements pin the validated SDK + httpx + jsonschema.
-  assert.match(files["requirements.txt"], /mcp==2\.1\.1/);
+  assert.match(files["requirements.txt"], /mcp==2\.3\.0/);
   assert.match(files["requirements.txt"], /httpx/);
   assert.match(files["requirements.txt"], /jsonschema/);
 });

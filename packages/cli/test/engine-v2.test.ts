@@ -14,7 +14,7 @@ import path from "node:path";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { execFileAsync, CLI_ENTRYPOINT } from "./test-helpers.js";
+import { execFileAsync, CLI_ENTRYPOINT, expectedToolOrder } from "./test-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PETSTORE_SPEC_PATH = path.resolve(__dirname, "../../../../examples/petstore/openapi.json");
@@ -95,6 +95,9 @@ test(
         proc.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n");
         const listResp = await readOneJsonRpcLine(proc);
         assert.ok(listResp.result.tools.length >= 15, "tools listed");
+        // MCPFO-92: the live wire order is the documented, deterministic one.
+        const petstore = JSON.parse(await readFile(PETSTORE_SPEC_PATH, "utf-8"));
+        assert.deepEqual(listResp.result.tools.map((t: any) => t.name), expectedToolOrder(petstore), "tools/list in documented order");
       } finally {
         proc.kill("SIGKILL");
       }

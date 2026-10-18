@@ -103,6 +103,10 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+      # Gate: never publish a tarball that can't start (MCPFO-136).
+      - name: Smoke-test the packed npm package
+        working-directory: packages/cli
+        run: npm run smoke:packed
       - name: Publish (OIDC, provenance)
         working-directory: packages/cli
         run: |

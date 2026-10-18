@@ -72,6 +72,11 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: "Build + test (real E2E: npm install/build/run a generated server)"
         run: npm test
+      # The tests above run the CLI from the working tree. This installs the
+      # npm tarball into an empty directory and runs it, which is the only
+      # way to catch a file missing from "files" (MCPFO-136).
+      - name: Smoke-test the packed npm package
+        run: npm run smoke:packed
 
   docs-style:
     name: Documentation style (Vale, non-blocking)

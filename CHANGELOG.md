@@ -10,6 +10,12 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-18
+
+### Fixed
+
+- The npm package failed to start (`Cannot find module '.../dist/package.json'`) for `npx klaridian` and `npm install -g klaridian`, in every release since 0.2.0. The file `--version` reads was left out of the published package. The PyPI, Homebrew, and direct-download binaries weren't affected. Every build now installs the packed npm package into an empty directory and runs it, and a release can't publish to npm unless that check passes.
+
 ## [0.5.0] - 2026-10-18
 
 ### Added
@@ -130,7 +136,8 @@ First public release.
 - `klaridian init` onboarding wizard, `klaridian start` launcher for a generated project, config-file support for `generate`, and `plugins list` / `licenses list` introspection commands.
 - A documentation site structured around the Diátaxis framework (tutorials, how-to, reference), with an auto-generated CLI reference.
 
-[Unreleased]: https://github.com/klaridian/klaridian/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/klaridian/klaridian/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/klaridian/klaridian/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/klaridian/klaridian/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/klaridian/klaridian/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/klaridian/klaridian/compare/v0.2.0...v0.3.0

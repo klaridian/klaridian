@@ -35,7 +35,7 @@ Versioning follows [semantic versioning](https://semver.org). The project is pre
 
 1. Bump the version in **all three** places the release gate checks: `packages/cli/package.json`, `packaging/pypi/pyproject.toml`, and `packaging/pypi/src/klaridian/__init__.py` (a mismatch fails the release loudly).
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The workflow gates on the real test suite, then publishes in parallel: the **npm** package (`packages/cli`, via OIDC Trusted Publishing, provenance attached) and the **PyPI** wheels — the CLI compiled to a standalone binary per platform (`bun build --compile`) and wrapped in platform-tagged wheels, so `pip install klaridian` needs zero Node (ARCHITECTURE.md §64). Both use OIDC, so there are no stored tokens.
+3. The workflow gates on the real test suite (and, for npm, on `npm run smoke:packed`, which installs the packed tarball into an empty directory and runs it), then publishes in parallel: the **npm** package (`packages/cli`, via OIDC Trusted Publishing, provenance attached) and the **PyPI** wheels — the CLI compiled to a standalone binary per platform (`bun build --compile`) and wrapped in platform-tagged wheels, so `pip install klaridian` needs zero Node (ARCHITECTURE.md §64). Both use OIDC, so there are no stored tokens.
 4. After both publish, it cuts a **GitHub Release** from the tag with auto-generated notes, attaching the bare per-platform binaries as assets (the Homebrew tap formula downloads these).
 
 The `klaridian` CLI is published on npm (`npm i -g klaridian`, or `npx klaridian`) and on PyPI (`pip install klaridian` / `uv tool install klaridian` / `pipx install klaridian`). A Homebrew tap serving the same binary is rendered from `packaging/homebrew/klaridian.rb` (see `render-formula.sh`).

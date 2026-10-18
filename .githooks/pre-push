@@ -4,7 +4,7 @@
 set -euo pipefail
 
 echo "[pre-push] Running CLI build + real E2E tests (packages/cli)..."
-(cd packages/cli && npm install --no-audit --no-fund && npm test)
+(cd packages/cli && npm install --no-audit --no-fund && npm test && npm run smoke:packed)
 
 echo "[pre-push] All checks passed."
 

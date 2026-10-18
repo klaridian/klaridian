@@ -2067,3 +2067,11 @@ PLAN.md §3 (Aug 30) committed klaridian to collecting NO CLI telemetry — not 
 
 **Revisit if** a mainstream client starts loading tools page by page (for example, on demand), so that pages would shrink what the model sees.
 
+## 109. Test the package users install, not the working tree (MCPFO-136, Oct 18, 2026)
+
+**Finding.** Checking the v0.5.0 release from a user's side, `npx klaridian@0.5.0 --version` crashed: `Cannot find module '.../dist/package.json'`. `src/index.ts` imports `../package.json` for `--version`. `tsc` emits that file as `dist/package.json`, but `package.json` `files` listed only `dist/src`, so the tarball left it out. 0.2.0 and 0.4.0 fail the same way, so the npm channel had been unusable for several releases. Every test ran the CLI from the working tree, where the file exists. The binaries (PyPI, Homebrew, release assets) were fine because `bun build --compile` inlines the JSON import.
+
+**Decision.** Add `dist/package.json` to `files`, and add `scripts/smoke-packed.mjs` (`npm run smoke:packed`). It packs the CLI, installs the tarball into an empty directory, and checks that `--version` matches `package.json` and that `generate` produces a server. It runs in CI on every build, in the pre-push hook, and in `release.yml` before `npm publish`. It takes a few seconds. Keeping the static JSON import (instead of reading the file at runtime) is deliberate: the Bun binary depends on it.
+
+**Lesson.** A unit or E2E suite run from source proves the source works, not the artifact. Each distribution channel needs one check that installs the published form the way a user does. The wheel channel already had one (`Install wheel + generate with zero Node`); npm didn't.
+

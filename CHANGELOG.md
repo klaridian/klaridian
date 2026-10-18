@@ -10,14 +10,16 @@ these are always called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-18
+
 ### Added
 
-- `klaridian generate` now warns when a server would have more than 128 tools, the limit VS Code (GitHub Copilot) and OpenAI-backed agents enforce, and points at curation and code mode. The warning is also in `--json` output. See [Large APIs](https://klaridian.dev/docs/how-to/curation#large-apis).
-- The order of tools in `tools/list` is now documented and covered by tests: paths in spec order, then GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE. It was already stable; a future engine change can no longer reshuffle it unnoticed. See [Tool order](https://klaridian.dev/docs/how-to/curation#tool-order).
 - An [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) for the klaridian CLI, so coding agents such as Claude Code, Codex, or Cursor curate tools, read `--json` results, and run the generated server correctly. Install it with `npx skills add klaridian/klaridian`.
 - `--architecture code-mode` now works with `--language python`. The model still writes TypeScript, run by the same Deno sandbox as the TypeScript target. Deno is installed by `pip` (the official `deno` package), so a Python project needs no separate install step: `pip install -r requirements.txt`, then `python sandbox_runner.py --install` once.
 - Observability plugins now see inside code mode's `execute_code`. `--plugin otel` adds one child span per API call the script made (`GET /pet/{petId}`, with operation, host, port, and status). `posthog`, `amplitude`, and `mixpanel` add `api_call_count` and `api_operations` to the event. Arguments and bodies are never recorded. TypeScript and Python targets at parity.
 - Code-mode scripts are now limited to 30 seconds and a 256 MB heap by default (`KLARIDIAN_SANDBOX_TIMEOUT`, `KLARIDIAN_SANDBOX_MAX_HEAP_MB`), so one script can't hang or exhaust the server.
+- `klaridian generate` now warns when a server would have more than 128 tools, the limit VS Code (GitHub Copilot) and OpenAI-backed agents enforce, and points at curation and code mode. The warning is also in `--json` output. See [Large APIs](https://klaridian.dev/docs/how-to/curation#large-apis).
+- The order of tools in `tools/list` is now documented and covered by tests: paths in spec order, then GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE. It was already stable; a future engine change can no longer reshuffle it unnoticed. See [Tool order](https://klaridian.dev/docs/how-to/curation#tool-order).
 
 ### Changed
 
@@ -128,7 +130,10 @@ First public release.
 - `klaridian init` onboarding wizard, `klaridian start` launcher for a generated project, config-file support for `generate`, and `plugins list` / `licenses list` introspection commands.
 - A documentation site structured around the Diátaxis framework (tutorials, how-to, reference), with an auto-generated CLI reference.
 
-[Unreleased]: https://github.com/klaridian/klaridian/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/klaridian/klaridian/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/klaridian/klaridian/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/klaridian/klaridian/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/klaridian/klaridian/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/klaridian/klaridian/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/klaridian/klaridian/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/klaridian/klaridian/compare/v0.0.1...v0.1.0

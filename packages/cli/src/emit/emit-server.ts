@@ -131,6 +131,29 @@ export function resolveBaseUrlWarning(
 }
 
 /**
+ * MCPFO-115 — the emitted server returns every tool in one `tools/list`
+ * response, by design: no pagination (ARCHITECTURE.md section 108). Clients
+ * that do support cursors still fetch every page and hand the model the
+ * whole list, so pages wouldn't shrink what the model sees, and a client that
+ * ignores `nextCursor` would silently lose tools. The real limit is
+ * downstream: VS Code (GitHub Copilot) and OpenAI-backed agents reject a
+ * request with more than 128 tools. Past that, warn and point at curation
+ * or code mode, the two levers that actually shrink the list.
+ */
+export const LARGE_TOOL_LIST_THRESHOLD = 128;
+
+export function resolveLargeToolListWarning(toolCount: number, architecture: string): string | null {
+  if (architecture === "code-mode" || toolCount <= LARGE_TOOL_LIST_THRESHOLD) return null;
+  return (
+    `${toolCount} tools is more than many clients accept: VS Code (GitHub Copilot) and ` +
+    `OpenAI-backed agents reject requests with more than ${LARGE_TOOL_LIST_THRESHOLD} tools. ` +
+    `The server returns all of them in one tools/list response. Curate the spec down ` +
+    `(--include-tags, --include-paths, --include-methods, or --interactive; see https://klaridian.dev/docs/how-to/curation) ` +
+    `or use --architecture code-mode, which exposes 2 tools for the whole API.`
+  );
+}
+
+/**
  * Emits the tool-registration factory as a standalone, side-effect-free module
  * (`src/server-factory.ts`) exporting `buildServer`. Split out from the entry
  * (MCPFO-86 step 3) so multiple entrypoints can reuse the SAME registration

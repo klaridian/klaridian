@@ -2059,3 +2059,11 @@ PLAN.md §3 (Aug 30) committed klaridian to collecting NO CLI telemetry — not 
 
 **Verified.** Read the 2.2.0 and 2.3.0 release notes: idle streamable-HTTP sessions now expire (the emitted server is stateless, so it's unaffected), two new deprecation warnings, a null `structuredContent` is now validated against the output schema, and invalid `x-mcp-header` annotations are rejected. The Python E2E tests (stdio and HTTP, both protocol eras, OAuth, plugins, code mode, conformance) pass on 2.3.0. A generated petstore server starts and lists its tools under `PYTHONWARNINGS=error -X dev` on Python 3.11 and 3.14 with no warnings.
 
+## 108. `tools/list` is one unpaginated page by design; large APIs get a warning, not pages (MCPFO-115, Oct 18, 2026)
+
+**Finding.** Both targets return the whole tool list in one response and ignore a `cursor` (they never send a `nextCursor`, so a conforming client never sends one). The 2026-07-28 spec allows this, because pagination is the server's choice. On the 1239-operation GitHub spec (`test/fixtures/real-specs/github.json`), `tools/list` returned all 1239 tools: 5.6 MB from the TypeScript server and 6.5 MB from the Python server, in the same order on repeated calls.
+
+**Decision: don't paginate.** Pagination only changes how the list is transferred. Clients that support cursors fetch every page and give the model the whole list anyway, so the model's context and the client's tool cap don't change. A client that ignores `nextCursor` would silently lose every tool after the first page, which is worse than a large response. The real limit is downstream: VS Code (GitHub Copilot) and OpenAI-backed agents reject a request with more than 128 tools. So `generate` warns above 128 tools (`resolveLargeToolListWarning`, also in `--json` `warnings[]`) and points at the two options that actually shrink the list: curation and `--architecture code-mode`. Code mode never warns.
+
+**Revisit if** a mainstream client starts loading tools page by page (for example, on demand), so that pages would shrink what the model sees.
+

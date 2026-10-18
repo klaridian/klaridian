@@ -25,7 +25,7 @@ import type { Command } from "commander";
 import path from "node:path";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { getPluginProjectAdditions, getPythonPluginProjectAdditions } from "../render/instrument.js";
-import { resolveBaseUrlWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
+import { resolveBaseUrlWarning, resolveLargeToolListWarning, type PluginWiring, type OAuthConfig } from "../emit/emit-server.js";
 import { getEmitTarget, type TargetLanguage } from "../emit/target.js";
 import { mapMcpToolDefinitionToIR, extractOperationMetaByOperationId, prepareSpecForEngine, type ToolIR } from "../emit/ir.js";
 import { getToolsFromOwnEngine } from "../engine/own-engine.js";
@@ -827,6 +827,13 @@ export function registerGenerateCommand(program: Command): void {
           if (baseUrlWarning) {
             warnings.push(baseUrlWarning);
             warn(baseUrlWarning);
+          }
+          // MCPFO-115: one unpaginated tools/list by design; warn when the
+          // count passes what common clients accept (ARCHITECTURE.md §108).
+          const largeToolListWarning = resolveLargeToolListWarning(tools.length, architecture);
+          if (largeToolListWarning) {
+            warnings.push(largeToolListWarning);
+            warn(`⚠️  ${largeToolListWarning}`);
           }
           // code-mode's sandbox needs a concrete, absolute API host at
           // generation time (--allow-net scoping) — unlike the "tools"

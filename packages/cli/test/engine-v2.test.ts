@@ -98,6 +98,8 @@ test(
         // MCPFO-92: the live wire order is the documented, deterministic one.
         const petstore = JSON.parse(await readFile(PETSTORE_SPEC_PATH, "utf-8"));
         assert.deepEqual(listResp.result.tools.map((t: any) => t.name), expectedToolOrder(petstore), "tools/list in documented order");
+        // MCPFO-115: one page by design — the whole list, no nextCursor.
+        assert.equal(listResp.result.nextCursor, undefined, "tools/list is not paginated");
       } finally {
         proc.kill("SIGKILL");
       }

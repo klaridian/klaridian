@@ -107,6 +107,10 @@ A ready-to-generate example lives at [`examples/annotated/openapi.json`](https:/
 
 The server returns tools from `tools/list` in a fixed order: paths in the order the spec lists them, and within a path, by HTTP method in the order GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE. Curation removes tools but never reorders the ones that remain. Generating from the same spec always gives the same order, which MCP recommends so that clients and model prompt caches see a stable tool list. To change the order, reorder the paths in your spec.
 
+## Large APIs
+
+The server returns every tool in a single `tools/list` response; it doesn't paginate. When a server has more than 128 tools, `klaridian generate` warns, because VS Code (GitHub Copilot) and OpenAI-backed agents reject requests with more than 128 tools. Pagination wouldn't help here: clients that support it fetch every page and pass the whole list to the model anyway. To get under the limit, curate with the flags on this page, or switch to [code mode](/docs/how-to/code-mode), which exposes two tools for the whole API.
+
 ## Flags or `x-klaridian`: When to use which
 
 The flags and the `x-klaridian` extension aren't two ways to do the same thing—they answer to different people at different times.

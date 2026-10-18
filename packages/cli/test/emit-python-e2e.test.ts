@@ -143,6 +143,8 @@ test(
         // MCPFO-92: same documented, deterministic order as the TS target.
         const petstore = JSON.parse(await readFile(PETSTORE_SPEC_PATH, "utf-8"));
         assert.deepEqual(listResp.result.tools.map((t: any) => t.name), expectedToolOrder(petstore), "tools/list in documented order");
+        // MCPFO-115: one page by design — the whole list, no nextCursor.
+        assert.equal(listResp.result.nextCursor, undefined, "tools/list is not paginated");
         const getPet = listResp.result.tools.find((t: any) => t.name === "getPetById");
         assert.ok(getPet, "getPetById present");
         assert.equal(getPet.annotations?.readOnlyHint, true, "GET tool annotated read-only (camelCase on the wire)");

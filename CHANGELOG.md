@@ -12,6 +12,7 @@ these are always called out under **Changed** or **Removed**.
 
 ### Added
 
+- `klaridian generate` now warns when a server would have more than 128 tools, the limit VS Code (GitHub Copilot) and OpenAI-backed agents enforce, and points at curation and code mode. The warning is also in `--json` output. See [Large APIs](https://klaridian.dev/docs/how-to/curation#large-apis).
 - The order of tools in `tools/list` is now documented and covered by tests: paths in spec order, then GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE. It was already stable; a future engine change can no longer reshuffle it unnoticed. See [Tool order](https://klaridian.dev/docs/how-to/curation#tool-order).
 - An [Agent Skill](https://klaridian.dev/docs/how-to/agent-skill) for the klaridian CLI, so coding agents such as Claude Code, Codex, or Cursor curate tools, read `--json` results, and run the generated server correctly. Install it with `npx skills add klaridian/klaridian`.
 - `--architecture code-mode` now works with `--language python`. The model still writes TypeScript, run by the same Deno sandbox as the TypeScript target. Deno is installed by `pip` (the official `deno` package), so a Python project needs no separate install step: `pip install -r requirements.txt`, then `python sandbox_runner.py --install` once.

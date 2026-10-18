@@ -19,6 +19,7 @@ these are always called out under **Changed** or **Removed**.
 
 ### Fixed
 
+- The macOS wheels on PyPI claimed to support macOS 11 (Apple Silicon) and 10.12 (Intel), but the binary inside needs macOS 13 or later, so on older systems `pip install` succeeded and `klaridian` then failed to start. The wheels are now tagged for macOS 13, the Homebrew formula requires macOS 13 (Ventura), and the [installation guide](https://klaridian.dev/docs/how-to/installation#system-requirements-for-the-native-binary) lists each platform's minimum.
 - Code mode's `execute_code` always claimed it was not destructive, even when the API had DELETE or PUT operations. Its annotations are now derived from the operations it exposes: destructive if any operation is, read-only only when all are.
 - A TypeScript server built with `--plugin otel` crashed at startup when run as `npm start` (the esbuild bundle). The bundle now provides `require` to the CommonJS OpenTelemetry packages. The TypeScript OTel plugin also logged a "duplicate registration" error on every start, and the Python one could lose a tool's span when the server exited right after the call. Both are fixed.
 - `klaridian deploy --target docker` (and `fly`) produced a broken image for a code-mode server: the image had no Deno and no compiled client, so the first `execute_code` call failed. Code-mode images now include both.

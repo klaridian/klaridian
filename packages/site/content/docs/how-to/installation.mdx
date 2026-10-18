@@ -66,6 +66,18 @@ Swap the asset name for your platform:
 | Linux (x64) | `klaridian-linux-x64` |
 | Windows (x64) | `klaridian-windows-x64.exe` |
 
+## System requirements for the native binary
+
+The PyPI, Homebrew, and direct-download channels ship the native binary, which needs:
+
+| Platform | Minimum |
+| --- | --- |
+| macOS (Apple Silicon or Intel) | macOS 13 (Ventura) |
+| Linux (x64 or arm64) | `glibc` 2.17 |
+| Windows (x64) | Windows 10, version 1809 |
+
+On an older macOS, `pip install klaridian` doesn't find a matching wheel and `brew install klaridian` stops before installing. Use the npm channel instead, which runs on any system with Node.js 22 or later.
+
 ## Which channel should I pick?
 
 - Already on Node.js? Run it with **`npx`**, or install globally with **npm**.

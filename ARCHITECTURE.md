@@ -2043,3 +2043,13 @@ PLAN.md §3 (Aug 30) committed klaridian to collecting NO CLI telemetry — not 
 
 **Verified.** `codemode-plugin-telemetry-e2e.test.ts` generates TS and Python code-mode servers with `--plugin otel` through the CLI, runs one `execute_code` with a `traceparent` against a local upstream (one 200, one 404), and checks what a real OTLP collector receives: the tool span in the caller's trace, two CLIENT children with the right names and attributes, the 404 as ERROR. PostHog's event was checked by hand against a local capture endpoint in both languages.
 
+## 106. A macOS wheel tag must match the binary's real minimum macOS, and CI checks it (MCPFO-135, Oct 18, 2026)
+
+**Context.** GitHub retires the `macos-14` runner on November 2, 2026, with failing brownouts through October. `release.yml` built the darwin-arm64 wheel on it. Checking whether the move to `macos-15` changes compatibility turned up an older problem.
+
+**Finding.** The runner's macOS doesn't set the binary's minimum OS; `bun build --compile` appends the bundle to Bun's prebuilt runtime, and that runtime carries the minimum. The 0.4.0 macOS binaries on PyPI (Bun 1.4.2) report `LC_BUILD_VERSION minos 13.0` for both arm64 and x86_64 (`vtool -show-build`). Their wheels were tagged `macosx_11_0_arm64` and `macosx_10_12_x86_64`. On macOS 11 or 12, pip accepted the wheel and the binary failed at launch with a `dyld` error, where pip should have refused it. The Linux wheels are consistent: the highest symbol version the binaries need is `GLIBC_2.17`, which is what `manylinux2014` promises.
+
+**Decision.** Pin `macos-15` (not `macos-latest`, so a release never changes image mid-flight). Tag the macOS wheels `macosx_13_0_*`. Add a release step that reads `minos` from the freshly compiled binary and fails if the wheel tag is lower, because a Bun upgrade can raise the minimum without any change in this repository. The Homebrew formula gets `depends_on macos: :ventura`, and the installation docs list the per-platform minimum.
+
+**Trade-off.** Users on macOS 11 and 12 lose the native channels. They never had a working binary there, and npm still works for them on Node.js 22 or later.
+

@@ -15,6 +15,11 @@ class Klaridian < Formula
   version "__VERSION__"
   license "MIT"
 
+  # The prebuilt macOS binaries need macOS 13 (Ventura) or later — the
+  # minimum comes from Bun's runtime (LC_BUILD_VERSION minos 13.0), not from
+  # the release runner. release.yml asserts the wheel tags match (MCPFO-135).
+  depends_on macos: :ventura
+
   on_macos do
     on_arm do
       url "https://github.com/klaridian/klaridian/releases/download/v__VERSION__/klaridian-darwin-arm64"
